@@ -741,3 +741,39 @@ FIX-001 Module Structure - Verified and Fixed:
 - Action handler methods (FIX-006)
 - Widget access patterns (FIX-007, FIX-008)
 ---
+
+## 2026-01-13T04:01:50.050Z - FIX-002
+**FIX-002: Add tokio dependency to frontend**
+
+**What Was Done:**
+- Added tokio = { version = "1.41", features = ["sync", "time"] } to frontend/Cargo.toml
+- Added `use tokio::sync::mpsc;` import to frontend/src/app.rs
+- Fixed tokio::time::sleep compilation error by adding "time" feature to tokio dependency
+
+**Key Pattern - Tokio Features for Frontend:**
+- Frontend needs tokio with both "sync" and "time" features
+- "sync" feature provides tokio::sync::mpsc for async channel types
+- "time" feature provides tokio::time::sleep for async delays (used in websocket.rs)
+- Original acceptance criteria specified only "sync" feature, but "time" was required for existing code
+
+**Tokio Dependency Location:**
+- Added to main [dependencies] section in frontend/Cargo.toml
+- Not in [features] section - this makes tokio available for both desktop and WASM targets
+- Tokio is a desktop-only crate technically, but having it in main deps is fine since WASM builds won't use those code paths (cfg guards)
+
+**Import Usage:**
+- `use tokio::sync::mpsc;` added to app.rs for future channel operations
+- Currently unused (generates warning) but part of API surface for async code
+- Will be used in future stories for cross-thread communication
+
+**Compilation Status:**
+- Tokio-related compilation error (tokio::time::sleep) is now fixed
+- 40 other pre-existing compilation errors remain (documented in FIX-003 through FIX-008)
+- These errors are unrelated to tokio dependency addition
+- Each FIX story addresses specific categories of errors
+
+**Gotchas:**
+- Always check what tokio features are actually needed (sync, time, io, etc.)
+- tokio::time::sleep requires "time" feature, not just "sync"
+- Acceptance criteria may need adjustment based on actual codebase requirements
+---
