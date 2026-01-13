@@ -873,3 +873,41 @@ The compiler error "mismatched closing delimiter: )" at line 346/396 was because
 ✓ Typecheck passes: cargo check --workspace
 
 ---
+
+## 2026-01-13T05:01:22.229Z - FIX-005
+**FIX-005 Learnings: Message struct thinking field type change**
+
+**What Was Changed:**
+- Changed Message struct `thinking` field from `Option<String>` to `bool`
+- Added `default_thinking()` function returning false for serde deserialization
+- Updated all 6 Message struct initializations to use `thinking: false` instead of `thinking: None`
+
+**Pattern - Serde Default Functions:**
+When using `#[serde(default = "function_name")]` on a non-Option field, must provide a function with signature `fn() -> T`:
+```rust
+#[serde(default = "default_thinking")]
+pub thinking: bool,
+
+fn default_thinking() -> bool {
+    false
+}
+```
+
+**Semantic Decision:**
+- `thinking: bool` indicates whether a message has associated thinking content (simple flag)
+- `thinking: Option<String>` would store the actual thinking content
+- The bool approach is simpler since thinking content is managed separately in SessionHistory component
+- All current messages have `thinking: false` (no thinking content)
+
+**Update Pattern:**
+When changing struct field types, must update ALL struct initializations:
+- Found 6 Message initializations: 4 in demo data (history.rs), 2 in app.rs
+- Used grep -rn "Message {" to find all initializations
+- Changed all from `thinking: None` to `thinking: false`
+
+**Acceptance Criteria Met:**
+✓ Changed Message struct to have `thinking: bool` field with default function
+✓ Updated all Message struct initializations to use `thinking: false`
+✓ No Message-related compilation errors
+✓ Typecheck passes (cargo check --workspace)
+---
