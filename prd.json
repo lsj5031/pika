@@ -1,0 +1,280 @@
+{
+  "project": "Pi Agent Manager",
+  "branchName": "ralph/pi-agent-manager",
+  "description": "Web app for managing multiple pi-coding-agent sessions - Rust backend + Makepad WASM frontend with mobile support",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Setup Rust backend project structure",
+      "description": "As a developer, I need to set up the Rust backend foundation with Axum/Tokio web server.",
+      "acceptanceCriteria": [
+        "Initialize Cargo project with dependencies: axum, tokio, serde, serde_json, uuid, jsonrpc",
+        "Create basic folder structure: src/, config, templates",
+        "Create main.rs with Axum HTTP server listening on configurable port",
+        "Add CORS support for local development",
+        "Server starts successfully with 'cargo run'",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Create project configuration structure",
+      "description": "As a user, I need to configure which project root folders to scan for sessions.",
+      "acceptanceCriteria": [
+        "Create ProjectConfig struct with project_root_paths: Vec<PathBuf>",
+        "Create config file: config.toml in app root directory",
+        "Implement config loading from file with default empty list",
+        "Add config validation (paths must exist)",
+        "Create CLI args to override config file path",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Implement pi session discovery",
+      "description": "As a developer, I need to discover pi sessions in each configured project folder.",
+      "acceptanceCriteria": [
+        "Scan .pi/agent/sessions/ subdirectory in each project root",
+        "Parse session.jsonl files to extract session metadata (id, name, timestamp)",
+        "Create SessionInfo struct with: id, project_path, name, created_at, is_active",
+        "Implement discovery function: Vec<SessionInfo> scan_sessions(config)",
+        "Handle missing .pi directories gracefully",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Create WebSocket server for real-time events",
+      "description": "As a developer, I need a WebSocket server to stream pi events to the frontend.",
+      "acceptanceCriteria": [
+        "Add WebSocket support to Axum server (tokio-tungstenite)",
+        "Create /ws endpoint that accepts WebSocket connections",
+        "Create event channel for broadcasting to multiple clients",
+        "Define WSEvent enum: SessionStarted, SessionStopped, ThinkingDelta, MessageAdded",
+        "Implement connection management (track active clients)",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Implement pi subprocess spawning with JSON-RPC",
+      "description": "As a developer, I need to spawn pi processes in JSON-RPC mode and capture their output.",
+      "acceptanceCriteria": [
+        "Create PiProcess struct managing subprocess: process, id, project_path, tx/rx channels",
+        "Spawn pi with: npx @mariozechner/pi-coding-agent --mode rpc --cwd <project>",
+        "Capture stdout (JSON-RPC events) and stderr (logs)",
+        "Parse JSON-RPC events: method, params, result",
+       "Create process manager: HashMap<SessionId, PiProcess>, max 10 concurrent",
+        "Kill process on request",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Create HTTP API endpoints",
+      "description": "As a developer, I need REST endpoints for listing projects and sessions.",
+      "acceptanceCriteria": [
+        "GET /api/projects - returns list of configured projects",
+        "GET /api/projects/:id/sessions - returns sessions for project",
+        "GET /api/sessions - returns all sessions across projects",
+        "GET /api/sessions/:id - returns session details and metadata",
+        "Add JSON response structs with proper serialization",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Setup Makepad WASM frontend project",
+      "description": "As a developer, I need to setup the Makepad frontend project structure.",
+      "acceptanceCriteria": [
+        "Initialize Makepad project with cargo makepad-app --init",
+        "Configure Makepad for WASM compilation target",
+        "Create basic folder structure: src/, assets/, styles/",
+        "Setup HTTP fetch for calling backend API (localhost:PORT)",
+        "App loads in browser with blank screen (no build errors)",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Create basic UI layout (sidebar + main panel)",
+      "description": "As a user, I need a responsive layout with sidebar for navigation and main panel for content.",
+      "acceptanceCriteria": [
+        "Create main UI with split layout: sidebar (30%) + main panel (70%)",
+        "Sidebar: collapsible with hamburger menu on mobile",
+        "Main panel: scrollable content area",
+        "Apply dark theme (dark gray background, light text)",
+        "Layout responsive to window resize",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Implement session list component",
+      "description": "As a user, I need to see a list of sessions organized by project in the sidebar.",
+      "acceptanceCriteria": [
+        "Create SessionList component fetching from /api/sessions",
+        "Group sessions by project (collapsible project headers)",
+        "Display session name and timestamp",
+        "Add visual indicator for running vs inactive sessions",
+        "Add search box to filter sessions by name",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Implement session history view (static)",
+      "description": "As a user, I need to view the message history of a selected session.",
+      "acceptanceCriteria": [
+        "Create SessionHistory component displaying messages in chat bubble format",
+        "Fetch messages from backend endpoint /api/sessions/:id/messages",
+        "Render user messages (right-aligned) and assistant messages (left-aligned)",
+        "Display code blocks in monospace font with syntax highlighting placeholder",
+        "Support scrolling through message history",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Connect WebSocket for live event streaming",
+      "description": "As a user, I need to see live updates when sessions are active.",
+      "acceptanceCriteria": [
+        "Connect to WebSocket at ws://localhost/ws on app load",
+        "Parse WSEvent messages: ThinkingDelta, MessageAdded, SessionStarted, SessionStopped",
+        "Update session list indicators in real-time (running/inactive)",
+        "Append new messages to SessionHistory as they arrive",
+        "Handle WebSocket reconnection on disconnect",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Display thinking blocks in real-time",
+      "description": "As a user, I need to see the assistant's thinking process as it happens.",
+      "acceptanceCriteria": [
+        "Create ThinkingBlock component for rendering thinking sections",
+        "Subscribe to ThinkingDelta events via WebSocket",
+        "Append delta text to thinking block in real-time",
+        "Show 'Thinking...' spinner while waiting for first delta",
+        "Collapse/expand thinking block toggle",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Implement chat input and message sending",
+      "description": "As a user, I need to send messages to the active session.",
+      "acceptanceCriteria": [
+        "Create ChatInput component with text area and send button",
+        "Send messages via POST /api/sessions/:id/prompt endpoint",
+        "Display user message immediately in SessionHistory (optimistic)",
+        "Disable input while session is thinking/busy",
+        "Support multi-line input with Shift+Enter for new lines",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Implement session resume/spawn on selection",
+      "description": "As a user, I need clicking a session to load it, spawning the pi process if not running.",
+      "acceptanceCriteria": [
+        "On session click in sidebar, set as active session",
+        "Check if session process is running via backend state",
+        "If not running, call POST /api/sessions/:id/start to spawn in RPC mode",
+        "Load session history immediately (no waiting for process start)",
+        "Show loading state in UI while process is spawning",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Make UI mobile-responsive",
+      "description": "As a user, I need the UI to work well on my phone browser.",
+      "acceptanceCriteria": [
+        "Sidebar collapses to full-width drawer on mobile (< 768px width)",
+        "Hamburger menu button to toggle sidebar on mobile",
+        "Chat input and buttons are minimum 44px height (touch-friendly)",
+        "Font sizes scale appropriately (16px base)",
+        "Viewport meta tag set for mobile (width=device-width)",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Add new session creation",
+      "description": "As a user, I want to create a new session in a project.",
+      "acceptanceCriteria": [
+        "Add 'New Session' button in project header or sidebar",
+        "Prompt for session name (optional, defaults to timestamp)",
+        "Call POST /api/projects/:id/sessions to create new session",
+        "Spawn pi process immediately in RPC mode",
+        "Add new session to list and select it automatically",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Add session stop functionality",
+      "description": "As a user, I want to manually stop a running session.",
+      "acceptanceCriteria": [
+        "Add 'Stop' button/indicator on active sessions",
+        "Call POST /api/sessions/:id/stop to kill pi process",
+        "Update session status to inactive in UI",
+        "Disable chat input when session is stopped",
+        "Confirm stop action with dialog if session has active work",
+        "Typecheck passes: cargo check"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
