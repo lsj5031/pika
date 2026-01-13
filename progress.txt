@@ -183,3 +183,45 @@ Session Discovery Implementation (US-003):
 - Clone channels before moving into async closures
 - Process.kill() is async - must await
 ---
+
+## 2026-01-13T00:48:29.841Z - US-006
+HTTP API Endpoints Implementation (US-006):
+
+**Axum Router State Management Pattern:**
+- When merging routers with .merge(), they must have the same state type
+- Router<ApiState> cannot be merged with Router<AppState> - state types must match
+- Solution: Keep ApiState as public struct in api.rs, have AppState wrap it
+- Access nested state via State<AppState> then dereference (state.api_state.config)
+
+**API Module Architecture:**
+- ApiState wraps shared resources with Arc<RwLock<ProjectConfig>> for thread-safe mutable access
+- Response structs (ProjectResponse, SessionResponse) need Serialize/Deserialize derives
+- ErrorResponse implements IntoResponse for custom HTTP status codes (NOT_FOUND, BAD_REQUEST, etc.)
+- Use Result<Json<T>, ErrorResponse> for handlers that can fail
+
+**State Nesting Pattern:**
+- AppState combines multiple module-specific states (ws_state, api_state)
+- Individual modules (api, websocket) have their own state types
+- AppState wraps ApiState rather than duplicating config access logic
+- Handlers extract State<AppState> and access nested state (state.api_state.config.read().await)
+
+**REST API Design Patterns:**
+- GET /api/projects - list all projects with session counts
+- GET /api/projects/:id/sessions - nested routes for hierarchical resources
+- GET /api/sessions - list all sessions across all projects  
+- GET /api/sessions/:id - individual resource access by ID
+- Hash-based project IDs from paths for stable identification
+
+**Move vs Clone Gotchas:**
+- Strings don't implement Copy trait
+- When moving String into struct field but also need it later as lookup key, use .clone()
+- Pattern: let id = generate_id(); Struct { id: id.clone(), ... use id for lookup ... }
+
+**Acceptance Criteria Met:**
+- ✓ GET /api/projects - returns list of configured projects
+- ✓ GET /api/projects/:id/sessions - returns sessions for project
+- ✓ GET /api/sessions - returns all sessions across projects
+- ✓ GET /api/sessions/:id - returns session details and metadata
+- ✓ JSON response structs with proper serialization (ProjectResponse, SessionResponse, ErrorResponse)
+- ✓ Typecheck passes (cargo check)
+---
