@@ -463,3 +463,36 @@ Session History Implementation (US-010):
 ✓ Reconnection with exponential backoff on disconnect
 ✓ Typecheck passes (cargo check --workspace)
 ---
+
+## 2026-01-13T02:27:59.612Z - US-012
+**Real-time Thinking Block Implementation (US-012):**
+
+**WebSocket Event Forwarding Pattern:**
+- When multiple components need to consume the same WebSocket event, use a hub-and-spoke pattern
+- App receives all WebSocket events and forwards to specific components based on context
+- Check session_id before forwarding: only forward ThinkingDelta to SessionHistory if it's the current session
+- Pattern: if current_session_id == event.session_id { cx.action(ComponentAction::Event(event.data)) }
+
+**Thinking Block UI Pattern:**
+- Use toggle button with Unicode characters (▼/▶) for collapse/expand state
+- Show spinner text ("...") while waiting for first delta, empty string when content arrives
+- thinking_content field accumulates deltas via push_str()
+- thinking_expanded bool tracks UI state, thinking_active bool tracks if thinking is in progress
+
+**Real-time UI Updates:**
+- ThinkingDelta appends to thinking_content and triggers update_thinking_block()
+- Block shows immediately when thinking_active is true (even without content)
+- Spinner appears until first delta arrives, then content replaces it
+- Collapse/expand state persists across updates
+
+**Integration with Existing Components:**
+- ThinkingBlock already defined in SessionHistory live_design (from previous story)
+- HistoryAction::ThinkingDelta handler already implemented
+- update_thinking_block() method handles all UI updates
+- Only missing piece was forwarding WSEvent to component action
+
+**Gotchas:**
+- Always check current session context before forwarding events to prevent cross-contamination
+- Use cx.action() to forward events from App to child components
+- ThinkingBlock should be visible when thinking_active OR has content (don't hide until thinking complete)
+---

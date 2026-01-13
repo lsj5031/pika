@@ -193,8 +193,8 @@
         "Typecheck passes: cargo check"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "**Real-time Thinking Block Implementation (US-012):**\n\n**WebSocket Event Forwarding Pattern:**\n- When multiple components need to consume the same WebSocket event, use a hub-and-spoke pattern\n- App receives all WebSocket events and forwards to specific components based on context\n- Check session_id before forwarding: only forward ThinkingDelta to SessionHistory if it's the current session\n- Pattern: if current_session_id == event.session_id { cx.action(ComponentAction::Event(event.data)) }\n\n**Thinking Block UI Pattern:**\n- Use toggle button with Unicode characters (▼/▶) for collapse/expand state\n- Show spinner text (\"...\") while waiting for first delta, empty string when content arrives\n- thinking_content field accumulates deltas via push_str()\n- thinking_expanded bool tracks UI state, thinking_active bool tracks if thinking is in progress\n\n**Real-time UI Updates:**\n- ThinkingDelta appends to thinking_content and triggers update_thinking_block()\n- Block shows immediately when thinking_active is true (even without content)\n- Spinner appears until first delta arrives, then content replaces it\n- Collapse/expand state persists across updates\n\n**Integration with Existing Components:**\n- ThinkingBlock already defined in SessionHistory live_design (from previous story)\n- HistoryAction::ThinkingDelta handler already implemented\n- update_thinking_block() method handles all UI updates\n- Only missing piece was forwarding WSEvent to component action\n\n**Gotchas:**\n- Always check current session context before forwarding events to prevent cross-contamination\n- Use cx.action() to forward events from App to child components\n- ThinkingBlock should be visible when thinking_active OR has content (don't hide until thinking complete)"
     },
     {
       "id": "US-013",
