@@ -316,3 +316,50 @@ Makepad Layout Implementation (US-008):
 - Always call `self.ui.redraw(cx)` after modifying UI state
 - ScrollYView must have height: Fill, not height: Fit, to enable scrolling
 ---
+
+## 2026-01-13T01:33:58.811Z - US-009
+Makepad Session List Component Implementation (US-009):
+
+**Dynamic UI Rendering in Makepad:**
+- Makepad widgets are defined in live_design! macro and cannot be created dynamically at runtime
+- Pattern: Update widget content dynamically using set_text() and set_visible()
+- For complex lists, use formatted text in labels or implement draw_walk for custom rendering
+- Alternative: Pre-create a fixed set of widgets and show/hide them as needed
+
+**Async HTTP Fetch Pattern with cx.spawn_task:**
+- Use cx.spawn_task() for async operations that need to update UI
+- Spawn async block with move closure to capture data
+- Emit actions using cx.action() to update UI state
+- Actions are processed in handle_actions() method
+- Detach with .detach() to fire-and-forget
+
+**Search Filtering Pattern:**
+- Store original sessions Vec<Session> separately from filtered display
+- Filter on search input change: sessions.iter().filter(|s| s.name.to_lowercase().contains(&query))
+- Regroup filtered sessions by project with HashMap
+- Preserve expansion state when regrouping
+
+**Session Display Formatting:**
+- Use Unicode characters for visual indicators: ● for active, ○ for inactive
+- Expand/collapse icons: ▼ (expanded) and ▶ (collapsed)
+- Format timestamp with format_timestamp() method (simple for now, can be enhanced)
+- Project name extracted from path: path.split('/').last()
+
+**Graceful Degradation:**
+- Use demo data when backend is unavailable
+- Log errors clearly for debugging
+- Empty state message when no sessions found
+- Show total session count for feedback
+
+**Component State Management:**
+- Store search_query, sessions, and grouped_sessions as Rust fields
+- Use #[rust] attribute in live_design! for non-widget fields
+- Access UI widgets via self.ui.widget_type(id!(widget_name))
+- Always call self.ui.redraw(cx) after state changes
+
+**Gotchas:**
+- Search input changes are detected via text_input(id!(name)).changed(actions)
+- Filter must regroup sessions, not just hide them
+- Unicode characters work fine in Makepad Label widgets
+- Format for display text: \n for newlines in multi-line labels
+---
