@@ -1,0 +1,657 @@
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::{IntoResponse, Json, Response},
+    routing::{get, post},
+    Router,
+};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use crate::sessions::{scan_sessions, get_session_messages as fetch_session_messages, create_session, CreateSessionRequest};
+use crate::AppState;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
+use crate::config::ProjectConfig;
+
+/// API state shared across all handlers
+#[derive(Clone)]
+pub struct ApiState {
+    pub config: Arc<RwLock<ProjectConfig>>,
+}
+
+impl ApiState {
+    pub fn new(config: ProjectConfig) -> Self {
+        Self {
+            config: Arc::new(RwLock::new(config)),
+        }
+    }
+}
+
+/// Project information response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectResponse {
+    /// Unique project ID (based on path hash for now)
+    pub id: String,
+    /// Project root path
+    pub path: PathBuf,
+    /// Project name (extracted from path)
+    pub name: String,
+    /// Number of sessions found in this project
+    pub session_count: usize,
+}
+
+/// Session details response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionResponse {
+    /// Unique session identifier
+    pub id: String,
+    /// Session name
+    pub name: String,
+    /// Project ID containing this session
+    pub project_id: String,
+    /// Project path containing this session
+    pub project_path: PathBuf,
+    /// Session creation timestamp
+    pub created_at: String,
+    /// Whether the session is currently active
+    pub is_active: bool,
+}
+
+/// Message in a session
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageResponse {
+    /// Message role ("user" or "assistant")
+    pub role: String,
+    /// Message content
+    pub content: String,
+    /// Message timestamp (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<String>,
+}
+
+/// Request to send a prompt to a session
+#[derive(Debug, Deserialize)]
+pub struct PromptRequest {
+    /// The prompt text to send
+    pub prompt: String,
+}
+
+/// Response when starting a session
+#[derive(Debug, Serialize)]
+pub struct StartSessionResponse {
+    /// The process ID that was started (or already running)
+    pub process_id: String,
+    /// Whether the process was newly spawned (false if already running)
+    pub newly_spawned: bool,
+}
+
+/// Response for session status
+#[derive(Debug, Serialize)]
+pub struct SessionStatusResponse {
+    /// The session ID
+    pub session_id: String,
+    /// Whether the session process is currently running
+    pub is_running: bool,
+    /// The process ID (if running)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub process_id: Option<String>,
+}
+
+/// Response when stopping a session
+#[derive(Debug, Serialize)]
+pub struct StopSessionResponse {
+    /// The session ID that was stopped
+    pub session_id: String,
+    /// The process ID that was killed
+    pub process_id: Option<String>,
+    /// Whether the process was running and was stopped
+    pub was_running: bool,
+}
+
+/// API error response
+#[derive(Debug, Serialize)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub message: String,
+}
+
+impl IntoResponse for ErrorResponse {
+    fn into_response(self) -> Response {
+        let status = match self.error.as_str() {
+            "NOT_FOUND" => StatusCode::NOT_FOUND,
+            "BAD_REQUEST" => StatusCode::BAD_REQUEST,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        (status, Json(self)).into_response()
+    }
+}
+
+/// Generate a project ID from path (simple hash-based approach)
+fn project_id_from_path(path: &PathBuf) -> String {
+    // Use a simple hash of the path string as ID
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    
+    let mut hasher = DefaultHasher::new();
+    path.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
+/// Extract project name from path
+fn project_name_from_path(path: &PathBuf) -> String {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Unknown")
+        .to_string()
+}
+
+/// GET /api/projects - returns list of configured projects
+pub async fn get_projects(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<ProjectResponse>>, ErrorResponse> {
+    let config = state.api_state.config.read().await;
+    
+    // Scan all sessions to get counts per project
+    let sessions = scan_sessions(&config);
+    let mut session_counts: HashMap<String, usize> = HashMap::new();
+    
+    for session in &sessions {
+        let project_id = project_id_from_path(&session.project_path);
+        *session_counts.entry(project_id).or_insert(0) += 1;
+    }
+    
+    // Build project responses
+    let projects: Vec<ProjectResponse> = config
+        .project_root_paths
+        .iter()
+        .map(|path| {
+            let project_id = project_id_from_path(path);
+            ProjectResponse {
+                id: project_id.clone(),
+                path: path.clone(),
+                name: project_name_from_path(path),
+                session_count: session_counts.get(&project_id).copied().unwrap_or(0),
+            }
+        })
+        .collect();
+    
+    Ok(Json(projects))
+}
+
+/// GET /api/projects/:id/sessions - returns sessions for a specific project
+pub async fn get_project_sessions(
+    State(state): State<AppState>,
+    Path(project_id): Path<String>,
+) -> Result<Json<Vec<SessionResponse>>, ErrorResponse> {
+    let config = state.api_state.config.read().await;
+    
+    // Find the project path by ID
+    let project_path = config
+        .project_root_paths
+        .iter()
+        .find(|path| project_id_from_path(path) == project_id);
+    
+    let project_path = match project_path {
+        Some(path) => path,
+        None => {
+            return Err(ErrorResponse {
+                error: "NOT_FOUND".to_string(),
+                message: format!("Project with ID '{}' not found", project_id),
+            });
+        }
+    };
+    
+    // Scan all sessions and filter by project
+    let sessions = scan_sessions(&config);
+    let project_sessions: Vec<SessionResponse> = sessions
+        .into_iter()
+        .filter(|s| s.project_path == *project_path)
+        .map(|s| SessionResponse {
+            id: s.id,
+            name: s.name,
+            project_id: project_id.clone(),
+            project_path: s.project_path,
+            created_at: s.created_at,
+            is_active: s.is_active,
+        })
+        .collect();
+    
+    Ok(Json(project_sessions))
+}
+
+/// GET /api/sessions - returns all sessions across all projects
+pub async fn get_sessions(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<SessionResponse>>, ErrorResponse> {
+    let config = state.api_state.config.read().await;
+    
+    let sessions = scan_sessions(&config);
+    let session_responses: Vec<SessionResponse> = sessions
+        .into_iter()
+        .map(|s| {
+            let project_id = project_id_from_path(&s.project_path);
+            SessionResponse {
+                id: s.id,
+                name: s.name,
+                project_id,
+                project_path: s.project_path,
+                created_at: s.created_at,
+                is_active: s.is_active,
+            }
+        })
+        .collect();
+    
+    Ok(Json(session_responses))
+}
+
+/// GET /api/sessions/:id - returns session details and metadata
+pub async fn get_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<SessionResponse>, ErrorResponse> {
+    let config = state.api_state.config.read().await;
+
+    // Scan all sessions and find the matching one
+    let sessions = scan_sessions(&config);
+    let session = sessions
+        .into_iter()
+        .find(|s| s.id == session_id);
+
+    let session = match session {
+        Some(s) => s,
+        None => {
+            return Err(ErrorResponse {
+                error: "NOT_FOUND".to_string(),
+                message: format!("Session with ID '{}' not found", session_id),
+            });
+        }
+    };
+
+    let project_id = project_id_from_path(&session.project_path);
+
+    Ok(Json(SessionResponse {
+        id: session.id,
+        name: session.name,
+        project_id,
+        project_path: session.project_path,
+        created_at: session.created_at,
+        is_active: session.is_active,
+    }))
+}
+
+/// GET /api/sessions/:id/messages - returns messages for a session
+pub async fn get_session_messages(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<Vec<MessageResponse>>, ErrorResponse> {
+    let config = state.api_state.config.read().await;
+
+    // Scan all sessions and find the matching one
+    let sessions = scan_sessions(&config);
+    let session = sessions
+        .into_iter()
+        .find(|s| s.id == session_id);
+
+    let session = match session {
+        Some(s) => s,
+        None => {
+            return Err(ErrorResponse {
+                error: "NOT_FOUND".to_string(),
+                message: format!("Session with ID '{}' not found", session_id),
+            });
+        }
+    };
+
+    // Get messages for this session
+    let messages = fetch_session_messages(&session.id, &session.project_path)
+        .map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to read messages: {}", e),
+        })?;
+
+    // Convert to response format
+    let message_responses: Vec<MessageResponse> = messages
+        .into_iter()
+        .map(|m| MessageResponse {
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp,
+        })
+        .collect();
+
+    Ok(Json(message_responses))
+}
+
+/// POST /api/sessions/:id/prompt - send a prompt to a session
+pub async fn send_prompt_to_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(req): Json<PromptRequest>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    // Lock the process manager and send the prompt
+    let mut process_manager = state.process_manager.lock().await;
+
+    process_manager
+        .send_prompt(&session_id, &req.prompt)
+        .await
+        .map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to send prompt: {}", e),
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "status": "ok",
+        "session_id": session_id,
+        "message": "Prompt sent successfully"
+    })))
+}
+
+/// POST /api/sessions/:id/start - start a session's process (or return if already running)
+pub async fn start_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<StartSessionResponse>, ErrorResponse> {
+    // First, find the session to get its project path
+    let config = state.api_state.config.read().await;
+    let sessions = scan_sessions(&config);
+
+    let session = sessions
+        .into_iter()
+        .find(|s| s.id == session_id);
+
+    let session = match session {
+        Some(s) => s,
+        None => {
+            return Err(ErrorResponse {
+                error: "NOT_FOUND".to_string(),
+                message: format!("Session with ID '{}' not found", session_id),
+            });
+        }
+    };
+
+    // Lock the process manager and start the session
+    let mut process_manager = state.process_manager.lock().await;
+
+    // Check if the session is already running
+    let already_running = process_manager.is_session_running(&session_id);
+
+    // Start the session (will return existing process ID if already running)
+    let process_id = process_manager
+        .spawn_for_session(&session_id, session.project_path.clone())
+        .map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to start session: {}", e),
+        })?;
+
+    Ok(Json(StartSessionResponse {
+        process_id,
+        newly_spawned: !already_running,
+    }))
+}
+
+/// GET /api/sessions/:id/status - check if a session is currently running
+pub async fn get_session_status(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<SessionStatusResponse>, ErrorResponse> {
+    // First, verify the session exists
+    let config = state.api_state.config.read().await;
+    let sessions = scan_sessions(&config);
+
+    let session = sessions
+        .into_iter()
+        .find(|s| s.id == session_id);
+
+    if session.is_none() {
+        return Err(ErrorResponse {
+            error: "NOT_FOUND".to_string(),
+            message: format!("Session with ID '{}' not found", session_id),
+        });
+    }
+
+    // Lock the process manager and check if the session is running
+    let process_manager = state.process_manager.lock().await;
+    let is_running = process_manager.is_session_running(&session_id);
+
+    // Get the process ID if running
+    let process_id = if is_running {
+        process_manager.get_process_id_for_session(&session_id)
+    } else {
+        None
+    };
+
+    Ok(Json(SessionStatusResponse {
+        session_id,
+        is_running,
+        process_id,
+    }))
+}
+
+/// POST /api/sessions/:id/stop - stop a running session's process
+pub async fn stop_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<StopSessionResponse>, ErrorResponse> {
+    // First, verify the session exists
+    let config = state.api_state.config.read().await;
+    let sessions = scan_sessions(&config);
+
+    let session = sessions
+        .into_iter()
+        .find(|s| s.id == session_id);
+
+    if session.is_none() {
+        return Err(ErrorResponse {
+            error: "NOT_FOUND".to_string(),
+            message: format!("Session with ID '{}' not found", session_id),
+        });
+    }
+
+    // Drop config read lock before killing process
+    drop(config);
+
+    // Lock the process manager and get the process ID before killing
+    let process_manager = state.process_manager.lock().await;
+    let is_running = process_manager.is_session_running(&session_id);
+    let process_id = if is_running {
+        process_manager.get_process_id_for_session(&session_id)
+    } else {
+        None
+    };
+
+    // Release the lock before killing (kill needs mutable access)
+    drop(process_manager);
+
+    // Kill the process if it was running
+    let mut process_manager = state.process_manager.lock().await;
+
+    if is_running {
+        if let Some(pid) = &process_id {
+            process_manager.kill(pid).await.map_err(|e| ErrorResponse {
+                error: "INTERNAL_ERROR".to_string(),
+                message: format!("Failed to stop session: {}", e),
+            })?;
+        }
+    }
+
+    Ok(Json(StopSessionResponse {
+        session_id,
+        process_id,
+        was_running: is_running,
+    }))
+}
+
+/// Request to create a new session in a project
+#[derive(Debug, Deserialize)]
+pub struct CreateSessionInProjectRequest {
+    /// Optional session name (defaults to timestamp if not provided)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// Response when creating a new session in a project
+#[derive(Debug, Serialize)]
+pub struct CreateSessionInProjectResponse {
+    /// The newly created session ID
+    pub session_id: String,
+    /// The session name
+    pub name: String,
+    /// The project ID where the session was created
+    pub project_id: String,
+    /// The project path where the session was created
+    pub project_path: PathBuf,
+    /// The session creation timestamp
+    pub created_at: String,
+    /// Whether the process was newly spawned
+    pub newly_spawned: bool,
+    /// The process ID (if spawned)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub process_id: Option<String>,
+}
+
+/// POST /api/projects/:id/sessions - create a new session in a project
+pub async fn create_session_in_project(
+    State(state): State<AppState>,
+    Path(project_id): Path<String>,
+    Json(req): Json<CreateSessionInProjectRequest>,
+) -> Result<Json<CreateSessionInProjectResponse>, ErrorResponse> {
+    // Get config to find project path by ID
+    let config = state.api_state.config.read().await;
+
+    // Find the project path by ID
+    let project_path = config
+        .project_root_paths
+        .iter()
+        .find(|path| project_id_from_path(path) == project_id)
+        .cloned(); // Clone the PathBuf to avoid borrow issues
+
+    let project_path = match project_path {
+        Some(path) => path,
+        None => {
+            return Err(ErrorResponse {
+                error: "NOT_FOUND".to_string(),
+                message: format!("Project with ID '{}' not found", project_id),
+            });
+        }
+    };
+
+    // Drop config read lock before doing file I/O
+    drop(config);
+
+    // Create the session
+    let create_request = CreateSessionRequest {
+        name: req.name,
+    };
+
+    let session_response = create_session(&project_path, create_request)
+        .map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to create session: {}", e),
+        })?;
+
+    let session_id = session_response.session_id.clone();
+
+    // Spawn the pi process immediately in RPC mode
+    let mut process_manager = state.process_manager.lock().await;
+
+    let process_id = process_manager
+        .spawn_for_session(&session_id, project_path.clone())
+        .map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to spawn session process: {}", e),
+        })?;
+
+    Ok(Json(CreateSessionInProjectResponse {
+        session_id: session_response.session_id,
+        name: session_response.name,
+        project_id,
+        project_path: session_response.project_path,
+        created_at: session_response.created_at,
+        newly_spawned: true,
+        process_id: Some(process_id),
+    }))
+}
+
+/// Create the API router with all endpoints
+pub fn create_api_router() -> Router<AppState> {
+    Router::new()
+        .route("/api/projects", get(get_projects))
+        .route("/api/projects/{id}/sessions", get(get_project_sessions))
+        .route("/api/projects/{id}/sessions", post(create_session_in_project))
+        .route("/api/sessions", get(get_sessions))
+        .route("/api/sessions/{id}", get(get_session))
+        .route("/api/sessions/{id}/messages", get(get_session_messages))
+        .route("/api/sessions/{id}/prompt", post(send_prompt_to_session))
+        .route("/api/sessions/{id}/status", get(get_session_status))
+        .route("/api/sessions/{id}/start", post(start_session))
+        .route("/api/sessions/{id}/stop", post(stop_session))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_project_id_from_path() {
+        let path1 = PathBuf::from("/test/project");
+        let path2 = PathBuf::from("/test/project");
+        let path3 = PathBuf::from("/other/project");
+        
+        // Same path should generate same ID
+        assert_eq!(project_id_from_path(&path1), project_id_from_path(&path2));
+        // Different path should generate different ID
+        assert_ne!(project_id_from_path(&path1), project_id_from_path(&path3));
+    }
+    
+    #[test]
+    fn test_project_name_from_path() {
+        let path = PathBuf::from("/home/user/my-project");
+        assert_eq!(project_name_from_path(&path), "my-project");
+    }
+    
+    #[test]
+    fn test_error_response_serialization() {
+        let error = ErrorResponse {
+            error: "NOT_FOUND".to_string(),
+            message: "Test not found".to_string(),
+        };
+        
+        let json = serde_json::to_string(&error).unwrap();
+        assert!(json.contains("NOT_FOUND"));
+        assert!(json.contains("Test not found"));
+    }
+    
+    #[test]
+    fn test_project_response_serialization() {
+        let project = ProjectResponse {
+            id: "test-id".to_string(),
+            path: PathBuf::from("/test/project"),
+            name: "test-project".to_string(),
+            session_count: 5,
+        };
+        
+        let json = serde_json::to_string(&project).unwrap();
+        assert!(json.contains("test-id"));
+        assert!(json.contains("test-project"));
+        assert!(json.contains("5"));
+    }
+    
+    #[test]
+    fn test_session_response_serialization() {
+        let session = SessionResponse {
+            id: "session-123".to_string(),
+            name: "Test Session".to_string(),
+            project_id: "project-456".to_string(),
+            project_path: PathBuf::from("/test/project"),
+            created_at: "2025-01-13T00:00:00Z".to_string(),
+            is_active: false,
+        };
+        
+        let json = serde_json::to_string(&session).unwrap();
+        assert!(json.contains("session-123"));
+        assert!(json.contains("Test Session"));
+        assert!(json.contains("project-456"));
+    }
+}
