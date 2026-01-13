@@ -58,8 +58,8 @@
         "TypeScript compiles without errors"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Moved up - needed before API client"
+      "passes": true,
+      "notes": "Created .env.example with VITE_API_URL and VITE_WS_URL defaults. Created src/config/env.ts to provide typed access to env vars with import.meta.env."
     },
     {
       "id": "US-004",

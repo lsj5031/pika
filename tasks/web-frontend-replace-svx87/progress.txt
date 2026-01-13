@@ -54,3 +54,17 @@ Started: 2026-01-14
 - TypeScript discriminated unions are the perfect match for Rust enums with serde tagging
 - Backend API returns path fields as strings (not PathBuf objects) in JSON
 
+## [2026-01-14] - US-018: Add environment variable configuration
+
+**Implementation:**
+- Created .env.example with VITE_API_URL and VITE_WS_URL documented
+- Default values: VITE_API_URL=http://localhost:8080/api, VITE_WS_URL=ws://localhost:8080/ws
+- Created src/config/env.ts for typed access to environment variables
+- Used import.meta.env to access Vite env variables with fallback defaults
+- Verified TypeScript compiles without errors
+
+**Learnings:**
+- Vite automatically loads .env files and makes VITE_ prefixed variables available via import.meta.env
+- Environment variables are replaced at build time for static values
+- The as const assertion on the config object provides better type inference
+
