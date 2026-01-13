@@ -1,0 +1,292 @@
+{
+  "project": "pika",
+  "branchName": "ralph/web-frontend-replace",
+  "description": "Replace Makepad WASM frontend with React + TypeScript + Vite + shadcn/ui",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Initialize Vite + React + TypeScript project",
+      "description": "As a developer, I want a Vite project scaffolded with React and TypeScript so that I can use standard web development tooling.",
+      "acceptanceCriteria": [
+        "frontend-web/ directory created with npm create vite@latest",
+        "React 19 and TypeScript configured",
+        "package.json includes dependencies: react, react-dom, @tanstack/react-query, zustand, lucide-react",
+        "Dev server runs on port 5173 with npm run dev",
+        "TypeScript compiles without errors"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Created with Vite 7.3.1, React 19.2.0, TypeScript 5.9.3. All required dependencies installed."
+    },
+    {
+      "id": "US-002",
+      "title": "Configure Tailwind CSS and shadcn/ui",
+      "description": "As a developer, I want Tailwind CSS and shadcn/ui installed so that I can use pre-built accessible components.",
+      "acceptanceCriteria": [
+        "Tailwind CSS configured with tailwind.config.js",
+        "shadcn/ui initialized with init command",
+        "Light theme as default (per user preference)",
+        "Global CSS includes shadcn base styles",
+        "TypeScript compiles without errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Create TypeScript types for API",
+      "description": "As a developer, I want TypeScript types matching the backend API so that I have type safety across the frontend.",
+      "acceptanceCriteria": [
+        "types/api.ts defines Session, Project, Message, WSEvent types",
+        "WSEvent type matches backend serde enum (SessionStarted, SessionStopped, ThinkingDelta, MessageAdded)",
+        "All types export from types/index.ts",
+        "TypeScript compiles without errors"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Add environment variable configuration",
+      "description": "As a developer, I want environment variables for API URLs so that development and production use different endpoints.",
+      "acceptanceCriteria": [
+        ".env.example documents VITE_API_URL and VITE_WS_URL",
+        "Default values: VITE_API_URL=http://localhost:8080/api, VITE_WS_URL=ws://localhost:8080/ws",
+        "Vite loads env variables from .env file",
+        "TypeScript compiles without errors"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Moved up - needed before API client"
+    },
+    {
+      "id": "US-004",
+      "title": "Create API client with React Query",
+      "description": "As a developer, I want an API client using React Query so that API state is managed efficiently.",
+      "acceptanceCriteria": [
+        "lib/api.ts creates apiClient with base URL from VITE_API_URL env var",
+        "hooks/useSessions.ts uses useQuery for fetching sessions list",
+        "hooks/useProjects.ts uses useQuery for fetching projects list",
+        "hooks/useSessionHistory.ts uses useQuery for fetching session messages",
+        "hooks/useCreateSession.ts uses useMutation for creating sessions",
+        "hooks/useStartSession.ts uses useMutation for starting sessions",
+        "hooks/useStopSession.ts uses useMutation for stopping sessions",
+        "TypeScript compiles without errors"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Create WebSocket hook",
+      "description": "As a developer, I want a React hook for WebSocket connections so that real-time updates work across the app.",
+      "acceptanceCriteria": [
+        "hooks/useWebSocket.ts creates WebSocket connection to VITE_WS_URL",
+        "Hook exposes connectionStatus state (connecting, connected, disconnected)",
+        "Hook accepts onMessage callback for handling events",
+        "Auto-reconnect on disconnect with exponential backoff",
+        "Cleanup on unmount",
+        "TypeScript compiles without errors"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Create Zustand store for global state",
+      "description": "As a developer, I want a Zustand store for global app state so that components can share state easily.",
+      "acceptanceCriteria": [
+        "store/appStore.ts defines store with currentSessionId, sidebarCollapsed",
+        "Store includes actions: setCurrentSession, toggleSidebar, setSidebarCollapsed",
+        "Store persists to localStorage",
+        "TypeScript compiles without errors"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Moved up - needed before UI components"
+    },
+    {
+      "id": "US-006",
+      "title": "Create session list sidebar component",
+      "description": "As a user, I want a sidebar showing all sessions grouped by project so that I can navigate between sessions.",
+      "acceptanceCriteria": [
+        "components/SessionList.tsx renders sessions grouped by project",
+        "Sessions show active status indicator (green dot)",
+        "Clicking a session calls onSessionSelect callback",
+        "Uses shadcn Scroll area for overflow",
+        "Responsive: collapses to drawer on mobile (< 768px)",
+        "TypeScript compiles without errors",
+        "Verify in browser using webapp-testing skill"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Create session history view component",
+      "description": "As a user, I want to see the conversation history for the selected session so that I can read previous messages.",
+      "acceptanceCriteria": [
+        "components/SessionHistory.tsx renders list of messages",
+        "User messages align right, assistant messages align left",
+        "Messages use shadcn Card component for styling",
+        "Timestamp displayed below each message",
+        "Scroll to bottom when new messages arrive",
+        "Empty state shows No messages yet",
+        "TypeScript compiles without errors",
+        "Verify in browser using webapp-testing skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Create chat input component",
+      "description": "As a user, I want an input field to send messages so that I can communicate with the agent.",
+      "acceptanceCriteria": [
+        "components/ChatInput.tsx has textarea and send button",
+        "Uses shadcn Textarea and Button components",
+        "Send button disabled when input is empty or session is inactive",
+        "Shift+Enter for new line, Enter to send",
+        "Calls onSendMessage with content and clears input",
+        "Auto-resize textarea based on content",
+        "TypeScript compiles without errors",
+        "Verify in browser using webapp-testing skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Implement thinking state display",
+      "description": "As a user, I want to see when the agent is thinking so that I know a response is coming.",
+      "acceptanceCriteria": [
+        "components/ThinkingIndicator.tsx shows animated loader",
+        "Streaming thinking content displays in real-time",
+        "Thinking message styled differently from regular messages",
+        "Clears when assistant message is complete",
+        "TypeScript compiles without errors",
+        "Verify in browser using webapp-testing skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Create app layout with header and sidebar",
+      "description": "As a user, I want a responsive layout with sidebar and main content area so that the app works on desktop and mobile.",
+      "acceptanceCriteria": [
+        "App.tsx layouts sidebar (left) and main panel (right)",
+        "Header shows app name and connection status",
+        "Hamburger menu toggles sidebar on mobile",
+        "Stop session button in header when session is active",
+        "Uses Zustand store for sidebar collapse state",
+        "TypeScript compiles without errors",
+        "Verify in browser using webapp-testing skill"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Wire WebSocket events to UI updates",
+      "description": "As a developer, I want WebSocket events to update the UI so that changes reflect in real-time.",
+      "acceptanceCriteria": [
+        "SessionStarted event updates session active status",
+        "SessionStopped event clears session active status",
+        "ThinkingDelta appends to current thinking message",
+        "MessageAdded appends new message to history",
+        "Events use React Query cache updates",
+        "TypeScript compiles without errors",
+        "Verify in browser using webapp-testing skill"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Create new session dialog",
+      "description": "As a user, I want a dialog to create new sessions so that I can start new conversations.",
+      "acceptanceCriteria": [
+        "components/NewSessionDialog.tsx uses shadcn Dialog",
+        "Project dropdown selector (populated from API)",
+        "Optional session name input",
+        "Create button calls API mutation",
+        "Dialog closes on successful creation",
+        "TypeScript compiles without errors",
+        "Verify in browser using webapp-testing skill"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Add error handling with toasts",
+      "description": "As a user, I want to see error messages when something goes wrong so that I understand what happened.",
+      "acceptanceCriteria": [
+        "components/Toaster.tsx integrates shadcn Toast",
+        "API errors trigger toast notifications",
+        "WebSocket errors trigger toast notifications",
+        "Success toasts for session creation/start",
+        "TypeScript compiles without errors",
+        "Verify in browser using webapp-testing skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Add static file serving to backend",
+      "description": "As a developer, I want the backend to serve the frontend build so that the app can be deployed as a single binary.",
+      "acceptanceCriteria": [
+        "src/static_files.rs module serves files from frontend-web/dist/",
+        "src/main.rs adds fallback route for SPA routing",
+        "Static files served at / path",
+        "CORS configured for development (Vite dev server on port 5173)",
+        "cargo check passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Backend integration - done after frontend is functional"
+    },
+    {
+      "id": "US-017",
+      "title": "Update build and deployment scripts",
+      "description": "As a developer, I want build scripts for the new frontend so that deployment is automated.",
+      "acceptanceCriteria": [
+        "frontend-web/package.json has build script for production",
+        "Root Makefile or script builds frontend then backend",
+        "Production build outputs to frontend-web/dist/",
+        "README documents build process"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Delete old Makepad frontend",
+      "description": "As a developer, I want the old frontend removed so that it doesn't cause confusion.",
+      "acceptanceCriteria": [
+        "frontend/ directory deleted after new frontend is functional",
+        "No references to Makepad in repository",
+        ".gitignore updated to exclude frontend-web/node_modules/ and frontend-web/dist/",
+        "README updated with new development instructions"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Done last - only after new frontend is fully functional"
+    }
+  ]
+}
