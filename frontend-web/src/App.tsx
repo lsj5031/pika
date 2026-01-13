@@ -1,6 +1,9 @@
-import { SessionList } from "./components";
+import { SessionList, SessionHistory } from "./components";
+import { useAppStore } from "./store/appStore";
 
 function App() {
+  const currentSessionId = useAppStore((state) => state.currentSessionId);
+
   return (
     <div className="flex h-screen w-full">
       {/* Sidebar - SessionList */}
@@ -9,8 +12,8 @@ function App() {
       </aside>
 
       {/* Main content area */}
-      <main className="flex-1 flex items-center justify-center">
-        <p className="text-muted-foreground">Select a session to view history</p>
+      <main className="flex-1">
+        <SessionHistory sessionId={currentSessionId} />
       </main>
     </div>
   );
