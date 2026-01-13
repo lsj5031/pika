@@ -123,8 +123,8 @@
         "Verify in browser using webapp-testing skill"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created SessionList.tsx component that groups sessions by project using useSessions and useProjects hooks. Active sessions show green dot indicator. Clicking updates Zustand store's currentSessionId. Uses shadcn ScrollArea for overflow. className prop supports responsive behavior (mobile drawer will be added in US-009 layout). Verified in browser - component renders correctly with loading and empty states."
     },
     {
       "id": "US-007",
