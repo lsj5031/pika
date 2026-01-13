@@ -209,8 +209,8 @@
         "Typecheck passes: cargo check"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "\n## US-013 Learnings: Chat Input and Message Sending\n\n**What Was Already Implemented:**\n- ChatInput component was fully implemented with TextInput, Send button, and keyboard handling\n- Backend POST /api/sessions/:id/prompt endpoint existed in api.rs\n- Optimistic UI update pattern was already working (ChatInput emits MessageSent, App forwards to SessionHistory)\n- Multi-line input with Shift+Enter was implemented in ChatInput::handle_actions\n- Thinking state management (disable input) was implemented in App::handle_websocket_event\n\n**What Was Missing:**\n- ChatInput was disabled when thinking started but never re-enabled after completion\n- `thinking_active` field was used but not declared in App struct\n\n**Pattern for Thinking State Lifecycle:**\n1. WSEvent::ThinkingDelta arrives → set thinking_active=true, disable ChatInput\n2. WSEvent::MessageAdded with role=\"assistant\" arrives → set thinking_active=false, re-enable ChatInput\n3. This assumes assistant message means thinking is complete (reasonable assumption for chat flow)\n\n**Action Forwarding Pattern:**\n- ChatInput emits ChatInputAction::MessageSent\n- App receives it and creates Message struct\n- App emits HistoryAction::MessageAppended to SessionHistory\n- This creates optimistic UI update before backend responds\n- WebSocket WSEvent::MessageAdded then confirms the message (or adds assistant response)\n\n**Keyboard Handling Pattern:**\n- Check for KeyEvent in actions loop\n- Use key_event.modifiers.shift to detect Shift key state\n- If Shift+Enter: let default behavior handle (new line)\n- If Enter only: consume event and trigger send\n\n**Integration Pattern:**\n- Use cross-component action forwarding via App as hub\n- App receives all actions and forwards to specific components based on context\n- Check current_session_id before forwarding WebSocket events to prevent cross-contamination\n"
     },
     {
       "id": "US-014",
