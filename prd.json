@@ -81,8 +81,8 @@
         "Typecheck passes: cargo check"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "**Subprocess Spawning Pattern (US-005):**\n- Use tokio::process::Command with .args() for spawning external processes\n- .stdout(Stdio::piped()) and .stderr(Stdio::piped()) to capture output\n- .spawn() returns Child with stdout/stderr handles that must be .take()\n\n**Async Task Management:**\n- tokio::spawn for concurrent stdout/stderr reading\n- Store JoinHandle for task cleanup (abort on kill)\n- Use underscore prefix (_stdout_task) to suppress unused variable warnings\n\n**Broadcast Channel Pattern:**\n- tokio::sync::broadcast::channel for pub/sub to multiple listeners\n- tx.subscribe() creates new receivers for each listener\n- tx.send() errors can be ignored when no listeners (use let _)\n- Channel capacity (100) provides backpressure\n\n**Process Management:**\n- HashMap<String, PiProcess> for tracking by ID\n- Check process.is_running() via process.id().is_some()\n- Enforce concurrent limit (MAX_CONCURRENT_PROCESSES = 10)\n- Remove from map before kill to prevent double-kill\n\n**JSON-RPC Event Parsing:**\n- JsonRpcEvent struct with Option<> fields for method/params/result\n- Use #[serde(flatten)] with extra HashMap for flexible JSON\n- Skip non-JSON lines gracefully (pi may output other content)\n- Trim and skip empty lines before parsing\n\n**Error Handling:**\n- thiserror for clean error derive with #[source] attribute\n- Contextual errors (include path/id in error variants)\n- Return Err early for validation (path existence, UTF-8 check)\n\n**Gotchas:**\n- Unused variables in async closures: prefix with underscore\n- PathBuf.to_str() returns Option<&str> - must handle None case\n- Clone channels before moving into async closures\n- Process.kill() is async - must await"
     },
     {
       "id": "US-006",
