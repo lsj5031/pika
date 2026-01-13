@@ -68,3 +68,24 @@ Started: 2026-01-14
 - Environment variables are replaced at build time for static values
 - The as const assertion on the config object provides better type inference
 
+## [2026-01-14] - US-004: Create API client with React Query
+
+**Implementation:**
+- Created src/lib/api.ts with fetch-based apiClient using VITE_API_URL
+  - Generic request<T> method with error handling
+  - Convenience get<T> and post<T> methods
+- Created React Query hooks:
+  - hooks/useSessions.ts - fetches all sessions
+  - hooks/useProjects.ts - fetches all projects
+  - hooks/useSessionHistory.ts - fetches messages for a session
+  - hooks/useCreateSession.ts - creates new session in project
+  - hooks/useStartSession.ts - starts a session
+  - hooks/useStopSession.ts - stops a running session
+- All mutations include cache invalidation to keep data fresh
+- Verified TypeScript compiles without errors
+
+**Learnings:**
+- React Query uses queryKey arrays for cache identification - nested arrays like ["sessions", sessionId, "messages"] work well
+- Mutations should invalidate related queries to trigger refetching
+- setQueryData can be used for optimistic updates after mutations
+
