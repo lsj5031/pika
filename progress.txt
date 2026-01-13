@@ -911,3 +911,33 @@ When changing struct field types, must update ALL struct initializations:
 ✓ No Message-related compilation errors
 ✓ Typecheck passes (cargo check --workspace)
 ---
+
+## 2026-01-13T05:24:37.905Z - FIX-006
+FIX-006 Action Handler Methods - Already Correctly Implemented:
+
+**Pattern - Trait Implementation vs Helper Methods:**
+- `impl MatchEvent for App` contains ONLY trait methods (handle_startup, handle_actions, etc.)
+- Helper methods (handle_websocket_action, handle_websocket_event) go in standalone `impl App`
+- They can be called from MatchEvent impl via self.method_name()
+- Cannot add arbitrary methods to trait impls - must be defined in the trait itself
+
+**MatchEvent is a Makepad Trait:**
+- MatchEvent is defined by Makepad framework, cannot be extended
+- Only trait-defined methods can be in impl MatchEvent for App
+- Helper methods go in impl App but are accessible from MatchEvent impl
+
+**Method Signature Pattern:**
+- WebSocket event handlers: fn handle_XXX(&mut self, cx: &mut Cx, event: &XXX)
+- Events passed by reference (&WSAction, &WSEvent) for efficiency
+- Methods update UI state and forward events to child components
+
+**Acceptance Criteria Interpretation:**
+- "to App impl MatchEvent" means "for use by App's MatchEvent implementation", not "into the impl block"
+- Methods must exist, have correct signatures, and be callable from MatchEvent impl
+- No new errors introduced by these methods
+
+**Code Organization:**
+- MatchEvent impl: handle_startup, handle_actions (trait methods)
+- impl App: handle_websocket_action, handle_websocket_event (helper methods)
+- Both blocks can call methods from the other block (self.method_name())
+---
