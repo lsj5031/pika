@@ -71,3 +71,42 @@ Configuration System Implementation (US-002):
 - ✓ CLI args to override config file path (--config)
 - ✓ Typecheck passes (cargo check)
 ---
+
+## 2026-01-13T00:40:27.137Z - US-003
+Session Discovery Implementation (US-003):
+
+**Session Discovery Pattern:**
+- Scan .pi/agent/sessions/ subdirectory in each configured project root
+- Parse session.jsonl files (JSONL format - one JSON object per line)
+- Return Vec<SessionInfo> with all discovered sessions
+
+**SessionInfo Struct:**
+- id: String (session ID from sessionId field)
+- project_path: PathBuf (path to the project containing the session)
+- name: String (human-readable name, falls back to ID if empty)
+- created_at: String (timestamp from JSON, defaults to "Unknown" if empty)
+- is_active: bool (currently hardcoded to false, will be enhanced later)
+
+**Graceful Degradation:**
+- Missing .pi directories: Return empty Vec instead of error
+- Missing session.jsonl: Return empty Vec instead of error
+- Malformed JSONL lines: Skip and continue parsing (don't fail entire scan)
+- Empty lines in JSONL: Skip gracefully
+
+**JSONL Parsing Pattern:**
+- Use BufReader with BufRead for line-by-line reading
+- serde_json::from_str for each line
+- SessionEntry struct with #[serde(rename)] for field name mapping
+- Trim and skip empty lines before parsing
+
+**Error Handling:**
+- SessionError enum with IoError and ParseError variants
+- Use thiserror for clean error derive macros
+- Errors propagated via Result<> for file operations
+- Public API (scan_sessions) never fails - returns empty Vec on errors
+
+**Module Organization:**
+- sessions.rs for session discovery logic
+- SessionEntry private struct for internal parsing
+- SessionInfo public struct for API responses
+---

@@ -48,8 +48,8 @@
         "Typecheck passes: cargo check"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Session Discovery Implementation (US-003):\n\n**Session Discovery Pattern:**\n- Scan .pi/agent/sessions/ subdirectory in each configured project root\n- Parse session.jsonl files (JSONL format - one JSON object per line)\n- Return Vec<SessionInfo> with all discovered sessions\n\n**SessionInfo Struct:**\n- id: String (session ID from sessionId field)\n- project_path: PathBuf (path to the project containing the session)\n- name: String (human-readable name, falls back to ID if empty)\n- created_at: String (timestamp from JSON, defaults to \"Unknown\" if empty)\n- is_active: bool (currently hardcoded to false, will be enhanced later)\n\n**Graceful Degradation:**\n- Missing .pi directories: Return empty Vec instead of error\n- Missing session.jsonl: Return empty Vec instead of error\n- Malformed JSONL lines: Skip and continue parsing (don't fail entire scan)\n- Empty lines in JSONL: Skip gracefully\n\n**JSONL Parsing Pattern:**\n- Use BufReader with BufRead for line-by-line reading\n- serde_json::from_str for each line\n- SessionEntry struct with #[serde(rename)] for field name mapping\n- Trim and skip empty lines before parsing\n\n**Error Handling:**\n- SessionError enum with IoError and ParseError variants\n- Use thiserror for clean error derive macros\n- Errors propagated via Result<> for file operations\n- Public API (scan_sessions) never fails - returns empty Vec on errors\n\n**Module Organization:**\n- sessions.rs for session discovery logic\n- SessionEntry private struct for internal parsing\n- SessionInfo public struct for API responses"
     },
     {
       "id": "US-004",
