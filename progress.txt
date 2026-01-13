@@ -708,3 +708,36 @@ When session state changes via WebSocket events, emit a separate action to updat
 - Inline confirmation is sufficient for now (full dialog would require modal component which doesn't exist)
 - Use thinking_active to detect if session has active work before stopping
 ---
+
+## 2026-01-13T03:59:32.439Z - FIX-001
+FIX-001 Module Structure - Verified and Fixed:
+
+**What Was Already Correct:**
+- sessions.rs already had `pub mod chat_input;` (line 756)
+- sessions.rs already had `pub mod history;` (line 754)
+- lib.rs re-exported both ChatInput and ChatInputAction from chat_input module
+
+**What Was Fixed:**
+- Added `ChatInput` to the import in app.rs (was only importing `ChatInputAction`)
+- Changed from: `use crate::sessions::chat_input::ChatInputAction;`
+- Changed to: `use crate::sessions::chat_input::{ChatInput, ChatInputAction};`
+
+**Module Structure Pattern:**
+- Submodules must be declared with `pub mod` in parent module
+- Re-exports in lib.rs should include both the widget type (ChatInput) and action types (ChatInputAction)
+- When using the component in live_design!, import the widget type if needed in code
+- Module declarations use `pub mod` not just `mod` for external visibility
+
+**Gotcha:**
+- Story acceptance criteria mentioned `ChatInputWidget` which doesn't exist
+- Actual type name is `ChatInput` (not `ChatInputWidget`)
+- Always verify actual type names in the source code before following documentation
+
+**Remaining Issues (Not Related to Module Structure):**
+- tokio dependency missing (FIX-002)
+- reqwest API usage (FIX-003)  
+- Makepad Cx API calls (FIX-004)
+- Message struct fields (FIX-005)
+- Action handler methods (FIX-006)
+- Widget access patterns (FIX-007, FIX-008)
+---
