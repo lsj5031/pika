@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useSessionHistory } from "../hooks/useSessionHistory";
+import { useThinkingStore } from "../store/thinkingStore";
 import { Card } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
+import { ThinkingIndicator } from "./ThinkingIndicator";
 import { cn } from "../lib/utils";
 import type { Message } from "../types";
 
@@ -58,11 +60,14 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   const { data: messages, isLoading } = useSessionHistory({ sessionId });
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const thinkingState = useThinkingStore((state) =>
+    sessionId ? state.thinkingBySession[sessionId] ?? { content: "", isThinking: false } : { content: "", isThinking: false }
+  );
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or thinking updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, thinkingState]);
 
   if (!sessionId) {
     return (
@@ -110,6 +115,9 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
           {messages.map((message, index) => (
             <MessageBubble key={index} message={message} />
           ))}
+          {thinkingState.isThinking && (
+            <ThinkingIndicator content={thinkingState.content} />
+          )}
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
