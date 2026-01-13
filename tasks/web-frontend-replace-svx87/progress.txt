@@ -107,3 +107,23 @@ Started: 2026-01-14
 - Exponential backoff prevents overwhelming the server during outages
 - Using refs for WebSocket and timeout ensures stable references across re-renders
 
+## [2026-01-14] - US-011: Create Zustand store for global state
+
+**Implementation:**
+- Created store/appStore.ts using Zustand v5
+- State includes:
+  - currentSessionId: string | null
+  - sidebarCollapsed: boolean
+- Actions include:
+  - setCurrentSession(sessionId) - sets the currently selected session
+  - toggleSidebar() - toggles sidebar collapse state
+  - setSidebarCollapsed(collapsed) - directly sets sidebar state
+- Used zustand/middleware persist for localStorage persistence
+- Storage key: "pika-storage"
+- Verified TypeScript compiles without errors
+
+**Learnings:**
+- Zustand v5 uses a different API for middleware - wrap the store function with persist middleware
+- The persist middleware automatically hydrates state from localStorage on mount
+- Zustand stores don't require providers - can be used directly in any component
+

@@ -106,8 +106,8 @@
         "TypeScript compiles without errors"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "Moved up - needed before UI components"
+      "passes": true,
+      "notes": "Created store/appStore.ts with Zustand v5. Includes currentSessionId and sidebarCollapsed state with setCurrentSession, toggleSidebar, and setSidebarCollapsed actions. Uses zustand/middleware persist for localStorage."
     },
     {
       "id": "US-006",
