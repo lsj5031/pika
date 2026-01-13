@@ -142,3 +142,44 @@ Session Discovery Implementation (US-003):
 - Unused functions generate warnings but are expected (API for future stories)
 - Edition "2024" works fine with axum 0.8 WebSocket features
 ---
+
+## 2026-01-13T00:44:29.937Z - US-005
+**Subprocess Spawning Pattern (US-005):**
+- Use tokio::process::Command with .args() for spawning external processes
+- .stdout(Stdio::piped()) and .stderr(Stdio::piped()) to capture output
+- .spawn() returns Child with stdout/stderr handles that must be .take()
+
+**Async Task Management:**
+- tokio::spawn for concurrent stdout/stderr reading
+- Store JoinHandle for task cleanup (abort on kill)
+- Use underscore prefix (_stdout_task) to suppress unused variable warnings
+
+**Broadcast Channel Pattern:**
+- tokio::sync::broadcast::channel for pub/sub to multiple listeners
+- tx.subscribe() creates new receivers for each listener
+- tx.send() errors can be ignored when no listeners (use let _)
+- Channel capacity (100) provides backpressure
+
+**Process Management:**
+- HashMap<String, PiProcess> for tracking by ID
+- Check process.is_running() via process.id().is_some()
+- Enforce concurrent limit (MAX_CONCURRENT_PROCESSES = 10)
+- Remove from map before kill to prevent double-kill
+
+**JSON-RPC Event Parsing:**
+- JsonRpcEvent struct with Option<> fields for method/params/result
+- Use #[serde(flatten)] with extra HashMap for flexible JSON
+- Skip non-JSON lines gracefully (pi may output other content)
+- Trim and skip empty lines before parsing
+
+**Error Handling:**
+- thiserror for clean error derive with #[source] attribute
+- Contextual errors (include path/id in error variants)
+- Return Err early for validation (path existence, UTF-8 check)
+
+**Gotchas:**
+- Unused variables in async closures: prefix with underscore
+- PathBuf.to_str() returns Option<&str> - must handle None case
+- Clone channels before moving into async closures
+- Process.kill() is async - must await
+---
