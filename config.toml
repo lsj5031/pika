@@ -1,0 +1,9 @@
+# Pi Agent Manager Configuration
+
+# List of project root paths to scan for agent sessions
+# Add absolute paths to your projects here
+project_root_paths = [
+    # Example:
+    # "/home/leo/projects/my-app",
+    # "/home/leo/work/another-project",
+]
