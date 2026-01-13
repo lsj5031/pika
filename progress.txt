@@ -1,0 +1,35 @@
+# Ralph Progress Log
+Started: 2026-01-13T00:31:26.198Z
+---
+
+## 2026-01-13T00:31:26.198Z - US-001
+Codebase Patterns Established:
+
+**Axum Server Setup:**
+- Use tower-http::cors::CorsLayer with Any origin/methods/headers for development CORS
+- Pattern: app.layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
+- Tokio async main with TcpListener for Axum serve
+- Configure port via std::env::var("PORT").and_then(|p| p.parse()).ok().unwrap_or(DEFAULT)
+
+**Project Structure:**
+- src/main.rs - entry point with async main
+- config/ - configuration directory (created, not yet used)
+- templates/ - templates directory (created, not yet used)
+
+**Dependencies:**
+- axum = "0.8" for web framework
+- tokio = { version = "1.41", features = ["full"] } for async runtime
+- serde/serde_json for JSON serialization
+- uuid for UUID generation
+- tower-http for CORS middleware
+- jsonrpc-core/jsonrpc-http-server for JSON-RPC support
+
+**Health Check Pattern:**
+- Simple GET /health endpoint returning status, service name, version
+- Useful for server startup verification
+
+**Gotchas:**
+- Edition "2024" in Cargo.toml (newer than standard 2021)
+- Ports 3000-3001 commonly in use, use uncommon ports for testing (e.g., 8765)
+- Use timeout command to test server startup without blocking
+---
