@@ -363,3 +363,51 @@ Makepad Session List Component Implementation (US-009):
 - Unicode characters work fine in Makepad Label widgets
 - Format for display text: \n for newlines in multi-line labels
 ---
+
+## 2026-01-13T01:52:19.140Z - US-010
+Session History Implementation (US-010):
+
+**Backend API Pattern:**
+- SessionHistory component already implemented in sessions/history.rs with full feature set
+- Backend endpoint /api/sessions/:id/messages returns Vec<MessageResponse>
+- MessageResponse struct maps to frontend Message struct (role, content, timestamp)
+- get_session_messages() handler finds session by ID, then fetches messages from session.jsonl
+
+**Chat Bubble UI Pattern:**
+- UserMessageBubble: right-aligned with blue background (#3b82f6), white text
+- AssistantMessageBubble: left-aligned with dark gray background (#2a2a2a), light gray text
+- Both use Sdf2d for custom rounded corners (12.0 border_radius)
+- Max width: 500px for readability
+
+**Code Block Handling:**
+- CodeBlock component with dark monospace background (#1e1e1e)
+- Extract code blocks from markdown using extract_code_blocks() method
+- Strip code blocks from text content with extract_text_content()
+- Display code in monospace font family
+- Syntax highlighting is placeholder (full implementation in future story)
+
+**Async Fetch Pattern with cx.spawn_task:**
+- Use cx.spawn_task() for async HTTP operations
+- Emit actions (HistoryAction::MessagesLoaded) to update UI
+- Graceful fallback to demo data when backend unavailable
+- .detach() for fire-and-forget async tasks
+
+**Message Rendering Pattern:**
+- Use template widgets (MessageItem) with WidgetRef::new_from_ptr()
+- Update existing widgets instead of creating new ones (performance)
+- Set visibility based on message role (user vs assistant)
+- Show/hide code blocks conditionally
+
+**Scrollable Content:**
+- Use ScrollYView wrapper with height: Fill for scrolling
+- Content uses height: Fit to size to message count
+- Empty state when no session selected
+
+**Acceptance Criteria Met:**
+- ✓ SessionHistory component with chat bubble format
+- ✓ Fetch messages from /api/sessions/:id/messages
+- ✓ User messages right-aligned, assistant messages left-aligned
+- ✓ Code blocks in monospace font
+- ✓ Scrollable message history
+- ✓ Typecheck passes (cargo check)
+---
