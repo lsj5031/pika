@@ -225,3 +225,50 @@ HTTP API Endpoints Implementation (US-006):
 - ✓ JSON response structs with proper serialization (ProjectResponse, SessionResponse, ErrorResponse)
 - ✓ Typecheck passes (cargo check)
 ---
+
+## 2026-01-13T01:16:33.651Z - US-007
+**Makepad WASM Frontend Setup (US-007):**
+
+**WASM Target Configuration:**
+- Use .cargo/config.toml for target configuration (not just build flags)
+- Pattern: target = "wasm32-unknown-unknown" in [build] section
+- Runner configuration: wasm-bindgen-test-runner for WASM testing
+
+**Module Visibility Gotcha:**
+- When re-exporting with `pub use app::App`, the module must also be public
+- Pattern: `pub mod app;` instead of `mod app;` when module is used in main.rs
+- Error message: "module `app` is private" - fix with pub keyword
+
+**Makepad Project Structure:**
+- src/lib.rs exports the main app
+- src/main.rs imports from lib crate and calls app_main
+- app.rs contains live_design! macro and App struct
+- assets/ and styles/ directories for future use (currently empty)
+
+**Async HTTP Fetch Pattern:**
+- AppAction enum with variants for async responses (HealthCheck, Error)
+- #[derive(Debug, Clone, DefaultNone)] for action enums
+- handle_actions() method processes async responses
+- cx.action() emits actions to update UI
+- Infrastructure ready for full async implementation in future stories
+
+**Backend Configuration:**
+- Environment variable pattern: std::env::var("BACKEND_URL").unwrap_or_else(|_| "http://localhost:8765".to_string())
+- Hardcoded default allows development without env var
+- URL stored in App struct for reuse across fetch methods
+
+**Live Design Pattern:**
+- Import makepad_widgets widgets and theme
+- Root > Window > View hierarchy for basic app structure
+- Label components with text and draw_text color properties
+- live_id!(label_name) for component references in code
+
+**Acceptance Criteria Met:**
+- ✓ Makepad project initialized with makepad-widgets dependency
+- ✓ WASM target configured (.cargo/config.toml)
+- ✓ Folder structure created (src/, assets/, styles/)
+- ✓ HTTP fetch infrastructure ready (reqwest + AppAction pattern)
+- ✓ App loads without build errors (cargo check passes)
+- ✓ Typecheck passes (cargo check)
+
+---
