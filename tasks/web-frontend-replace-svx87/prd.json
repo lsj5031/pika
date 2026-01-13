@@ -141,8 +141,8 @@
         "Verify in browser using webapp-testing skill"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created SessionHistory.tsx with message list rendering, user/assistant alignment (right/left), Card styling, timestamp display, auto-scroll to bottom, and empty states. Verified in browser - component renders correctly with all states."
     },
     {
       "id": "US-008",
@@ -159,8 +159,8 @@
         "Verify in browser using webapp-testing skill"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created ChatInput.tsx with textarea and send button. Uses shadcn Textarea and Button components. Send button disabled when input is empty or session is inactive. Shift+Enter for new line, Enter to send. Auto-resize textarea based on content with max height of 200px. Created useSendPrompt hook for API calls to /sessions/{id}/prompt. Integrated into App.tsx layout. Verified in browser - all states work correctly."
     },
     {
       "id": "US-015",
@@ -175,8 +175,8 @@
         "Verify in browser using webapp-testing skill"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created ThinkingIndicator.tsx component with amber-colored Card, animated Loader2 spinner, and 'Thinking' label. Created thinkingStore.ts with Zustand for per-session thinking state management (content, isThinking). Integrated into SessionHistory component to show thinking indicator when active. Wired WebSocket events in App.tsx: ThinkingDelta appends content, MessageAdded clears thinking state, SessionStopped also clears thinking. Verified in browser - app loads correctly and component structure is in place."
     },
     {
       "id": "US-009",
