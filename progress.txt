@@ -33,3 +33,41 @@ Codebase Patterns Established:
 - Ports 3000-3001 commonly in use, use uncommon ports for testing (e.g., 8765)
 - Use timeout command to test server startup without blocking
 ---
+
+## 2026-01-13T00:38:06.521Z - US-002
+Configuration System Implementation (US-002):
+
+**thiserror Dependency:**
+- The `#[source]` and `#[error]` attributes require `thiserror = "2.0"` crate
+- Thiserror provides clean error enum derivation with Display and Error impls
+- Pattern: #[error("Failed to {action} {path}: {source}")]
+
+**Config Module Pattern:**
+- ProjectConfig struct with Vec<PathBuf> for multiple paths
+- from_file() returns default if file doesn't exist (graceful degradation)
+- validate() checks path existence before runtime
+- to_file() for config persistence (added but unused, ready for future)
+
+**Priority Order for Overrides:**
+- CLI args > Environment variables > Default values
+- Example: port flag > PORT env var > 3000 default
+- clap Parser with Option<T> for optional overrides
+
+**Config File Template:**
+- Create config.toml with documentation comments as examples
+- Empty array [] for paths prevents errors on first run
+- Users can uncomment and modify examples
+
+**Main.rs Integration:**
+- Load and validate config at startup
+- Log configuration state (count of paths, warnings if empty)
+- Parse CLI args before loading config for path override
+
+**Acceptance Criteria Met:**
+- ✓ ProjectConfig struct with project_root_paths: Vec<PathBuf>
+- ✓ config.toml in app root with examples
+- ✓ Config loading from file with default empty list
+- ✓ Config validation (paths must exist)
+- ✓ CLI args to override config file path (--config)
+- ✓ Typecheck passes (cargo check)
+---
