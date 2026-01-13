@@ -152,3 +152,99 @@ Started: 2026-01-14
 - browser-tools skill requires Chrome to be started with remote debugging on port 9222 before navigating
 - The component handles API errors gracefully by showing empty states when data is unavailable
 
+
+## [2026-01-14] - US-007: Create session history view component
+
+**Implementation:**
+- Installed shadcn Card component via `npx shadcn@latest add card`
+- Created src/components/SessionHistory.tsx with:
+  - MessageBubble component for individual message rendering
+  - User messages align right (justify-end), assistant messages align left (justify-start)
+  - Card component styling with different colors for user (primary) vs assistant (muted)
+  - Timestamp display formatted with localeTimeString below each message
+  - Auto-scroll to bottom using messagesEndRef with smooth scroll behavior
+  - Empty states: "Select a session to view history" when no session selected, "No messages yet" when no messages
+  - Loading state shows "Loading messages..."
+- Updated src/components/index.ts to export SessionHistory
+- Updated App.tsx to use SessionHistory in main content area
+- Fixed import path in card.tsx (changed "src/lib/utils" to relative path)
+- Verified TypeScript compiles without errors
+- Verified in browser using browser-tools skill
+
+**Learnings:**
+- The Card component uses React.forwardRef for proper ref forwarding
+- Auto-scrolling to bottom on new messages is achieved with a ref (messagesEndRef) and scrollIntoView
+- The useEffect dependency array with messages triggers scroll on each message update
+- User messages use primary color, assistant messages use muted background for visual distinction
+- Need to use relative imports (../../lib/utils) instead of @ alias which is not configured yet in Vite
+
+## [2026-01-14] - US-008: Create chat input component
+
+**Implementation:**
+- Installed shadcn/ui Button and Textarea components via `npx shadcn@latest add button textarea`
+- Created src/components/ChatInput.tsx with:
+  - Textarea with auto-resize (max height 200px)
+  - Send button with lucide-send icon
+  - Keyboard handling: Enter to send, Shift+Enter for new line
+  - Disabled state when no session selected, session inactive, or input empty
+  - Dynamic placeholder text based on session state
+  - Props: sessionId, isSessionActive, onSendMessage
+- Created src/hooks/useSendPrompt.ts for API calls to POST /sessions/{id}/prompt
+- Updated src/App.tsx:
+  - Added useSessions hook to get session data
+  - Added useSendPrompt hook for sending messages
+  - Found current session and derived isSessionActive state
+  - Added handleSendMessage callback with error handling
+  - Integrated ChatInput component at bottom of main content area
+  - Updated main layout to flex-col for proper ChatInput positioning
+- Updated src/components/index.ts to export ChatInput
+- Fixed import paths in button.tsx and textarea.tsx (changed "src/lib/utils" to relative paths)
+- Verified TypeScript compiles without errors
+- Verified in browser using browser-tools skill:
+  - Textarea renders with "Select a session" placeholder when no session selected
+  - Textarea is disabled when no session selected
+  - Send button renders with lucide-send icon
+  - Send button is disabled when no session selected
+  - Proper flex layout with items-end gap-2 max-w-4xl mx-auto
+
+**Learnings:**
+- shadcn CLI generates components using "src/lib/utils" import path which doesn't work with Vite's default config
+- Need to manually fix imports to use relative paths (../../lib/utils) for components
+- Textarea auto-resize requires setting height to "auto" then to scrollHeight in a useEffect
+- React Query mutations return a mutateAsync method for await-style error handling
+- The isSessionActive state is derived from the session's is_active property from the API
+
+## [2026-01-14] - US-015: Implement thinking state display
+
+**Implementation:**
+- Created src/store/thinkingStore.ts using Zustand v5 for per-session thinking state management:
+  - thinkingBySession: Record<string, { content: string; isThinking: boolean }>
+  - setThinking, appendThinking, clearThinking, getThinking actions
+- Created src/components/ThinkingIndicator.tsx with:
+  - Amber-colored Card component for visual distinction from regular messages
+  - Animated Loader2 spinner from lucide-react
+  - "Thinking" label with uppercase styling
+  - Optional content display for streaming thinking content
+- Updated src/components/SessionHistory.tsx:
+  - Added useThinkingStore hook to get thinking state for current session
+  - Conditionally render ThinkingIndicator when thinkingState.isThinking is true
+  - Added thinkingState to useEffect dependency for auto-scroll
+- Updated src/App.tsx:
+  - Added useWebSocket hook with handleWebSocketMessage callback
+  - Implemented WebSocket event handlers:
+    - SessionStarted: invalidates sessions query
+    - SessionStopped: clears thinking state and invalidates sessions
+    - ThinkingDelta: appends content to thinking state
+    - MessageAdded: clears thinking state and invalidates messages
+  - Added useQueryClient hook for cache invalidation
+- Updated src/components/index.ts to export ThinkingIndicator
+- Verified TypeScript compiles without errors
+- Verified in browser using browser-tools skill - app loads correctly with all components
+
+**Learnings:**
+- Zustand stores can be accessed with selectors to get specific state slices (e.g., (state) => state.thinkingBySession[sessionId])
+- Using nullish coalescing (??) with empty state provides good default values for missing keys
+- WebSocket event handlers should be wrapped in useCallback with proper dependencies
+- The thinking state is per-session, allowing multiple sessions to have independent thinking states
+- amber-50/amber-200 colors provide good visual distinction from user (primary) and assistant (muted) messages
+- Using dark: variants ensures the component works in dark mode too
