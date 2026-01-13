@@ -411,3 +411,55 @@ Session History Implementation (US-010):
 - ✓ Scrollable message history
 - ✓ Typecheck passes (cargo check)
 ---
+
+## 2026-01-13T02:21:01.836Z - US-011
+## US-011: WebSocket Live Event Streaming Implementation
+
+**WebSocket Integration Pattern:**
+- Use tokio-tungstenite for desktop WebSocket connections
+- WebSocket manager runs in background task (spawned via cx.spawn_task)
+- Cross-thread communication via crossbeam_channel (unbounded channels for zero-copy)
+- Poll for events in UI thread using poll_event() (non-blocking try_recv)
+
+**WSEvent Enum Pattern:**
+- Use #[serde(tag = "type", content = "data")] for discriminated union JSON
+- This maps to: {"type":"SessionStarted","data":{"session_id":"...","project_path":"..."}}
+- All events follow this pattern for consistent parsing
+
+**Action Routing Pattern:**
+- App receives WSMessage from WebSocket thread
+- Converts to WSAction and emits to UI via cx.action()
+- Specific components (SessionList, SessionHistory) subscribe to relevant actions
+- SessionStatusChanged updates session list in real-time
+- MessageAppended adds to history without full reload
+
+**Reconnection Strategy:**
+- Exponential backoff starting at 1s, max 30s
+- Reset delay on successful connection
+- Infinite loop in websocket_task ensures always reconnects
+- Send Connected/Disconnected events to update UI status indicator
+
+**Makepad WebSocket Gotchas:**
+- WASM target not yet implemented (placeholder for future story)
+- Desktop requires tokio-tungstenite + futures-util dependencies
+- Use cfg(target_arch) to separate desktop/WASM implementations
+- WebSocket URL conversion: replace http:// with ws://, https:// with wss://
+
+**Status Indicator Updates:**
+- SessionList shows ● (active) or ○ (inactive) based on is_active flag
+- Updates are real-time via WebSocket events
+- If session not found in local list, fetches full refresh from backend
+
+**Message Appending:**
+- Messages added to history without full re-fetch
+- Preserves scroll position (only appends, doesn't replace)
+- Works even when viewing different session (only affects current session)
+
+**Acceptance Criteria Met:**
+✓ WebSocket connects on app load to ws://localhost/ws
+✓ Parses all WSEvent types (ThinkingDelta, MessageAdded, SessionStarted, SessionStopped)
+✓ Session list indicators update in real-time
+✓ New messages append to SessionHistory as they arrive
+✓ Reconnection with exponential backoff on disconnect
+✓ Typecheck passes (cargo check --workspace)
+---
