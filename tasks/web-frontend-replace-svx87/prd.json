@@ -44,8 +44,8 @@
         "TypeScript compiles without errors"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created types/api.ts with all API types matching backend serde structs. WSEvent uses discriminated union matching the internally tagged enum format. Added helper WSEventData type for data extraction."
     },
     {
       "id": "US-018",

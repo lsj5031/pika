@@ -36,3 +36,21 @@ Started: 2026-01-14
 - The old v3 config file (tailwind.config.js) is still needed for shadcn/ui to customize theme
 - Tailwind v4 doesn't support `@apply border-border` syntax - use plain CSS `border-color: hsl(var(--border))` instead
 
+## [2026-01-14] - US-003: Create TypeScript types for API
+
+**Implementation:**
+- Created src/types/api.ts with all TypeScript types matching backend serde structs:
+  - Project: id, path, name, session_count
+  - Session: id, name, project_id, project_path, created_at, is_active
+  - Message: role (user/assistant), content, timestamp
+  - WSEvent: discriminated union with SessionStarted, SessionStopped, ThinkingDelta, MessageAdded
+  - Request/response types for all API endpoints
+- Created src/types/index.ts to export all types
+- WSEvent uses TypeScript discriminated union matching Rust's serde "internally tagged" enum format
+- Verified TypeScript compiles without errors
+
+**Learnings:**
+- Rust's `#[serde(tag = "type", content = "data")]` creates JSON with separate `type` and `data` fields
+- TypeScript discriminated unions are the perfect match for Rust enums with serde tagging
+- Backend API returns path fields as strings (not PathBuf objects) in JSON
+
