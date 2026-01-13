@@ -110,3 +110,35 @@ Session Discovery Implementation (US-003):
 - SessionEntry private struct for internal parsing
 - SessionInfo public struct for API responses
 ---
+
+## 2026-01-13T00:42:45.549Z - US-004
+**WebSocket Implementation (US-004):**
+
+**Axum WebSocket Integration:**
+- Axum's WebSocket support uses tokio-tungstenite under the hood
+- WebSocketUpgrade extractor upgrades HTTP to WebSocket connection
+- Message::Text expects Utf8Bytes, not String - use .into() for automatic conversion
+- split() separates WebSocket into Sender and Receiver for concurrent operations
+
+**Broadcast Channel Pattern:**
+- tokio::sync::broadcast::channel for pub/sub to multiple clients
+- tx.subscribe() creates a new receiver that gets all future messages
+- Channel capacity (100) provides backpressure if clients are slow
+- Use _ to ignore send errors when no clients are connected
+
+**Connection Management:**
+- UUID for unique client identification
+- Arc<RwLock<HashSet<String>>> for thread-safe active client tracking
+- Clone values before moving into async closures if needed later
+- tokio::select! waits for first completed task (cleanup on disconnect)
+
+**State Management:**
+- WSState must be cloned and passed via Router::with_state
+- Clone is cheap due to Arc wrapping of internal state
+- State accessible in handlers via State<T> extractor
+
+**Gotchas:**
+- Ping/Pong handling with split socket is complex - simplified for now
+- Unused functions generate warnings but are expected (API for future stories)
+- Edition "2024" works fine with axum 0.8 WebSocket features
+---
