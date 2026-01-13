@@ -89,3 +89,21 @@ Started: 2026-01-14
 - Mutations should invalidate related queries to trigger refetching
 - setQueryData can be used for optimistic updates after mutations
 
+## [2026-01-14] - US-005: Create WebSocket hook
+
+**Implementation:**
+- Created hooks/useWebSocket.ts with the following features:
+  - connectionStatus state: "connecting" | "connected" | "disconnected"
+  - onMessage callback for handling WSEvent messages
+  - enabled option to conditionally connect
+  - Auto-reconnect on disconnect with exponential backoff (max 30s delay)
+  - Proper cleanup on unmount (closes WebSocket with code 1000)
+  - isConnected and isConnecting convenience booleans
+- Uses VITE_WS_URL from config
+- Verified TypeScript compiles without errors
+
+**Learnings:**
+- WebSocket cleanup requires both clearing the reconnect timeout and closing the connection
+- Exponential backoff prevents overwhelming the server during outages
+- Using refs for WebSocket and timeout ensures stable references across re-renders
+

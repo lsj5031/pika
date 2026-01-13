@@ -92,8 +92,8 @@
         "TypeScript compiles without errors"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created hooks/useWebSocket.ts with connectionStatus state, onMessage callback, auto-reconnect with exponential backoff (max 30s delay), and proper cleanup on unmount. Uses VITE_WS_URL from config."
     },
     {
       "id": "US-011",
