@@ -129,8 +129,8 @@
         "Typecheck passes: cargo check"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Makepad Layout Implementation (US-008):\n\n**Split Layout Pattern:**\n- Use `flow: Right` for horizontal split (sidebar + main panel)\n- Fixed width for sidebar (300px) + `width: Fill` for main panel to take remaining space\n- This creates effective 30/70 split that's more practical than percentage-based widths\n\n**Dark Theme Implementation:**\n- Apply `show_bg: true` with `draw_bg: { color: #hex }` for backgrounds\n- Dark colors: #1a1a1a (main), #242424 (sidebar), #2a2a2a (cards)\n- Light text: #e0e0e0 for primary, #aaa for secondary, #888 for tertiary\n- Use different shades of gray to create visual hierarchy\n\n**Scrollable Content:**\n- Use `<ScrollYView>` wrapper for vertical scrolling\n- Child content uses `height: Fit` to size to content\n- ScrollYView uses `height: Fill` to take available space\n\n**Button Click Handling:**\n- Pattern: `self.ui.button(id!(button_name)).clicked(&actions)`\n- Use `id!` macro for single widget (not `ids!` which returns array)\n- Handle in handle_actions() method within MatchEvent impl\n\n**Widget Visibility Toggle:**\n- Access widget: `self.ui.view(id!(sidebar))`\n- Toggle: `widget.set_visible(cx, false)` or `widget.set_visible(cx, true)`\n- Call `self.ui.redraw(cx)` after visibility change\n\n**Responsive Layout Patterns:**\n- `width: Fill, height: Fill` - fill available space in both dimensions\n- `width: Fill, height: Fit` - fill horizontally, size to content vertically\n- `width: Fit, height: Fit` - size to content in both dimensions\n\n**Custom Rounded Corners with Shaders:**\n- Use Sdf2d for drawing rounded rectangles with custom colors\n- Pattern: `draw_bg: { color: #hex, instance border_radius: 8.0, fn pixel(self) -> vec4 { ... } }`\n\n**Gotchas:**\n- Use `id!` for single widget, `ids!` for nested paths or multiple widgets\n- Always call `self.ui.redraw(cx)` after modifying UI state\n- ScrollYView must have height: Fill, not height: Fit, to enable scrolling"
     },
     {
       "id": "US-009",

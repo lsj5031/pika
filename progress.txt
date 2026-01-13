@@ -272,3 +272,47 @@ HTTP API Endpoints Implementation (US-006):
 - ✓ Typecheck passes (cargo check)
 
 ---
+
+## 2026-01-13T01:18:55.497Z - US-008
+Makepad Layout Implementation (US-008):
+
+**Split Layout Pattern:**
+- Use `flow: Right` for horizontal split (sidebar + main panel)
+- Fixed width for sidebar (300px) + `width: Fill` for main panel to take remaining space
+- This creates effective 30/70 split that's more practical than percentage-based widths
+
+**Dark Theme Implementation:**
+- Apply `show_bg: true` with `draw_bg: { color: #hex }` for backgrounds
+- Dark colors: #1a1a1a (main), #242424 (sidebar), #2a2a2a (cards)
+- Light text: #e0e0e0 for primary, #aaa for secondary, #888 for tertiary
+- Use different shades of gray to create visual hierarchy
+
+**Scrollable Content:**
+- Use `<ScrollYView>` wrapper for vertical scrolling
+- Child content uses `height: Fit` to size to content
+- ScrollYView uses `height: Fill` to take available space
+
+**Button Click Handling:**
+- Pattern: `self.ui.button(id!(button_name)).clicked(&actions)`
+- Use `id!` macro for single widget (not `ids!` which returns array)
+- Handle in handle_actions() method within MatchEvent impl
+
+**Widget Visibility Toggle:**
+- Access widget: `self.ui.view(id!(sidebar))`
+- Toggle: `widget.set_visible(cx, false)` or `widget.set_visible(cx, true)`
+- Call `self.ui.redraw(cx)` after visibility change
+
+**Responsive Layout Patterns:**
+- `width: Fill, height: Fill` - fill available space in both dimensions
+- `width: Fill, height: Fit` - fill horizontally, size to content vertically
+- `width: Fit, height: Fit` - size to content in both dimensions
+
+**Custom Rounded Corners with Shaders:**
+- Use Sdf2d for drawing rounded rectangles with custom colors
+- Pattern: `draw_bg: { color: #hex, instance border_radius: 8.0, fn pixel(self) -> vec4 { ... } }`
+
+**Gotchas:**
+- Use `id!` for single widget, `ids!` for nested paths or multiple widgets
+- Always call `self.ui.redraw(cx)` after modifying UI state
+- ScrollYView must have height: Fill, not height: Fit, to enable scrolling
+---
