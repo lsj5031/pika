@@ -1,280 +1,132 @@
 {
-  "project": "Pika",
-  "branchName": "ralph/pika",
-  "description": "Web app for managing multiple pi-coding-agent sessions - Rust backend + Makepad WASM frontend with mobile support",
+  "project": "Pika - Frontend Fixes",
+  "branchName": "ralph/frontend-fixes",
+  "description": "Fix frontend compilation errors to get Makepad UI working",
   "userStories": [
     {
-      "id": "US-001",
-      "title": "Setup Rust backend project structure",
-      "description": "As a developer, I need to set up the Rust backend foundation with Axum/Tokio web server.",
+      "id": "FIX-001",
+      "title": "Fix module structure and imports",
+      "description": "As a developer, I need to fix module declarations so chat_input submodule is accessible.",
       "acceptanceCriteria": [
-        "Initialize Cargo project with dependencies: axum, tokio, serde, serde_json, uuid, jsonrpc",
-        "Create basic folder structure: src/, config, templates",
-        "Create main.rs with Axum HTTP server listening on configurable port",
-        "Add CORS support for local development",
-        "Server starts successfully with 'cargo run'",
-        "Typecheck passes: cargo check"
+        "Add `pub mod chat_input;` to sessions.rs to export the module",
+        "Fix import in app.rs: `use crate::sessions::chat_input::ChatInputWidget;`",
+        "Ensure sessions.rs has `pub mod history;` and `pub mod chat_input;`",
+        "Typecheck passes: cargo check in frontend/"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "Codebase Patterns Established:\n\n**Axum Server Setup:**\n- Use tower-http::cors::CorsLayer with Any origin/methods/headers for development CORS\n- Pattern: app.layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))\n- Tokio async main with TcpListener for Axum serve\n- Configure port via std::env::var(\"PORT\").and_then(|p| p.parse()).ok().unwrap_or(DEFAULT)\n\n**Project Structure:**\n- src/main.rs - entry point with async main\n- config/ - configuration directory (created, not yet used)\n- templates/ - templates directory (created, not yet used)\n\n**Dependencies:**\n- axum = \"0.8\" for web framework\n- tokio = { version = \"1.41\", features = [\"full\"] } for async runtime\n- serde/serde_json for JSON serialization\n- uuid for UUID generation\n- tower-http for CORS middleware\n- jsonrpc-core/jsonrpc-http-server for JSON-RPC support\n\n**Health Check Pattern:**\n- Simple GET /health endpoint returning status, service name, version\n- Useful for server startup verification\n\n**Gotchas:**\n- Edition \"2024\" in Cargo.toml (newer than standard 2021)\n- Ports 3000-3001 commonly in use, use uncommon ports for testing (e.g., 8765)\n- Use timeout command to test server startup without blocking"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-002",
-      "title": "Create project configuration structure",
-      "description": "As a user, I need to configure which project root folders to scan for sessions.",
+      "id": "FIX-002",
+      "title": "Add missing tokio dependency to frontend",
+      "description": "As a developer, I need tokio runtime for async operations in the frontend.",
       "acceptanceCriteria": [
-        "Create ProjectConfig struct with project_root_paths: Vec<PathBuf>",
-        "Create config file: config.toml in app root directory",
-        "Implement config loading from file with default empty list",
-        "Add config validation (paths must exist)",
-        "Create CLI args to override config file path",
-        "Typecheck passes: cargo check"
+        "Add tokio = { version = \"1.41\", features = [\"sync\"] } to frontend/Cargo.toml dependencies",
+        "Add `use tokio::sync::mpsc;` for channel types",
+        "Typecheck passes: cargo check in frontend/"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Configuration System Implementation (US-002):\n\n**thiserror Dependency:**\n- The `#[source]` and `#[error]` attributes require `thiserror = \"2.0\"` crate\n- Thiserror provides clean error enum derivation with Display and Error impls\n- Pattern: #[error(\"Failed to {action} {path}: {source}\")]\n\n**Config Module Pattern:**\n- ProjectConfig struct with Vec<PathBuf> for multiple paths\n- from_file() returns default if file doesn't exist (graceful degradation)\n- validate() checks path existence before runtime\n- to_file() for config persistence (added but unused, ready for future)\n\n**Priority Order for Overrides:**\n- CLI args > Environment variables > Default values\n- Example: port flag > PORT env var > 3000 default\n- clap Parser with Option<T> for optional overrides\n\n**Config File Template:**\n- Create config.toml with documentation comments as examples\n- Empty array [] for paths prevents errors on first run\n- Users can uncomment and modify examples\n\n**Main.rs Integration:**\n- Load and validate config at startup\n- Log configuration state (count of paths, warnings if empty)\n- Parse CLI args before loading config for path override\n\n**Acceptance Criteria Met:**\n- ✓ ProjectConfig struct with project_root_paths: Vec<PathBuf>\n- ✓ config.toml in app root with examples\n- ✓ Config loading from file with default empty list\n- ✓ Config validation (paths must exist)\n- ✓ CLI args to override config file path (--config)\n- ✓ Typecheck passes (cargo check)"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-003",
-      "title": "Implement pi session discovery",
-      "description": "As a developer, I need to discover pi sessions in each configured project folder.",
+      "id": "FIX-003",
+      "title": "Fix reqwest API usage",
+      "description": "As a developer, I need to use correct reqwest API for HTTP POST requests.",
       "acceptanceCriteria": [
-        "Scan .pi/agent/sessions/ subdirectory in each project root",
-        "Parse session.jsonl files to extract session metadata (id, name, timestamp)",
-        "Create SessionInfo struct with: id, project_path, name, created_at, is_active",
-        "Implement discovery function: Vec<SessionInfo> scan_sessions(config)",
-        "Handle missing .pi directories gracefully",
-        "Typecheck passes: cargo check"
+        "Replace `reqwest::post()` with `reqwest::Client::new().post()`",
+        "Replace `Body::empty()` with proper body construction",
+        "Create Client instance once, reuse for requests",
+        "Typecheck passes: cargo check in frontend/"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Session Discovery Implementation (US-003):\n\n**Session Discovery Pattern:**\n- Scan .pi/agent/sessions/ subdirectory in each configured project root\n- Parse session.jsonl files (JSONL format - one JSON object per line)\n- Return Vec<SessionInfo> with all discovered sessions\n\n**SessionInfo Struct:**\n- id: String (session ID from sessionId field)\n- project_path: PathBuf (path to the project containing the session)\n- name: String (human-readable name, falls back to ID if empty)\n- created_at: String (timestamp from JSON, defaults to \"Unknown\" if empty)\n- is_active: bool (currently hardcoded to false, will be enhanced later)\n\n**Graceful Degradation:**\n- Missing .pi directories: Return empty Vec instead of error\n- Missing session.jsonl: Return empty Vec instead of error\n- Malformed JSONL lines: Skip and continue parsing (don't fail entire scan)\n- Empty lines in JSONL: Skip gracefully\n\n**JSONL Parsing Pattern:**\n- Use BufReader with BufRead for line-by-line reading\n- serde_json::from_str for each line\n- SessionEntry struct with #[serde(rename)] for field name mapping\n- Trim and skip empty lines before parsing\n\n**Error Handling:**\n- SessionError enum with IoError and ParseError variants\n- Use thiserror for clean error derive macros\n- Errors propagated via Result<> for file operations\n- Public API (scan_sessions) never fails - returns empty Vec on errors\n\n**Module Organization:**\n- sessions.rs for session discovery logic\n- SessionEntry private struct for internal parsing\n- SessionInfo public struct for API responses"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-004",
-      "title": "Create WebSocket server for real-time events",
-      "description": "As a developer, I need a WebSocket server to stream pi events to the frontend.",
+      "id": "FIX-004",
+      "title": "Fix Makepad Cx API calls",
+      "description": "As a developer, I need to use correct Makepad API for async tasks and window info.",
       "acceptanceCriteria": [
-        "Add WebSocket support to Axum server (tokio-tungstenite)",
-        "Create /ws endpoint that accepts WebSocket connections",
-        "Create event channel for broadcasting to multiple clients",
-        "Define WSEvent enum: SessionStarted, SessionStopped, ThinkingDelta, MessageAdded",
-        "Implement connection management (track active clients)",
-        "Typecheck passes: cargo check"
+        "Replace `cx.get_window_size()` with `cx.gpu().window_size()` or remove if unused",
+        "Replace `cx.spawn_task()` with correct Makepad async API (use cx.future_task() or similar)",
+        "Check Makepad docs for correct task spawning pattern",
+        "Typecheck passes: cargo check in frontend/"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "**WebSocket Implementation (US-004):**\n\n**Axum WebSocket Integration:**\n- Axum's WebSocket support uses tokio-tungstenite under the hood\n- WebSocketUpgrade extractor upgrades HTTP to WebSocket connection\n- Message::Text expects Utf8Bytes, not String - use .into() for automatic conversion\n- split() separates WebSocket into Sender and Receiver for concurrent operations\n\n**Broadcast Channel Pattern:**\n- tokio::sync::broadcast::channel for pub/sub to multiple clients\n- tx.subscribe() creates a new receiver that gets all future messages\n- Channel capacity (100) provides backpressure if clients are slow\n- Use _ to ignore send errors when no clients are connected\n\n**Connection Management:**\n- UUID for unique client identification\n- Arc<RwLock<HashSet<String>>> for thread-safe active client tracking\n- Clone values before moving into async closures if needed later\n- tokio::select! waits for first completed task (cleanup on disconnect)\n\n**State Management:**\n- WSState must be cloned and passed via Router::with_state\n- Clone is cheap due to Arc wrapping of internal state\n- State accessible in handlers via State<T> extractor\n\n**Gotchas:**\n- Ping/Pong handling with split socket is complex - simplified for now\n- Unused functions generate warnings but are expected (API for future stories)\n- Edition \"2024\" works fine with axum 0.8 WebSocket features"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-005",
-      "title": "Implement pi subprocess spawning with JSON-RPC",
-      "description": "As a developer, I need to spawn pi processes in JSON-RPC mode and capture their output.",
+      "id": "FIX-005",
+      "title": "Fix Message struct missing fields",
+      "description": "As a developer, I need to add the thinking field to Message struct initialization.",
       "acceptanceCriteria": [
-        "Create PiProcess struct managing subprocess: process, id, project_path, tx/rx channels",
-        "Spawn pi with: npx @mariozechner/pi-coding-agent --mode rpc --cwd <project>",
-        "Capture stdout (JSON-RPC events) and stderr (logs)",
-        "Parse JSON-RPC events: method, params, result",
-        "Create process manager: HashMap<SessionId, PiProcess>, max 10 concurrent",
-        "Kill process on request",
-        "Typecheck passes: cargo check"
+        "Find all Message struct initializations missing `thinking` field",
+        "Add `thinking: false` or `thinking: true` as appropriate",
+        "Ensure Message struct has thinking: bool field defined",
+        "Typecheck passes: cargo check in frontend/"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "**Subprocess Spawning Pattern (US-005):**\n- Use tokio::process::Command with .args() for spawning external processes\n- .stdout(Stdio::piped()) and .stderr(Stdio::piped()) to capture output\n- .spawn() returns Child with stdout/stderr handles that must be .take()\n\n**Async Task Management:**\n- tokio::spawn for concurrent stdout/stderr reading\n- Store JoinHandle for task cleanup (abort on kill)\n- Use underscore prefix (_stdout_task) to suppress unused variable warnings\n\n**Broadcast Channel Pattern:**\n- tokio::sync::broadcast::channel for pub/sub to multiple listeners\n- tx.subscribe() creates new receivers for each listener\n- tx.send() errors can be ignored when no listeners (use let _)\n- Channel capacity (100) provides backpressure\n\n**Process Management:**\n- HashMap<String, PiProcess> for tracking by ID\n- Check process.is_running() via process.id().is_some()\n- Enforce concurrent limit (MAX_CONCURRENT_PROCESSES = 10)\n- Remove from map before kill to prevent double-kill\n\n**JSON-RPC Event Parsing:**\n- JsonRpcEvent struct with Option<> fields for method/params/result\n- Use #[serde(flatten)] with extra HashMap for flexible JSON\n- Skip non-JSON lines gracefully (pi may output other content)\n- Trim and skip empty lines before parsing\n\n**Error Handling:**\n- thiserror for clean error derive with #[source] attribute\n- Contextual errors (include path/id in error variants)\n- Return Err early for validation (path existence, UTF-8 check)\n\n**Gotchas:**\n- Unused variables in async closures: prefix with underscore\n- PathBuf.to_str() returns Option<&str> - must handle None case\n- Clone channels before moving into async closures\n- Process.kill() is async - must await"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-006",
-      "title": "Create HTTP API endpoints",
-      "description": "As a developer, I need REST endpoints for listing projects and sessions.",
+      "id": "FIX-006",
+      "title": "Fix action handler method signatures",
+      "description": "As a developer, I need to add missing action handler methods to MatchEvent trait.",
       "acceptanceCriteria": [
-        "GET /api/projects - returns list of configured projects",
-        "GET /api/projects/:id/sessions - returns sessions for project",
-        "GET /api/sessions - returns all sessions across projects",
-        "GET /api/sessions/:id - returns session details and metadata",
-        "Add JSON response structs with proper serialization",
-        "Typecheck passes: cargo check"
+        "Add `handle_websocket_action` method to App impl MatchEvent",
+        "Add `handle_websocket_event` method to App impl MatchEvent",
+        "Ensure methods match expected signature: fn handle_XXX(&mut self, cx: &mut Cx, event: &XXX)",
+        "Typecheck passes: cargo check in frontend/"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "HTTP API Endpoints Implementation (US-006):\n\n**Axum Router State Management Pattern:**\n- When merging routers with .merge(), they must have the same state type\n- Router<ApiState> cannot be merged with Router<AppState> - state types must match\n- Solution: Keep ApiState as public struct in api.rs, have AppState wrap it\n- Access nested state via State<AppState> then dereference (state.api_state.config)\n\n**API Module Architecture:**\n- ApiState wraps shared resources with Arc<RwLock<ProjectConfig>> for thread-safe mutable access\n- Response structs (ProjectResponse, SessionResponse) need Serialize/Deserialize derives\n- ErrorResponse implements IntoResponse for custom HTTP status codes (NOT_FOUND, BAD_REQUEST, etc.)\n- Use Result<Json<T>, ErrorResponse> for handlers that can fail\n\n**State Nesting Pattern:**\n- AppState combines multiple module-specific states (ws_state, api_state)\n- Individual modules (api, websocket) have their own state types\n- AppState wraps ApiState rather than duplicating config access logic\n- Handlers extract State<AppState> and access nested state (state.api_state.config.read().await)\n\n**REST API Design Patterns:**\n- GET /api/projects - list all projects with session counts\n- GET /api/projects/:id/sessions - nested routes for hierarchical resources\n- GET /api/sessions - list all sessions across all projects  \n- GET /api/sessions/:id - individual resource access by ID\n- Hash-based project IDs from paths for stable identification\n\n**Move vs Clone Gotchas:**\n- Strings don't implement Copy trait\n- When moving String into struct field but also need it later as lookup key, use .clone()\n- Pattern: let id = generate_id(); Struct { id: id.clone(), ... use id for lookup ... }\n\n**Acceptance Criteria Met:**\n- ✓ GET /api/projects - returns list of configured projects\n- ✓ GET /api/projects/:id/sessions - returns sessions for project\n- ✓ GET /api/sessions - returns all sessions across projects\n- ✓ GET /api/sessions/:id - returns session details and metadata\n- ✓ JSON response structs with proper serialization (ProjectResponse, SessionResponse, ErrorResponse)\n- ✓ Typecheck passes (cargo check)"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-007",
-      "title": "Setup Makepad WASM frontend project",
-      "description": "As a developer, I need to setup the Makepad frontend project structure.",
+      "id": "FIX-007",
+      "title": "Fix TextInputRef set_enabled method",
+      "description": "As a developer, I need to use correct API for enabling/disabling text inputs.",
       "acceptanceCriteria": [
-        "Initialize Makepad project with cargo makepad-app --init",
-        "Configure Makepad for WASM compilation target",
-        "Create basic folder structure: src/, assets/, styles/",
-        "Setup HTTP fetch for calling backend API (localhost:PORT)",
-        "App loads in browser with blank screen (no build errors)",
-        "Typecheck passes: cargo check"
+        "Replace `text_input_ref.set_enabled(false)` with correct Makepad API",
+        "Use `text_input_ref.set_visible(bool)` or check Makepad docs for enable/disable",
+        "Find all set_enabled calls on TextInputRef and fix",
+        "Typecheck passes: cargo check in frontend/"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "**Makepad WASM Frontend Setup (US-007):**\n\n**WASM Target Configuration:**\n- Use .cargo/config.toml for target configuration (not just build flags)\n- Pattern: target = \"wasm32-unknown-unknown\" in [build] section\n- Runner configuration: wasm-bindgen-test-runner for WASM testing\n\n**Module Visibility Gotcha:**\n- When re-exporting with `pub use app::App`, the module must also be public\n- Pattern: `pub mod app;` instead of `mod app;` when module is used in main.rs\n- Error message: \"module `app` is private\" - fix with pub keyword\n\n**Makepad Project Structure:**\n- src/lib.rs exports the main app\n- src/main.rs imports from lib crate and calls app_main\n- app.rs contains live_design! macro and App struct\n- assets/ and styles/ directories for future use (currently empty)\n\n**Async HTTP Fetch Pattern:**\n- AppAction enum with variants for async responses (HealthCheck, Error)\n- #[derive(Debug, Clone, DefaultNone)] for action enums\n- handle_actions() method processes async responses\n- cx.action() emits actions to update UI\n- Infrastructure ready for full async implementation in future stories\n\n**Backend Configuration:**\n- Environment variable pattern: std::env::var(\"BACKEND_URL\").unwrap_or_else(|_| \"http://localhost:8765\".to_string())\n- Hardcoded default allows development without env var\n- URL stored in App struct for reuse across fetch methods\n\n**Live Design Pattern:**\n- Import makepad_widgets widgets and theme\n- Root > Window > View hierarchy for basic app structure\n- Label components with text and draw_text color properties\n- live_id!(label_name) for component references in code\n\n**Acceptance Criteria Met:**\n- ✓ Makepad project initialized with makepad-widgets dependency\n- ✓ WASM target configured (.cargo/config.toml)\n- ✓ Folder structure created (src/, assets/, styles/)\n- ✓ HTTP fetch infrastructure ready (reqwest + AppAction pattern)\n- ✓ App loads without build errors (cargo check passes)\n- ✓ Typecheck passes (cargo check)\n"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-008",
-      "title": "Create basic UI layout (sidebar + main panel)",
-      "description": "As a user, I need a responsive layout with sidebar for navigation and main panel for content.",
+      "id": "FIX-008",
+      "title": "Fix widget_ref.chat_input() method call",
+      "description": "As a developer, I need to use correct widget reference API for accessing chat_input.",
       "acceptanceCriteria": [
-        "Create main UI with split layout: sidebar (30%) + main panel (70%)",
-        "Sidebar: collapsible with hamburger menu on mobile",
-        "Main panel: scrollable content area",
-        "Apply dark theme (dark gray background, light text)",
-        "Layout responsive to window resize",
-        "Typecheck passes: cargo check"
+        "Replace `widget_ref.chat_input()` with correct Makepad widget access pattern",
+        "Use `widget_ref.view(id!(chat_input))` or similar based on Makepad docs",
+        "Check chat_input widget ID is correctly defined in live_design!",
+        "Typecheck passes: cargo check in frontend/"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "Makepad Layout Implementation (US-008):\n\n**Split Layout Pattern:**\n- Use `flow: Right` for horizontal split (sidebar + main panel)\n- Fixed width for sidebar (300px) + `width: Fill` for main panel to take remaining space\n- This creates effective 30/70 split that's more practical than percentage-based widths\n\n**Dark Theme Implementation:**\n- Apply `show_bg: true` with `draw_bg: { color: #hex }` for backgrounds\n- Dark colors: #1a1a1a (main), #242424 (sidebar), #2a2a2a (cards)\n- Light text: #e0e0e0 for primary, #aaa for secondary, #888 for tertiary\n- Use different shades of gray to create visual hierarchy\n\n**Scrollable Content:**\n- Use `<ScrollYView>` wrapper for vertical scrolling\n- Child content uses `height: Fit` to size to content\n- ScrollYView uses `height: Fill` to take available space\n\n**Button Click Handling:**\n- Pattern: `self.ui.button(id!(button_name)).clicked(&actions)`\n- Use `id!` macro for single widget (not `ids!` which returns array)\n- Handle in handle_actions() method within MatchEvent impl\n\n**Widget Visibility Toggle:**\n- Access widget: `self.ui.view(id!(sidebar))`\n- Toggle: `widget.set_visible(cx, false)` or `widget.set_visible(cx, true)`\n- Call `self.ui.redraw(cx)` after visibility change\n\n**Responsive Layout Patterns:**\n- `width: Fill, height: Fill` - fill available space in both dimensions\n- `width: Fill, height: Fit` - fill horizontally, size to content vertically\n- `width: Fit, height: Fit` - size to content in both dimensions\n\n**Custom Rounded Corners with Shaders:**\n- Use Sdf2d for drawing rounded rectangles with custom colors\n- Pattern: `draw_bg: { color: #hex, instance border_radius: 8.0, fn pixel(self) -> vec4 { ... } }`\n\n**Gotchas:**\n- Use `id!` for single widget, `ids!` for nested paths or multiple widgets\n- Always call `self.ui.redraw(cx)` after modifying UI state\n- ScrollYView must have height: Fill, not height: Fit, to enable scrolling"
+      "passes": false,
+      "notes": ""
     },
     {
-      "id": "US-009",
-      "title": "Implement session list component",
-      "description": "As a user, I need to see a list of sessions organized by project in the sidebar.",
+      "id": "FIX-009",
+      "title": "Verify and run frontend successfully",
+      "description": "As a developer, I need to confirm the frontend compiles and can run.",
       "acceptanceCriteria": [
-        "Create SessionList component fetching from /api/sessions",
-        "Group sessions by project (collapsible project headers)",
-        "Display session name and timestamp",
-        "Add visual indicator for running vs inactive sessions",
-        "Add search box to filter sessions by name",
-        "Typecheck passes: cargo check"
+        "Run `cargo check` in frontend/ with zero errors",
+        "Run `cargo build` in frontend/ successfully",
+        "Test that frontend binary runs without crashing",
+        "All previous fix stories complete and committed"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "Makepad Session List Component Implementation (US-009):\n\n**Dynamic UI Rendering in Makepad:**\n- Makepad widgets are defined in live_design! macro and cannot be created dynamically at runtime\n- Pattern: Update widget content dynamically using set_text() and set_visible()\n- For complex lists, use formatted text in labels or implement draw_walk for custom rendering\n- Alternative: Pre-create a fixed set of widgets and show/hide them as needed\n\n**Async HTTP Fetch Pattern with cx.spawn_task:**\n- Use cx.spawn_task() for async operations that need to update UI\n- Spawn async block with move closure to capture data\n- Emit actions using cx.action() to update UI state\n- Actions are processed in handle_actions() method\n- Detach with .detach() to fire-and-forget\n\n**Search Filtering Pattern:**\n- Store original sessions Vec<Session> separately from filtered display\n- Filter on search input change: sessions.iter().filter(|s| s.name.to_lowercase().contains(&query))\n- Regroup filtered sessions by project with HashMap\n- Preserve expansion state when regrouping\n\n**Session Display Formatting:**\n- Use Unicode characters for visual indicators: ● for active, ○ for inactive\n- Expand/collapse icons: ▼ (expanded) and ▶ (collapsed)\n- Format timestamp with format_timestamp() method (simple for now, can be enhanced)\n- Project name extracted from path: path.split('/').last()\n\n**Graceful Degradation:**\n- Use demo data when backend is unavailable\n- Log errors clearly for debugging\n- Empty state message when no sessions found\n- Show total session count for feedback\n\n**Component State Management:**\n- Store search_query, sessions, and grouped_sessions as Rust fields\n- Use #[rust] attribute in live_design! for non-widget fields\n- Access UI widgets via self.ui.widget_type(id!(widget_name))\n- Always call self.ui.redraw(cx) after state changes\n\n**Gotchas:**\n- Search input changes are detected via text_input(id!(name)).changed(actions)\n- Filter must regroup sessions, not just hide them\n- Unicode characters work fine in Makepad Label widgets\n- Format for display text: \\n for newlines in multi-line labels"
-    },
-    {
-      "id": "US-010",
-      "title": "Implement session history view (static)",
-      "description": "As a user, I need to view the message history of a selected session.",
-      "acceptanceCriteria": [
-        "Create SessionHistory component displaying messages in chat bubble format",
-        "Fetch messages from backend endpoint /api/sessions/:id/messages",
-        "Render user messages (right-aligned) and assistant messages (left-aligned)",
-        "Display code blocks in monospace font with syntax highlighting placeholder",
-        "Support scrolling through message history",
-        "Typecheck passes: cargo check"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "Session History Implementation (US-010):\n\n**Backend API Pattern:**\n- SessionHistory component already implemented in sessions/history.rs with full feature set\n- Backend endpoint /api/sessions/:id/messages returns Vec<MessageResponse>\n- MessageResponse struct maps to frontend Message struct (role, content, timestamp)\n- get_session_messages() handler finds session by ID, then fetches messages from session.jsonl\n\n**Chat Bubble UI Pattern:**\n- UserMessageBubble: right-aligned with blue background (#3b82f6), white text\n- AssistantMessageBubble: left-aligned with dark gray background (#2a2a2a), light gray text\n- Both use Sdf2d for custom rounded corners (12.0 border_radius)\n- Max width: 500px for readability\n\n**Code Block Handling:**\n- CodeBlock component with dark monospace background (#1e1e1e)\n- Extract code blocks from markdown using extract_code_blocks() method\n- Strip code blocks from text content with extract_text_content()\n- Display code in monospace font family\n- Syntax highlighting is placeholder (full implementation in future story)\n\n**Async Fetch Pattern with cx.spawn_task:**\n- Use cx.spawn_task() for async HTTP operations\n- Emit actions (HistoryAction::MessagesLoaded) to update UI\n- Graceful fallback to demo data when backend unavailable\n- .detach() for fire-and-forget async tasks\n\n**Message Rendering Pattern:**\n- Use template widgets (MessageItem) with WidgetRef::new_from_ptr()\n- Update existing widgets instead of creating new ones (performance)\n- Set visibility based on message role (user vs assistant)\n- Show/hide code blocks conditionally\n\n**Scrollable Content:**\n- Use ScrollYView wrapper with height: Fill for scrolling\n- Content uses height: Fit to size to message count\n- Empty state when no session selected\n\n**Acceptance Criteria Met:**\n- ✓ SessionHistory component with chat bubble format\n- ✓ Fetch messages from /api/sessions/:id/messages\n- ✓ User messages right-aligned, assistant messages left-aligned\n- ✓ Code blocks in monospace font\n- ✓ Scrollable message history\n- ✓ Typecheck passes (cargo check)"
-    },
-    {
-      "id": "US-011",
-      "title": "Connect WebSocket for live event streaming",
-      "description": "As a user, I need to see live updates when sessions are active.",
-      "acceptanceCriteria": [
-        "Connect to WebSocket at ws://localhost/ws on app load",
-        "Parse WSEvent messages: ThinkingDelta, MessageAdded, SessionStarted, SessionStopped",
-        "Update session list indicators in real-time (running/inactive)",
-        "Append new messages to SessionHistory as they arrive",
-        "Handle WebSocket reconnection on disconnect",
-        "Typecheck passes: cargo check"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "## US-011: WebSocket Live Event Streaming Implementation\n\n**WebSocket Integration Pattern:**\n- Use tokio-tungstenite for desktop WebSocket connections\n- WebSocket manager runs in background task (spawned via cx.spawn_task)\n- Cross-thread communication via crossbeam_channel (unbounded channels for zero-copy)\n- Poll for events in UI thread using poll_event() (non-blocking try_recv)\n\n**WSEvent Enum Pattern:**\n- Use #[serde(tag = \"type\", content = \"data\")] for discriminated union JSON\n- This maps to: {\"type\":\"SessionStarted\",\"data\":{\"session_id\":\"...\",\"project_path\":\"...\"}}\n- All events follow this pattern for consistent parsing\n\n**Action Routing Pattern:**\n- App receives WSMessage from WebSocket thread\n- Converts to WSAction and emits to UI via cx.action()\n- Specific components (SessionList, SessionHistory) subscribe to relevant actions\n- SessionStatusChanged updates session list in real-time\n- MessageAppended adds to history without full reload\n\n**Reconnection Strategy:**\n- Exponential backoff starting at 1s, max 30s\n- Reset delay on successful connection\n- Infinite loop in websocket_task ensures always reconnects\n- Send Connected/Disconnected events to update UI status indicator\n\n**Makepad WebSocket Gotchas:**\n- WASM target not yet implemented (placeholder for future story)\n- Desktop requires tokio-tungstenite + futures-util dependencies\n- Use cfg(target_arch) to separate desktop/WASM implementations\n- WebSocket URL conversion: replace http:// with ws://, https:// with wss://\n\n**Status Indicator Updates:**\n- SessionList shows ● (active) or ○ (inactive) based on is_active flag\n- Updates are real-time via WebSocket events\n- If session not found in local list, fetches full refresh from backend\n\n**Message Appending:**\n- Messages added to history without full re-fetch\n- Preserves scroll position (only appends, doesn't replace)\n- Works even when viewing different session (only affects current session)\n\n**Acceptance Criteria Met:**\n✓ WebSocket connects on app load to ws://localhost/ws\n✓ Parses all WSEvent types (ThinkingDelta, MessageAdded, SessionStarted, SessionStopped)\n✓ Session list indicators update in real-time\n✓ New messages append to SessionHistory as they arrive\n✓ Reconnection with exponential backoff on disconnect\n✓ Typecheck passes (cargo check --workspace)"
-    },
-    {
-      "id": "US-012",
-      "title": "Display thinking blocks in real-time",
-      "description": "As a user, I need to see the assistant's thinking process as it happens.",
-      "acceptanceCriteria": [
-        "Create ThinkingBlock component for rendering thinking sections",
-        "Subscribe to ThinkingDelta events via WebSocket",
-        "Append delta text to thinking block in real-time",
-        "Show 'Thinking...' spinner while waiting for first delta",
-        "Collapse/expand thinking block toggle",
-        "Typecheck passes: cargo check"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "**Real-time Thinking Block Implementation (US-012):**\n\n**WebSocket Event Forwarding Pattern:**\n- When multiple components need to consume the same WebSocket event, use a hub-and-spoke pattern\n- App receives all WebSocket events and forwards to specific components based on context\n- Check session_id before forwarding: only forward ThinkingDelta to SessionHistory if it's the current session\n- Pattern: if current_session_id == event.session_id { cx.action(ComponentAction::Event(event.data)) }\n\n**Thinking Block UI Pattern:**\n- Use toggle button with Unicode characters (▼/▶) for collapse/expand state\n- Show spinner text (\"...\") while waiting for first delta, empty string when content arrives\n- thinking_content field accumulates deltas via push_str()\n- thinking_expanded bool tracks UI state, thinking_active bool tracks if thinking is in progress\n\n**Real-time UI Updates:**\n- ThinkingDelta appends to thinking_content and triggers update_thinking_block()\n- Block shows immediately when thinking_active is true (even without content)\n- Spinner appears until first delta arrives, then content replaces it\n- Collapse/expand state persists across updates\n\n**Integration with Existing Components:**\n- ThinkingBlock already defined in SessionHistory live_design (from previous story)\n- HistoryAction::ThinkingDelta handler already implemented\n- update_thinking_block() method handles all UI updates\n- Only missing piece was forwarding WSEvent to component action\n\n**Gotchas:**\n- Always check current session context before forwarding events to prevent cross-contamination\n- Use cx.action() to forward events from App to child components\n- ThinkingBlock should be visible when thinking_active OR has content (don't hide until thinking complete)"
-    },
-    {
-      "id": "US-013",
-      "title": "Implement chat input and message sending",
-      "description": "As a user, I need to send messages to the active session.",
-      "acceptanceCriteria": [
-        "Create ChatInput component with text area and send button",
-        "Send messages via POST /api/sessions/:id/prompt endpoint",
-        "Display user message immediately in SessionHistory (optimistic)",
-        "Disable input while session is thinking/busy",
-        "Support multi-line input with Shift+Enter for new lines",
-        "Typecheck passes: cargo check"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "\n## US-013 Learnings: Chat Input and Message Sending\n\n**What Was Already Implemented:**\n- ChatInput component was fully implemented with TextInput, Send button, and keyboard handling\n- Backend POST /api/sessions/:id/prompt endpoint existed in api.rs\n- Optimistic UI update pattern was already working (ChatInput emits MessageSent, App forwards to SessionHistory)\n- Multi-line input with Shift+Enter was implemented in ChatInput::handle_actions\n- Thinking state management (disable input) was implemented in App::handle_websocket_event\n\n**What Was Missing:**\n- ChatInput was disabled when thinking started but never re-enabled after completion\n- `thinking_active` field was used but not declared in App struct\n\n**Pattern for Thinking State Lifecycle:**\n1. WSEvent::ThinkingDelta arrives → set thinking_active=true, disable ChatInput\n2. WSEvent::MessageAdded with role=\"assistant\" arrives → set thinking_active=false, re-enable ChatInput\n3. This assumes assistant message means thinking is complete (reasonable assumption for chat flow)\n\n**Action Forwarding Pattern:**\n- ChatInput emits ChatInputAction::MessageSent\n- App receives it and creates Message struct\n- App emits HistoryAction::MessageAppended to SessionHistory\n- This creates optimistic UI update before backend responds\n- WebSocket WSEvent::MessageAdded then confirms the message (or adds assistant response)\n\n**Keyboard Handling Pattern:**\n- Check for KeyEvent in actions loop\n- Use key_event.modifiers.shift to detect Shift key state\n- If Shift+Enter: let default behavior handle (new line)\n- If Enter only: consume event and trigger send\n\n**Integration Pattern:**\n- Use cross-component action forwarding via App as hub\n- App receives all actions and forwards to specific components based on context\n- Check current_session_id before forwarding WebSocket events to prevent cross-contamination\n"
-    },
-    {
-      "id": "US-014",
-      "title": "Implement session resume/spawn on selection",
-      "description": "As a user, I need clicking a session to load it, spawning the pi process if not running.",
-      "acceptanceCriteria": [
-        "On session click in sidebar, set as active session",
-        "Check if session process is running via backend state",
-        "If not running, call POST /api/sessions/:id/start to spawn in RPC mode",
-        "Load session history immediately (no waiting for process start)",
-        "Show loading state in UI while process is spawning",
-        "Typecheck passes: cargo check"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "## US-014 Learnings: Session Resume/Spawn Implementation\n\n**What Was Already Implemented:**\nThe session resume/spawn functionality was ALREADY FULLY IMPLEMENTED in previous stories (US-009, US-010, US-011, US-012, US-013):\n- Session clicking logic with SessionAction::SessionClicked\n- Async status check via GET /api/sessions/:id/status\n- Process spawning via POST /api/sessions/:id/start (backend endpoint existed)\n- Immediate session history load via HistoryAction::SessionChanged\n- Loading state display with ⏳ emoji in SessionList\n- SessionStarted/SessionStartFailed action handling to clear loading state\n\n**Main Work - Fixing Compilation Errors:**\nThe codebase had 3 compilation errors that prevented cargo check from passing:\n\n1. **Missing method in ProcessManager**: api.rs called `get_process_id(&session_id)` but this method didn't exist\n   - Solution: Added `get_process_id_for_session(&self, session_id: &str) -> Option<String>` method to ProcessManager\n   - This method returns the process_id for a session by looking up the session_to_process HashMap\n\n2. **Missing pattern match in main.rs**: ProcessManagerEvent::SessionStarted variant wasn't handled in event bridge\n   - Solution: Added handler for SessionStarted pattern (though it's currently redundant with ProcessSpawned)\n   - Pattern: Always update match statements when adding new enum variants\n\n3. **Borrow checker error in pi.rs**: spawn_for_session borrowed session_to_process immutably with .get() then tried mutable borrow with .remove()\n   - Solution: Clone the process_id when getting from HashMap: `self.session_to_process.get(session_id).cloned()`\n   - This allows the remove() call to work without borrow conflicts\n\n**Pattern - HashMap Clone-Before-Remove:**\nWhen you need to both read and remove from a HashMap:\n```rust\n// WRONG - borrow checker error\nif let Some(value) = my_map.get(key) {\n    my_map.remove(key);  // Can't borrow mutably while immutably borrowed\n}\n\n// CORRECT - clone before remove\nif let Some(value) = my_map.get(key).cloned() {\n    my_map.remove(key);  // OK - we have a cloned value, not a reference\n}\n```\n\n**Acceptance Criteria Met:**\n✓ On session click, set as active session (current_session_id)\n✓ Check if session process is running via GET /api/sessions/:id/status\n✓ If not running, call POST /api/sessions/:id/start\n✓ Load session history immediately (SessionChanged action)\n✓ Show loading state with ⏳ emoji (SessionLoading action)\n✓ Typecheck passes (cargo check --workspace)"
-    },
-    {
-      "id": "US-015",
-      "title": "Make UI mobile-responsive",
-      "description": "As a user, I need the UI to work well on my phone browser.",
-      "acceptanceCriteria": [
-        "Sidebar collapses to full-width drawer on mobile (< 768px width)",
-        "Hamburger menu button to toggle sidebar on mobile",
-        "Chat input and buttons are minimum 44px height (touch-friendly)",
-        "Font sizes scale appropriately (16px base)",
-        "Viewport meta tag set for mobile (width=device-width)",
-        "Typecheck passes: cargo check"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "\n## US-015 Learnings: Mobile Responsiveness\n\n**What Was Already Implemented:**\nThe mobile responsiveness infrastructure was ALREADY FULLY IMPLEMENTED in previous stories:\n- Sidebar collapses to full-width drawer on mobile (< 768px width) via update_mobile_layout() method\n- Hamburger menu button (44px x 44px) to toggle sidebar on mobile\n- Viewport meta tag in index.html: width=device-width, initial-scale=1.0\n- Font sizes using 16px base throughout the UI\n- Touch-friendly sizing already applied to most interactive elements\n\n**What Was Fixed:**\n- SessionItem button height changed from `height: Fit` to `height: 44` for touch-friendly target size\n- This ensures minimum 44px height for all buttons (Apple HIG and Android design guidelines)\n\n**Touch Target Guidelines:**\n- Minimum 44px x 44px for all touch targets (iOS Human Interface Guidelines)\n- Minimum 48dp for Android (Material Design)\n- 44px is a good compromise that works well on both platforms\n\n**Mobile Responsiveness Pattern in Makepad:**\n- Track window dimensions in App struct (window_width, window_height)\n- Update layout on Event::WindowResized\n- Use `is_mobile()` helper method: `self.window_width < 768.0`\n- Conditional visibility based on screen size\n- Full-width overlay for sidebar on mobile (z-index behavior via visibility toggle)\n\n**Viewport Meta Tag Pattern:**\n```html\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">\n```\nThis prevents zooming and sets the viewport to match device width.\n\n**Font Size Pattern:**\n- Use 16px as base font size for readability on mobile\n- Smaller sizes (13-14px) for secondary text\n- Larger sizes (18px+) for headers\n- All text sizes defined in draw_text.text_style.font_size\n\n**Acceptance Criteria Met:**\n✓ Sidebar collapses to full-width drawer on mobile (< 768px width)\n✓ Hamburger menu button (44px x 44px) to toggle sidebar on mobile\n✓ Chat input and buttons are minimum 44px height (touch-friendly)\n✓ Font sizes scale appropriately (16px base)\n✓ Viewport meta tag set for mobile (width=device-width)\n✓ Typecheck passes (cargo check --workspace)\n"
-    },
-    {
-      "id": "US-016",
-      "title": "Add new session creation",
-      "description": "As a user, I want to create a new session in a project.",
-      "acceptanceCriteria": [
-        "Add 'New Session' button in project header or sidebar",
-        "Prompt for session name (optional, defaults to timestamp)",
-        "Call POST /api/projects/:id/sessions to create new session",
-        "Spawn pi process immediately in RPC mode",
-        "Add new session to list and select it automatically",
-        "Typecheck passes: cargo check"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "**US-016 Learnings: New Session Creation**\n\n**What Was Already Implemented:**\nThe new session creation feature was FULLY IMPLEMENTED in previous stories:\n- Frontend: \"New Session\" button in sidebar (id: new_session_button)\n- Frontend: Click handler that fetches projects and calls POST /api/projects/:id/sessions\n- Backend: create_session_in_project() endpoint in api.rs\n- Backend: create_session() function in sessions.rs that generates UUID and timestamp-based names\n- Backend: Automatic process spawning via spawn_for_session() in RPC mode\n- Frontend: Automatic session selection and list refresh after creation\n\n**Only Fix Required:**\n- Fixed test compilation error in websocket.rs: test_ws_state_creation() needed to be async\n- Changed from `#[test]` to `#[tokio::test]` to allow .await calls\n\n**Session Creation Flow:**\n1. User clicks \"+ New Session\" button in sidebar\n2. Frontend fetches project list, gets first project's ID\n3. Frontend calls POST /api/projects/:id/sessions with `{\"name\": null}`\n4. Backend validates project path, generates UUID session ID\n5. Backend creates timestamp-based name if not provided (e.g., \"Session 1736721234\")\n6. Backend creates .pi/agent/sessions/ directory if needed\n7. Backend appends session entry to session.jsonl file\n8. Backend spawns pi process immediately in RPC mode\n9. Frontend receives response and automatically selects the new session\n10. Frontend refreshes session list to show the new session\n\n**Async Test Pattern:**\n- Use `#[tokio::test]` instead of `#[test]` for async tests\n- This allows .await calls within test functions\n- Required for any test that calls async methods"
-    },
-    {
-      "id": "US-017",
-      "title": "Add session stop functionality",
-      "description": "As a user, I want to manually stop a running session.",
-      "acceptanceCriteria": [
-        "Add 'Stop' button/indicator on active sessions",
-        "Call POST /api/sessions/:id/stop to kill pi process",
-        "Update session status to inactive in UI",
-        "Disable chat input when session is stopped",
-        "Confirm stop action with dialog if session has active work",
-        "Typecheck passes: cargo check"
-      ],
-      "priority": 17,
-      "passes": true,
-      "notes": "**US-017 Learnings: Session Stop Functionality**\n\n**What Was Already Implemented:**\n- Backend endpoint POST /api/sessions/:id/stop already existed in api.rs\n- Stop button was already defined in the app's UI (stop_session_button) with visible: false\n- Stop button click handler was already implemented\n- WebSocket SessionStopped event handler was already updating the session list\n- stop_session method was already implemented in sessions.rs\n\n**What Was Added:**\n- SessionStopped action handler to update current_session_active and UI when session stops\n- SessionStarted action handler updated to set current_session_active when session starts\n- update_stop_button_visibility() method to show/hide stop button based on current_session_active\n- update_chat_input_state() method to enable/disable chat input based on current_session_active and thinking_active\n- Inline confirmation in stop button handler (logs warning if session has active work)\n- SessionClicked handler updated to reset current_session_active = false until status is verified\n\n**Pattern - State Synchronization Across WebSocket Events:**\nWhen session state changes via WebSocket events, emit a separate action to update the UI:\n- WebSocket event handler receives WSEvent::SessionStopped\n- Emits SessionAction::SessionStatusChanged to update session list\n- Emits AppAction::SessionStopped to update current session state and UI\n- This separation allows different components to respond to the same event\n\n**Pattern - Button Visibility and Input State Management:**\n- Stop button visibility: current_session_id is Some AND current_session_active is true\n- Chat input state: current_session_id is Some AND current_session_active is true AND NOT thinking_active\n- update_stop_button_visibility() and update_chat_input_state() centralize this logic\n- Always call self.ui.redraw(cx) after changing widget visibility or enabled state\n\n**Gotchas:**\n- SessionStarted action is emitted both when session is newly started AND when it's already running\n- SessionClicked handler should reset current_session_active = false until session status is verified\n- Inline confirmation is sufficient for now (full dialog would require modal component which doesn't exist)\n- Use thinking_active to detect if session has active work before stopping"
+      "passes": false,
+      "notes": ""
     }
   ]
 }
