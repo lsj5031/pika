@@ -127,3 +127,28 @@ Started: 2026-01-14
 - The persist middleware automatically hydrates state from localStorage on mount
 - Zustand stores don't require providers - can be used directly in any component
 
+## [2026-01-14] - US-006: Create session list sidebar component
+
+**Implementation:**
+- Installed shadcn/ui ScrollArea component via `npx shadcn@latest add scroll-area`
+- Created src/components/SessionList.tsx with:
+  - Groups sessions by project using useSessions and useProjects hooks
+  - Active status indicator (green dot) for active sessions
+  - Click handler that updates Zustand store's currentSessionId
+  - ScrollArea component for overflow handling
+  - Loading state with "Loading..." message
+  - Empty states for "No sessions" and "No projects found"
+- Created src/components/index.ts for component exports
+- Added QueryClientProvider to main.tsx for React Query support
+- Updated App.tsx to display SessionList in sidebar layout
+- Fixed scroll-area.tsx import to use relative path instead of @ alias (not configured yet)
+- Verified TypeScript compiles without errors
+- Verified in browser using browser-tools skill
+
+**Learnings:**
+- shadcn/ui CLI installs components directly into src/components/ui/
+- The ScrollArea component uses @radix-ui/react-scroll-area under the hood
+- Vite doesn't have @ alias configured by default - use relative imports or configure paths in vite.config.ts and tsconfig
+- browser-tools skill requires Chrome to be started with remote debugging on port 9222 before navigating
+- The component handles API errors gracefully by showing empty states when data is unavailable
+
