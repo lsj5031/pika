@@ -536,3 +536,53 @@ Session History Implementation (US-010):
 - Check current_session_id before forwarding WebSocket events to prevent cross-contamination
 
 ---
+
+## 2026-01-13T02:59:35.156Z - US-014
+## US-014 Learnings: Session Resume/Spawn Implementation
+
+**What Was Already Implemented:**
+The session resume/spawn functionality was ALREADY FULLY IMPLEMENTED in previous stories (US-009, US-010, US-011, US-012, US-013):
+- Session clicking logic with SessionAction::SessionClicked
+- Async status check via GET /api/sessions/:id/status
+- Process spawning via POST /api/sessions/:id/start (backend endpoint existed)
+- Immediate session history load via HistoryAction::SessionChanged
+- Loading state display with ⏳ emoji in SessionList
+- SessionStarted/SessionStartFailed action handling to clear loading state
+
+**Main Work - Fixing Compilation Errors:**
+The codebase had 3 compilation errors that prevented cargo check from passing:
+
+1. **Missing method in ProcessManager**: api.rs called `get_process_id(&session_id)` but this method didn't exist
+   - Solution: Added `get_process_id_for_session(&self, session_id: &str) -> Option<String>` method to ProcessManager
+   - This method returns the process_id for a session by looking up the session_to_process HashMap
+
+2. **Missing pattern match in main.rs**: ProcessManagerEvent::SessionStarted variant wasn't handled in event bridge
+   - Solution: Added handler for SessionStarted pattern (though it's currently redundant with ProcessSpawned)
+   - Pattern: Always update match statements when adding new enum variants
+
+3. **Borrow checker error in pi.rs**: spawn_for_session borrowed session_to_process immutably with .get() then tried mutable borrow with .remove()
+   - Solution: Clone the process_id when getting from HashMap: `self.session_to_process.get(session_id).cloned()`
+   - This allows the remove() call to work without borrow conflicts
+
+**Pattern - HashMap Clone-Before-Remove:**
+When you need to both read and remove from a HashMap:
+```rust
+// WRONG - borrow checker error
+if let Some(value) = my_map.get(key) {
+    my_map.remove(key);  // Can't borrow mutably while immutably borrowed
+}
+
+// CORRECT - clone before remove
+if let Some(value) = my_map.get(key).cloned() {
+    my_map.remove(key);  // OK - we have a cloned value, not a reference
+}
+```
+
+**Acceptance Criteria Met:**
+✓ On session click, set as active session (current_session_id)
+✓ Check if session process is running via GET /api/sessions/:id/status
+✓ If not running, call POST /api/sessions/:id/start
+✓ Load session history immediately (SessionChanged action)
+✓ Show loading state with ⏳ emoji (SessionLoading action)
+✓ Typecheck passes (cargo check --workspace)
+---
