@@ -777,3 +777,54 @@ FIX-001 Module Structure - Verified and Fixed:
 - tokio::time::sleep requires "time" feature, not just "sync"
 - Acceptance criteria may need adjustment based on actual codebase requirements
 ---
+
+## 2026-01-13T04:10:09.456Z - FIX-003
+**reqwest API Migration Pattern (FIX-003):**
+
+**Deprecated APIs to Avoid:**
+- `reqwest::post(url, body)` - deprecated, causes compilation errors
+- `reqwest::Body::empty()` - deprecated, no longer needed
+
+**Correct reqwest Usage Pattern:**
+1. **Client Initialization (once per component):**
+   - Add `http_client: Option<reqwest::Client>` field to struct
+   - Initialize in handle_startup: `self.http_client = Some(reqwest::Client::new());`
+   - Use `#[cfg(not(target_arch = "wasm32"))]` guards for desktop-only code
+
+2. **Reuse Client for Requests:**
+   - Clone before moving into async block: `let client = self.http_client.clone();`
+   - Use pattern: `if let Some(client) = client { client.post(url).send().await }`
+   - For POST without body: just call `.post(url).send()` (no body parameter needed)
+   - For POST with JSON: `.post(url).json(&body).send()`
+   - For GET: `.get(url).send()` or use existing client.get() method
+
+3. **Async Block Pattern:**
+   ```rust
+   let client = self.http_client.clone();
+   cx.spawn_task(async move {
+       if let Some(client) = client {
+           match client.post(&url).send().await {
+               Ok(response) => { /* handle response */ }
+               Err(e) => { /* handle error */ }
+           }
+       } else {
+           log!("HTTP client not initialized");
+       }
+   }).detach();
+   ```
+
+4. **Error Handling:**
+   - Always handle the case where http_client is None
+   - Log errors clearly for debugging
+   - Use graceful degradation (log and continue vs crash)
+
+**Files Modified:**
+- frontend/src/sessions.rs: Added http_client field to SessionList, fixed stop_session method
+- frontend/src/app.rs: Reused self.http_client for session creation and start requests
+
+**Acceptance Criteria Met:**
+✓ Replaced `reqwest::post()` with `Client::new().post()`
+✓ Removed `Body::empty()` calls (POST without body doesn't need it)
+✓ Client instance created once per component, reused for all requests
+✓ No reqwest-related compilation errors
+---
