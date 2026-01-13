@@ -670,3 +670,41 @@ The new session creation feature was FULLY IMPLEMENTED in previous stories:
 - This allows .await calls within test functions
 - Required for any test that calls async methods
 ---
+
+## 2026-01-13T03:48:15.524Z - US-017
+**US-017 Learnings: Session Stop Functionality**
+
+**What Was Already Implemented:**
+- Backend endpoint POST /api/sessions/:id/stop already existed in api.rs
+- Stop button was already defined in the app's UI (stop_session_button) with visible: false
+- Stop button click handler was already implemented
+- WebSocket SessionStopped event handler was already updating the session list
+- stop_session method was already implemented in sessions.rs
+
+**What Was Added:**
+- SessionStopped action handler to update current_session_active and UI when session stops
+- SessionStarted action handler updated to set current_session_active when session starts
+- update_stop_button_visibility() method to show/hide stop button based on current_session_active
+- update_chat_input_state() method to enable/disable chat input based on current_session_active and thinking_active
+- Inline confirmation in stop button handler (logs warning if session has active work)
+- SessionClicked handler updated to reset current_session_active = false until status is verified
+
+**Pattern - State Synchronization Across WebSocket Events:**
+When session state changes via WebSocket events, emit a separate action to update the UI:
+- WebSocket event handler receives WSEvent::SessionStopped
+- Emits SessionAction::SessionStatusChanged to update session list
+- Emits AppAction::SessionStopped to update current session state and UI
+- This separation allows different components to respond to the same event
+
+**Pattern - Button Visibility and Input State Management:**
+- Stop button visibility: current_session_id is Some AND current_session_active is true
+- Chat input state: current_session_id is Some AND current_session_active is true AND NOT thinking_active
+- update_stop_button_visibility() and update_chat_input_state() centralize this logic
+- Always call self.ui.redraw(cx) after changing widget visibility or enabled state
+
+**Gotchas:**
+- SessionStarted action is emitted both when session is newly started AND when it's already running
+- SessionClicked handler should reset current_session_active = false until session status is verified
+- Inline confirmation is sufficient for now (full dialog would require modal component which doesn't exist)
+- Use thinking_active to detect if session has active work before stopping
+---
