@@ -1,0 +1,9 @@
+# Pika Configuration
+
+# List of project root paths to scan for agent sessions
+# Add absolute paths to your projects here
+project_root_paths = [
+    # Example:
+    # "/home/youruser/projects/my-app",
+    # "/home/youruser/work/another-project",
+]
