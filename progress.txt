@@ -496,3 +496,43 @@ Session History Implementation (US-010):
 - Use cx.action() to forward events from App to child components
 - ThinkingBlock should be visible when thinking_active OR has content (don't hide until thinking complete)
 ---
+
+## 2026-01-13T02:36:47.113Z - US-013
+
+## US-013 Learnings: Chat Input and Message Sending
+
+**What Was Already Implemented:**
+- ChatInput component was fully implemented with TextInput, Send button, and keyboard handling
+- Backend POST /api/sessions/:id/prompt endpoint existed in api.rs
+- Optimistic UI update pattern was already working (ChatInput emits MessageSent, App forwards to SessionHistory)
+- Multi-line input with Shift+Enter was implemented in ChatInput::handle_actions
+- Thinking state management (disable input) was implemented in App::handle_websocket_event
+
+**What Was Missing:**
+- ChatInput was disabled when thinking started but never re-enabled after completion
+- `thinking_active` field was used but not declared in App struct
+
+**Pattern for Thinking State Lifecycle:**
+1. WSEvent::ThinkingDelta arrives → set thinking_active=true, disable ChatInput
+2. WSEvent::MessageAdded with role="assistant" arrives → set thinking_active=false, re-enable ChatInput
+3. This assumes assistant message means thinking is complete (reasonable assumption for chat flow)
+
+**Action Forwarding Pattern:**
+- ChatInput emits ChatInputAction::MessageSent
+- App receives it and creates Message struct
+- App emits HistoryAction::MessageAppended to SessionHistory
+- This creates optimistic UI update before backend responds
+- WebSocket WSEvent::MessageAdded then confirms the message (or adds assistant response)
+
+**Keyboard Handling Pattern:**
+- Check for KeyEvent in actions loop
+- Use key_event.modifiers.shift to detect Shift key state
+- If Shift+Enter: let default behavior handle (new line)
+- If Enter only: consume event and trigger send
+
+**Integration Pattern:**
+- Use cross-component action forwarding via App as hub
+- App receives all actions and forwards to specific components based on context
+- Check current_session_id before forwarding WebSocket events to prevent cross-contamination
+
+---
