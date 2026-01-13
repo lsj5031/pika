@@ -64,8 +64,8 @@
         "Typecheck passes: cargo check"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "**WebSocket Implementation (US-004):**\n\n**Axum WebSocket Integration:**\n- Axum's WebSocket support uses tokio-tungstenite under the hood\n- WebSocketUpgrade extractor upgrades HTTP to WebSocket connection\n- Message::Text expects Utf8Bytes, not String - use .into() for automatic conversion\n- split() separates WebSocket into Sender and Receiver for concurrent operations\n\n**Broadcast Channel Pattern:**\n- tokio::sync::broadcast::channel for pub/sub to multiple clients\n- tx.subscribe() creates a new receiver that gets all future messages\n- Channel capacity (100) provides backpressure if clients are slow\n- Use _ to ignore send errors when no clients are connected\n\n**Connection Management:**\n- UUID for unique client identification\n- Arc<RwLock<HashSet<String>>> for thread-safe active client tracking\n- Clone values before moving into async closures if needed later\n- tokio::select! waits for first completed task (cleanup on disconnect)\n\n**State Management:**\n- WSState must be cloned and passed via Router::with_state\n- Clone is cheap due to Arc wrapping of internal state\n- State accessible in handlers via State<T> extractor\n\n**Gotchas:**\n- Ping/Pong handling with split socket is complex - simplified for now\n- Unused functions generate warnings but are expected (API for future stories)\n- Edition \"2024\" works fine with axum 0.8 WebSocket features"
     },
     {
       "id": "US-005",
