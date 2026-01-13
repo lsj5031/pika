@@ -257,8 +257,8 @@
         "Typecheck passes: cargo check"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "**US-016 Learnings: New Session Creation**\n\n**What Was Already Implemented:**\nThe new session creation feature was FULLY IMPLEMENTED in previous stories:\n- Frontend: \"New Session\" button in sidebar (id: new_session_button)\n- Frontend: Click handler that fetches projects and calls POST /api/projects/:id/sessions\n- Backend: create_session_in_project() endpoint in api.rs\n- Backend: create_session() function in sessions.rs that generates UUID and timestamp-based names\n- Backend: Automatic process spawning via spawn_for_session() in RPC mode\n- Frontend: Automatic session selection and list refresh after creation\n\n**Only Fix Required:**\n- Fixed test compilation error in websocket.rs: test_ws_state_creation() needed to be async\n- Changed from `#[test]` to `#[tokio::test]` to allow .await calls\n\n**Session Creation Flow:**\n1. User clicks \"+ New Session\" button in sidebar\n2. Frontend fetches project list, gets first project's ID\n3. Frontend calls POST /api/projects/:id/sessions with `{\"name\": null}`\n4. Backend validates project path, generates UUID session ID\n5. Backend creates timestamp-based name if not provided (e.g., \"Session 1736721234\")\n6. Backend creates .pi/agent/sessions/ directory if needed\n7. Backend appends session entry to session.jsonl file\n8. Backend spawns pi process immediately in RPC mode\n9. Frontend receives response and automatically selects the new session\n10. Frontend refreshes session list to show the new session\n\n**Async Test Pattern:**\n- Use `#[tokio::test]` instead of `#[test]` for async tests\n- This allows .await calls within test functions\n- Required for any test that calls async methods"
     },
     {
       "id": "US-017",

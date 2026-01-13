@@ -636,3 +636,37 @@ This prevents zooming and sets the viewport to match device width.
 ✓ Typecheck passes (cargo check --workspace)
 
 ---
+
+## 2026-01-13T03:30:22.837Z - US-016
+**US-016 Learnings: New Session Creation**
+
+**What Was Already Implemented:**
+The new session creation feature was FULLY IMPLEMENTED in previous stories:
+- Frontend: "New Session" button in sidebar (id: new_session_button)
+- Frontend: Click handler that fetches projects and calls POST /api/projects/:id/sessions
+- Backend: create_session_in_project() endpoint in api.rs
+- Backend: create_session() function in sessions.rs that generates UUID and timestamp-based names
+- Backend: Automatic process spawning via spawn_for_session() in RPC mode
+- Frontend: Automatic session selection and list refresh after creation
+
+**Only Fix Required:**
+- Fixed test compilation error in websocket.rs: test_ws_state_creation() needed to be async
+- Changed from `#[test]` to `#[tokio::test]` to allow .await calls
+
+**Session Creation Flow:**
+1. User clicks "+ New Session" button in sidebar
+2. Frontend fetches project list, gets first project's ID
+3. Frontend calls POST /api/projects/:id/sessions with `{"name": null}`
+4. Backend validates project path, generates UUID session ID
+5. Backend creates timestamp-based name if not provided (e.g., "Session 1736721234")
+6. Backend creates .pi/agent/sessions/ directory if needed
+7. Backend appends session entry to session.jsonl file
+8. Backend spawns pi process immediately in RPC mode
+9. Frontend receives response and automatically selects the new session
+10. Frontend refreshes session list to show the new session
+
+**Async Test Pattern:**
+- Use `#[tokio::test]` instead of `#[test]` for async tests
+- This allows .await calls within test functions
+- Required for any test that calls async methods
+---
