@@ -1,58 +1,90 @@
 @import "tailwindcss";
 
+@import url('https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Patrick+Hand&display=swap');
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --background: #fdfbf7;
+    /* Warm Paper */
+    --foreground: #2d2d2d;
+    /* Soft Pencil Black */
+    --card: #ffffff;
+    --card-foreground: #2d2d2d;
+    --popover: #ffffff;
+    --popover-foreground: #2d2d2d;
+    --primary: #2d2d2d;
+    --primary-foreground: #ffffff;
+    --secondary: #e5e0d8;
+    /* Muted/Old Paper */
+    --secondary-foreground: #2d2d2d;
+    --muted: #e5e0d8;
+    --muted-foreground: #2d2d2d80;
+    /* Black with opacity */
+    --accent: #ff4d4d;
+    /* Correction Red */
+    --accent-foreground: #ffffff;
+    --destructive: #ff4d4d;
+    --destructive-foreground: #ffffff;
+    --border: #2d2d2d;
+    /* Pencil Lead */
+    --input: #ffffff;
+    --ring: #2d5da1;
+    /* Blue Ring */
     --radius: 0.5rem;
+    /* Fallback, mostly unused due to wobbly */
+
+    /* Chart colors - placeholders but harmonized */
+    --chart-1: #ff4d4d;
+    --chart-2: #2d5da1;
+    --chart-3: #e5e0d8;
+    --chart-4: #2d2d2d;
+    --chart-5: #fff9c4;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    /* Dark mode isn't explicitly defined in spec, but lets do a blackboard style or just invert broadly for safety */
+    --background: #1a1a1a;
+    --foreground: #fdfbf7;
+    --card: #2d2d2d;
+    --card-foreground: #fdfbf7;
+    --popover: #2d2d2d;
+    --popover-foreground: #fdfbf7;
+    --primary: #fdfbf7;
+    --primary-foreground: #2d2d2d;
+    --secondary: #404040;
+    --secondary-foreground: #fdfbf7;
+    --muted: #404040;
+    --muted-foreground: #fdfbf780;
+    --accent: #ff4d4d;
+    --accent-foreground: #fdfbf7;
+    --destructive: #ff4d4d;
+    --destructive-foreground: #fdfbf7;
+    --border: #fdfbf7;
+    --input: #2d2d2d;
+    --ring: #4dabf7;
   }
 }
 
 @layer base {
   * {
-    border-color: hsl(var(--border));
+    border-color: var(--border);
   }
+
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
+    background-color: var(--background);
+    background-image: radial-gradient(var(--muted) 1px, transparent 1px);
+    background-size: 24px 24px;
+    color: var(--foreground);
+    font-family: 'Patrick Hand', cursive;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Kalam', cursive;
   }
 }

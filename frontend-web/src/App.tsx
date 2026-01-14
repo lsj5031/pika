@@ -122,7 +122,7 @@ function App() {
       {/* Main layout: Sidebar + Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop Sidebar */}
-        <aside className="hidden w-64 border-r bg-background md:block">
+        <aside className="hidden w-64 border-r-2 border-dashed border-primary bg-background md:block">
           <SessionList />
         </aside>
 
