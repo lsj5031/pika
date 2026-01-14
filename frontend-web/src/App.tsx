@@ -209,9 +209,7 @@ function App() {
                 WebkitOverflowScrolling: "touch",
               }}
             >
-              <div className="h-full overflow-y-auto">
-                <SessionList />
-              </div>
+              <SessionList />
             </SheetContent>
           </Sheet>
 

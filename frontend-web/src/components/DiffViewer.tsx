@@ -64,45 +64,60 @@ export function DiffViewer({ diff, className }: DiffViewerProps) {
       {/* Diff content - simple line-by-line comparison */}
       <div className={cn(
         "border rounded-lg overflow-hidden text-xs font-mono",
-        viewMode === "split" ? "grid grid-cols-2" : ""
+        viewMode === "split" ? "grid grid-cols-1 md:grid-cols-2" : ""
       )}>
         {viewMode === "split" ? (
           <>
             {/* Old content */}
-            <div className="border-r bg-red-50 dark:bg-red-950/20 p-2">
-              <div className="font-semibold mb-2 text-red-700 dark:text-red-400">
+            <div className="border-b md:border-b-0 md:border-r bg-red-50 dark:bg-red-950/20 p-2">
+              <div className="font-semibold mb-2 text-red-700 dark:text-red-400 flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
                 Before
               </div>
-              <pre className="whitespace-pre-wrap break-words">
+              <pre className="whitespace-pre-wrap break-all opacity-80">
                 {diff.oldContent || "// No previous content"}
               </pre>
             </div>
             {/* New content */}
             <div className="bg-green-50 dark:bg-green-950/20 p-2">
-              <div className="font-semibold mb-2 text-green-700 dark:text-green-400">
+              <div className="font-semibold mb-2 text-green-700 dark:text-green-400 flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span>
                 After
               </div>
-              <pre className="whitespace-pre-wrap break-words">
+              <pre className="whitespace-pre-wrap break-all">
                 {diff.newContent || "// No new content"}
               </pre>
             </div>
           </>
         ) : (
           /* Unified view */
-          <div className="p-2 bg-muted/30">
-            <div className="font-semibold mb-2">Changes</div>
-            <pre className="whitespace-pre-wrap break-words">
+          <div className="p-3 bg-muted/10">
+            <div className="font-semibold mb-3 flex items-center gap-2">
+              <FileDiff className="h-4 w-4" />
+              Changes
+            </div>
+            <pre className="whitespace-pre-wrap break-all leading-relaxed">
               {diff.oldContent && diff.newContent ? (
                 <>
-                  <span className="line-through text-red-600 dark:text-red-400">
-                    {diff.oldContent}
-                  </span>
-                  {"\n\n"}
-                  <span className="text-green-600 dark:text-green-400">
-                    {diff.newContent}
-                  </span>
+                  <div className="bg-red-100/50 dark:bg-red-900/20 px-1 py-0.5 rounded -mx-1 mb-2">
+                    <span className="text-red-600 dark:text-red-400 line-through">
+                      {diff.oldContent}
+                    </span>
+                  </div>
+                  <div className="bg-green-100/50 dark:bg-green-900/20 px-1 py-0.5 rounded -mx-1">
+                    <span className="text-green-600 dark:text-green-400">
+                      {diff.newContent}
+                    </span>
+                  </div>
                 </>
-              ) : diff.newContent || diff.oldContent || "// No content"}
+              ) : (
+                <div className={cn(
+                  "p-2 rounded",
+                  diff.newContent ? "bg-green-50 dark:bg-green-900/20 text-green-700" : "bg-red-50 dark:bg-red-900/20 text-red-700"
+                )}>
+                  {diff.newContent || diff.oldContent || "// No content"}
+                </div>
+              )}
             </pre>
           </div>
         )}
