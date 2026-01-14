@@ -6,7 +6,6 @@ import { cn } from "../lib/utils";
 
 interface ChatInputProps {
   sessionId: string | null;
-  isSessionActive: boolean;
   onSendMessage: (content: string) => void;
   disabled?: boolean;
   className?: string;
@@ -14,7 +13,6 @@ interface ChatInputProps {
 
 export function ChatInput({
   sessionId,
-  isSessionActive,
   onSendMessage,
   disabled = false,
   className,

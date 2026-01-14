@@ -54,6 +54,25 @@ export interface Message {
   timestamp: string | null;
 }
 
+// Code diff types
+export interface CodeDiff {
+  id: string;
+  sessionId: string;
+  messageId: string;
+  oldCode: string;
+  newCode: string;
+  language: string;
+  filePath: string;
+  createdAt: string;
+  diffUrl?: string;
+}
+
+export interface DiffIntegrationSettings {
+  enabled: boolean;
+  apiKey?: string;
+  autoGenerate: boolean;
+}
+
 // API request types
 export interface PromptRequest {
   prompt: string;
