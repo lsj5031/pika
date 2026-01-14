@@ -21,7 +21,7 @@ export function useCreateStandaloneSession() {
   >({
     mutationFn: async (request) => {
       return apiClient.post<CreateStandaloneSessionResponse>(
-        "/api/sessions/create",
+        "/sessions/create",
         request
       );
     },

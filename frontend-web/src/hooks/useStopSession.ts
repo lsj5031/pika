@@ -6,7 +6,7 @@ export function useStopSession() {
 
   return useMutation<void, Error, string>({
     mutationFn: async (sessionId) => {
-      return apiClient.post<void>(`/api/sessions/${sessionId}/stop`, {});
+      return apiClient.post<void>(`/sessions/${sessionId}/stop`, {});
     },
     onSuccess: (_, sessionId) => {
       // Invalidate session queries

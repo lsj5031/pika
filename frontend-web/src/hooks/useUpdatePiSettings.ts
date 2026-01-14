@@ -13,7 +13,7 @@ export function useUpdatePiSettings() {
 
   return useMutation<void, Error, UpdatePiSettingsRequest>({
     mutationFn: async (request) => {
-      return apiClient.post<void>("/api/settings", request);
+      return apiClient.post<void>("/settings", request);
     },
     onSuccess: () => {
       // Invalidate settings query to refetch
