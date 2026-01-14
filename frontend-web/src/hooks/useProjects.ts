@@ -5,6 +5,6 @@ import type { Project } from "../types";
 export function useProjects() {
   return useQuery<Project[]>({
     queryKey: ["projects"],
-    queryFn: () => apiClient.get<Project[]>("/projects"),
+    queryFn: () => apiClient.get<Project[]>("/api/projects"),
   });
 }

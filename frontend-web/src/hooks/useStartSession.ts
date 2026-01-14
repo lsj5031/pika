@@ -8,7 +8,7 @@ export function useStartSession() {
 
   return useMutation<StartSessionResponse, Error, string>({
     mutationFn: (sessionId) =>
-      apiClient.post<StartSessionResponse>(`/sessions/${sessionId}/start`, {}),
+      apiClient.post<StartSessionResponse>(`/api/sessions/${sessionId}/start`, {}),
     onSuccess: (_data, sessionId) => {
       // Update the session in the cache
       queryClient.setQueryData(

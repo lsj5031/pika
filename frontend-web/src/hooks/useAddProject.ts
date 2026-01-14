@@ -16,7 +16,7 @@ export function useAddProject() {
 
   return useMutation<AddProjectResponse, Error, AddProjectRequest>({
     mutationFn: async (request) => {
-      return apiClient.post<AddProjectResponse>("/projects", request);
+      return apiClient.post<AddProjectResponse>("/api/projects", request);
     },
     onSuccess: () => {
       // Invalidate projects query to refetch

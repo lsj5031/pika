@@ -5,6 +5,6 @@ import type { Session } from "../types";
 export function useSessions() {
   return useQuery<Session[]>({
     queryKey: ["sessions"],
-    queryFn: () => apiClient.get<Session[]>("/sessions"),
+    queryFn: () => apiClient.get<Session[]>("/api/sessions"),
   });
 }
