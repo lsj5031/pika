@@ -280,3 +280,24 @@ Started: 2026-01-14
 - Connection status colors (green/yellow/red) are applied via className overrides on Badge
 - The layout structure is: flex-col parent -> header + flex row for sidebar/content
 - Desktop sidebar is always visible but hidden on mobile; drawer is separate for mobile only
+
+## [2026-01-14] - US-010: Wire WebSocket events to UI updates
+
+**Implementation:**
+- Fixed critical infinite loop bug in useWebSocket hook: added onMessageRef to store the callback without triggering connect() to change on every render
+- Fixed critical infinite loop bug in SessionHistory.tsx: added EMPTY_THINKING_STATE constant to avoid creating new objects in Zustand selector (caused React error #185 "Maximum update depth exceeded")
+- All WebSocket events properly wired in App.tsx handleWebSocketMessage callback:
+  - SessionStarted: invalidates sessions query via queryClient.invalidateQueries({ queryKey: ["sessions"] })
+  - SessionStopped: clears thinking state via clearThinking() and invalidates sessions
+  - ThinkingDelta: appends thinking content via appendThinking(sessionId, content)
+  - MessageAdded: clears thinking state and invalidates messages query
+- Verified TypeScript compiles without errors
+- Verified in browser using browser-tools skill - app now renders correctly without infinite loop
+
+**Learnings:**
+- React error #185 "Maximum update depth exceeded" is caused by state updates during render or unstable selectors that create new objects on every call
+- Zustand selectors must return stable references - using inline object literals like `{ content: "", isThinking: false }` in selectors causes infinite loops because a new object is created on each render
+- Solution: define constants outside the component using `as const` and use those in selectors
+- For callbacks in custom hooks, use useRef to store the latest callback without triggering the hook's dependencies to change
+- The pattern `const callbackRef = useRef(callback); useEffect(() => { callbackRef.current = callback; }, [callback]);` allows updating the ref without changing memoized functions that depend on it
+- Chrome DevTools Protocol via browser-tools skill is invaluable for diagnosing React errors - captured the actual error message which led to finding the Zustand selector issue
