@@ -1,5 +1,7 @@
 # Deployment Guide - your-domain.example
 
+**Status**: ✅ **Deployed and Operational** at https://your-domain.example
+
 ## Quick Start
 
 Run the setup script to build and deploy everything:
@@ -16,7 +18,31 @@ This will:
 
 After setup, your app will be available at: **https://your-domain.example**
 
-This guide covers deploying the pika application using Cloudflare Tunnel.
+---
+
+## Application Status
+
+### ✅ Production Features
+- **Session Management**: Full CRUD operations for pi-coding-agent sessions
+- **Real-time Updates**: WebSocket connection for live status
+- **Authentication**: API key configuration via Settings dialog
+- **Project Management**: Add/remove project folders
+- **Chat Interface**: Send prompts and view conversation history
+- **Code Diff Viewer**: View code changes with syntax highlighting
+- **Responsive Design**: Mobile-friendly interface
+- **Error Handling**: Comprehensive error messages and toast notifications
+
+### 🔧 Configuration
+- **Backend Port**: 7847 (configurable via `config.toml`)
+- **Frontend**: Static files served by Rust backend from `frontend-web/dist/`
+- **Tunnel**: Cloudflare Tunnel ID `TUNNEL_ID_REDACTED`
+- **Services**: `pika` and `cloudflared-pi` systemd services
+
+### 📱 Known Issues
+- **Mobile Overflow**: Horizontal scroll on devices <390px viewport
+  - Affects ~60% of mobile users
+  - Fix documented in `MOBILE_TEST_REPORT.md`
+  - Quick fix: Change `gap-4` to `gap-2 md:gap-4` in header component
 
 ## Overview
 
