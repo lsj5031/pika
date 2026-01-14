@@ -124,8 +124,8 @@ localhost:7847 (Rust Backend)
 
 ## Configuration Files
 
-- **Tunnel Config**: `~/.cloudflared/config-pi-api.yml`
-- **Systemd Service**: `/etc/systemd/system/cloudflared-pi-api.service`
+- **Tunnel Config**: `~/.cloudflared/config-pi.yml`
+- **Systemd Service**: `/etc/systemd/system/cloudflared-pi.service`
 - **Project Config**: `config.toml` (in project root)
 - **Frontend Env**: `frontend-web/.env`
 
@@ -133,17 +133,17 @@ localhost:7847 (Rust Backend)
 
 ### Check Tunnel Status
 ```bash
-sudo systemctl status cloudflared-pi-api
+sudo systemctl status cloudflared-pi
 ```
 
 ### Restart Tunnel
 ```bash
-sudo systemctl restart cloudflared-pi-api
+sudo systemctl restart cloudflared-pi
 ```
 
 ### View Tunnel Logs
 ```bash
-sudo journalctl -u cloudflared-pi-api -f
+sudo journalctl -u cloudflared-pi -f
 ```
 
 ### Update Frontend
@@ -163,7 +163,8 @@ sudo systemctl restart pika
 
 Frontend (`.env`):
 ```
-VITE_API_BASE_URL=https://pi-ayour-domain.example
+VITE_API_URL=https://your-domain.example/api
+VITE_WS_URL=wss://your-domain.example/ws
 ```
 
 Backend will automatically use the tunnel endpoint.
@@ -173,10 +174,10 @@ Backend will automatically use the tunnel endpoint.
 ### Tunnel not working
 ```bash
 # Check if cloudflared is running
-sudo systemctl status cloudflared-pi-api
+sudo systemctl status cloudflared-pi
 
 # Check DNS
-nslookup pi-ayour-domain.example
+nslookup your-domain.example
 
 # Test local connection
 curl http://localhost:7847
