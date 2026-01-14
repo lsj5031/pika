@@ -6,20 +6,28 @@ type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
 interface UseWebSocketOptions {
   onMessage?: (event: WSEvent) => void;
+  onError?: (error: Event) => void;
   enabled?: boolean;
 }
 
-export function useWebSocket({ onMessage, enabled = true }: UseWebSocketOptions = {}) {
+export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocketOptions = {}) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectDelay = 30000; // 30 seconds max
   const onMessageRef = useRef(onMessage);
+  const onErrorRef = useRef(onError);
+  const hasConnectedOnceRef = useRef(false);
 
   // Keep onMessageRef updated without triggering connect to change
   useEffect(() => {
     onMessageRef.current = onMessage;
   }, [onMessage]);
+
+  // Keep onErrorRef updated
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
     enabled ? "connecting" : "disconnected"
@@ -49,11 +57,17 @@ export function useWebSocket({ onMessage, enabled = true }: UseWebSocketOptions 
       ws.onopen = () => {
         setConnectionStatus("connected");
         reconnectAttemptsRef.current = 0;
+        hasConnectedOnceRef.current = true;
       };
 
       ws.onclose = (event) => {
         setConnectionStatus("disconnected");
         wsRef.current = null;
+
+        // Show error on unexpected disconnect if we've connected before
+        if (hasConnectedOnceRef.current && !event.wasClean) {
+          onErrorRef.current?.(event);
+        }
 
         // Attempt to reconnect with exponential backoff if not explicitly closed
         if (!event.wasClean && enabled) {
@@ -70,6 +84,7 @@ export function useWebSocket({ onMessage, enabled = true }: UseWebSocketOptions 
       };
 
       ws.onerror = (error) => {
+        // Only log error to console, let onclose handle the toast
         console.error("WebSocket error:", error);
       };
 
