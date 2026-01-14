@@ -1,6 +1,15 @@
 import { config } from "../config/env";
+import { getCredentials, getAuthHeader, clearCredentials } from "./auth";
 
-// API client using fetch
+// Event for auth failures
+export const AUTH_ERROR_EVENT = "auth-error";
+
+// Dispatch auth error event
+function dispatchAuthError() {
+  window.dispatchEvent(new CustomEvent(AUTH_ERROR_EVENT));
+}
+
+// API client using fetch with auth support
 export const apiClient = {
   async request<T>(
     endpoint: string,
@@ -8,17 +17,40 @@ export const apiClient = {
   ): Promise<T> {
     const url = `${config.API_URL}${endpoint}`;
 
+    // Get auth header if credentials exist
+    const credentials = getCredentials();
+    const authHeader = getAuthHeader(credentials);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...options.headers as Record<string, string>,
+    };
+
+    if (authHeader) {
+      headers["Authorization"] = authHeader;
+    }
+
     const response = await fetch(url, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
+      headers,
     });
 
+    // Handle 401 Unauthorized - trigger auth flow
+    if (response.status === 401) {
+      clearCredentials();
+      dispatchAuthError();
+      throw new Error("Authentication required");
+    }
+
     if (!response.ok) {
-      const error: { error: string; message: string } = await response.json();
-      throw new Error(error.message || `API error: ${response.status}`);
+      let errorMessage = `API error: ${response.status}`;
+      try {
+        const error: { error: string; message: string } = await response.json();
+        errorMessage = error.message || errorMessage;
+      } catch {
+        // Could not parse error response
+      }
+      throw new Error(errorMessage);
     }
 
     return response.json();

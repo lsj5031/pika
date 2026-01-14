@@ -75,7 +75,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
   };
 
   const defaultTrigger = (
-    <Button variant="outline" size="sm">
+    <Button variant="outline" size="sm" id="new-session-button" data-testid="new-session-button" className="min-h-[44px]">
       <Plus className="mr-2 h-4 w-4" />
       New Session
     </Button>
@@ -101,7 +101,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
               onValueChange={setSelectedProjectId}
               disabled={projectsLoading}
             >
-              <SelectTrigger id="project">
+              <SelectTrigger id="project" data-testid="project-select" className="min-h-[44px]">
                 <SelectValue
                   placeholder={
                     projectsLoading
@@ -150,7 +150,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
           >
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={isCreateDisabled}>
+          <Button onClick={handleCreate} disabled={isCreateDisabled} id="create-session-button" data-testid="create-session-button" className="min-h-[44px]">
             {createSessionMutation.isPending ? "Creating..." : "Create"}
           </Button>
         </DialogFooter>

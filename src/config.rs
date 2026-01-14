@@ -10,6 +10,37 @@ pub struct ProjectConfig {
     /// List of project root paths to scan for sessions
     #[serde(default)]
     pub project_root_paths: Vec<PathBuf>,
+
+    /// HTTP Basic Auth username (optional, can be set via AUTH_USERNAME env var)
+    #[serde(default)]
+    pub auth_username: Option<String>,
+
+    /// HTTP Basic Auth password (optional, can be set via AUTH_PASSWORD env var)
+    #[serde(default)]
+    pub auth_password: Option<String>,
+}
+
+impl ProjectConfig {
+    /// Get the effective auth username (config value or environment variable)
+    pub fn get_auth_username(&self) -> Option<String> {
+        self.auth_username
+            .clone()
+            .or_else(|| std::env::var("AUTH_USERNAME").ok())
+            .filter(|s| !s.is_empty())
+    }
+
+    /// Get the effective auth password (config value or environment variable)
+    pub fn get_auth_password(&self) -> Option<String> {
+        self.auth_password
+            .clone()
+            .or_else(|| std::env::var("AUTH_PASSWORD").ok())
+            .filter(|s| !s.is_empty())
+    }
+
+    /// Check if authentication is enabled
+    pub fn is_auth_enabled(&self) -> bool {
+        self.get_auth_username().is_some() && self.get_auth_password().is_some()
+    }
 }
 
 impl ProjectConfig {

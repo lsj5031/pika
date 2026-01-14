@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { config } from "../config/env";
+import { getCredentials, encodeBasicAuth, clearCredentials } from "../lib/auth";
+import { AUTH_ERROR_EVENT } from "../lib/api";
 import type { WSEvent } from "../types";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -47,6 +49,25 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
     connectionStatusRef.current = connectionStatus;
   }, [connectionStatus]);
 
+  /**
+   * Build WebSocket URL with auth query params
+   * WebSocket doesn't support custom headers, so we use query params for auth
+   */
+  const buildWsUrl = () => {
+    const credentials = getCredentials();
+    const baseUrl = config.WS_URL;
+
+    if (credentials) {
+      // Use subprotocol or query param for auth
+      // Query param approach: append encoded credentials
+      const url = new URL(baseUrl);
+      url.searchParams.set("auth", encodeBasicAuth(credentials));
+      return url.toString();
+    }
+
+    return baseUrl;
+  };
+
   // Function to create WebSocket connection
   const createConnection = () => {
     if (!enabledRef.current) return;
@@ -66,7 +87,8 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
     setConnectionStatus("connecting");
 
     try {
-      const ws = new WebSocket(config.WS_URL);
+      const wsUrl = buildWsUrl();
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -78,6 +100,13 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
       ws.onclose = (event) => {
         setConnectionStatus("disconnected");
         wsRef.current = null;
+
+        // Check for auth failure (code 4401 or close reason contains "unauthorized")
+        if (event.code === 4401 || event.reason?.toLowerCase().includes("unauthorized")) {
+          clearCredentials();
+          window.dispatchEvent(new CustomEvent(AUTH_ERROR_EVENT));
+          return; // Don't reconnect on auth failure
+        }
 
         // Show error on unexpected disconnect if we've connected before
         if (hasConnectedOnceRef.current && !event.wasClean) {
@@ -147,5 +176,6 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
     connectionStatus,
     isConnected: connectionStatus === "connected",
     isConnecting: connectionStatus === "connecting",
+    reconnect: createConnection,
   };
 }

@@ -1,5 +1,5 @@
-import { useCallback, useState, useRef } from "react";
-import { SessionList, SessionHistory, ChatInput, AppHeader } from "./components";
+import { useCallback, useState, useRef, useEffect } from "react";
+import { SessionList, SessionHistory, ChatInput, AppHeader, AuthPrompt } from "./components";
 import { useAppStore } from "./store/appStore";
 import { useThinkingStore } from "./store/thinkingStore";
 import { useSessions } from "./hooks/useSessions";
@@ -9,10 +9,16 @@ import { useWebSocket } from "./hooks/useWebSocket";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent } from "./components/ui/sheet";
 import { toast } from "sonner";
+import { hasCredentials } from "./lib/auth";
+import { AUTH_ERROR_EVENT } from "./lib/api";
 import type { WSEvent } from "./types";
 
 function App() {
   const currentSessionId = useAppStore((state) => state.currentSessionId);
+
+  // Auth state
+  const [needsAuth, setNeedsAuth] = useState(() => !hasCredentials());
+  const [authKey, setAuthKey] = useState(0); // Used to force re-render after auth
 
   const { data: sessions } = useSessions();
   const sendPromptMutation = useSendPrompt();
@@ -23,6 +29,26 @@ function App() {
 
   // Mobile drawer state
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+  // Listen for auth error events
+  useEffect(() => {
+    const handleAuthError = () => {
+      setNeedsAuth(true);
+    };
+
+    window.addEventListener(AUTH_ERROR_EVENT, handleAuthError);
+    return () => {
+      window.removeEventListener(AUTH_ERROR_EVENT, handleAuthError);
+    };
+  }, []);
+
+  // Handle successful authentication
+  const handleAuthenticated = useCallback(() => {
+    setNeedsAuth(false);
+    setAuthKey((k) => k + 1); // Force refresh
+    // Invalidate all queries to refetch with new credentials
+    queryClient.invalidateQueries();
+  }, [queryClient]);
 
   // Find current session and check if active
   const currentSession = sessions?.find((s) => s.id === currentSessionId);
@@ -79,10 +105,22 @@ function App() {
   }, []);
 
   // Establish WebSocket connection and get connection status
-  const { connectionStatus } = useWebSocket({
+  // Only connect if authenticated
+  const { connectionStatus, reconnect } = useWebSocket({
     onMessage: handleWebSocketMessage,
     onError: handleWebSocketError,
+    enabled: !needsAuth,
   });
+
+  // Reconnect WebSocket when auth changes
+  useEffect(() => {
+    if (!needsAuth && authKey > 0) {
+      // Small delay to ensure credentials are stored
+      setTimeout(() => {
+        reconnect();
+      }, 100);
+    }
+  }, [needsAuth, authKey, reconnect]);
 
   // Handle sending messages
   const handleSendMessage = useCallback(
@@ -110,42 +148,47 @@ function App() {
   }, []);
 
   return (
-    <div className="flex h-screen w-full flex-col">
-      {/* Header */}
-      <AppHeader
-        connectionStatus={connectionStatus}
-        isSessionActive={isSessionActive}
-        onMenuToggle={handleMenuToggle}
-        onStopSession={isSessionActive ? handleStopSession : undefined}
-      />
+    <>
+      {/* Auth prompt modal */}
+      <AuthPrompt open={needsAuth} onAuthenticated={handleAuthenticated} />
 
-      {/* Main layout: Sidebar + Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Desktop Sidebar */}
-        <aside className="hidden w-64 border-r-2 border-dashed border-primary bg-background md:block">
-          <SessionList />
-        </aside>
+      <div className="flex h-screen w-full flex-col">
+        {/* Header */}
+        <AppHeader
+          connectionStatus={connectionStatus}
+          isSessionActive={isSessionActive}
+          onMenuToggle={handleMenuToggle}
+          onStopSession={isSessionActive ? handleStopSession : undefined}
+        />
 
-        {/* Mobile Drawer Sidebar */}
-        <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
-          <SheetContent side="left" className="w-64 p-0">
+        {/* Main layout: Sidebar + Content */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Desktop Sidebar */}
+          <aside className="hidden w-64 border-r-2 border-dashed border-primary bg-background md:block">
             <SessionList />
-          </SheetContent>
-        </Sheet>
+          </aside>
 
-        {/* Main content area */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-hidden">
-            <SessionHistory sessionId={currentSessionId} />
-          </div>
-          <ChatInput
-            sessionId={currentSessionId}
-            isSessionActive={isSessionActive}
-            onSendMessage={handleSendMessage}
-          />
-        </main>
+          {/* Mobile Drawer Sidebar */}
+          <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
+            <SheetContent side="left" className="w-[280px] p-0 sm:w-64" id="mobile-drawer-content">
+              <SessionList />
+            </SheetContent>
+          </Sheet>
+
+          {/* Main content area */}
+          <main className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-hidden">
+              <SessionHistory sessionId={currentSessionId} />
+            </div>
+            <ChatInput
+              sessionId={currentSessionId}
+              isSessionActive={isSessionActive}
+              onSendMessage={handleSendMessage}
+            />
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
