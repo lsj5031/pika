@@ -18,6 +18,7 @@ interface AppState {
   setThinkingSession: (sessionId: string, isThinking: boolean) => void; // NEW
   markSessionAsRead: (sessionId: string, messageCount: number) => void; // NEW
   incrementUnreadCount: (sessionId: string) => void; // NEW
+  clearInvalidSession: (sessionId: string) => void; // NEW: Clear session that doesn't exist
 }
 
 export const useAppStore = create<AppState>()(
@@ -82,6 +83,15 @@ export const useAppStore = create<AppState>()(
           const newUnread = new Set(state.unreadSessions);
           newUnread.add(sessionId);
           return { unreadSessions: newUnread };
+        }),
+
+      clearInvalidSession: (sessionId) =>
+        set((state) => {
+          // Clear the session if it's the current one
+          if (state.currentSessionId === sessionId) {
+            return { currentSessionId: null };
+          }
+          return state;
         }),
     }),
     {
