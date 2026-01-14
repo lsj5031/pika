@@ -248,3 +248,35 @@ Started: 2026-01-14
 - The thinking state is per-session, allowing multiple sessions to have independent thinking states
 - amber-50/amber-200 colors provide good visual distinction from user (primary) and assistant (muted) messages
 - Using dark: variants ensures the component works in dark mode too
+
+## [2026-01-14] - US-009: Create app layout with header and sidebar
+
+**Implementation:**
+- Installed shadcn/ui Sheet component via `npx shadcn@latest add sheet` for mobile drawer
+- Installed shadcn/ui Badge component via `npx shadcn@latest add badge` for status display
+- Created src/components/AppHeader.tsx with:
+  - App name "PI Agent Manager" on left side
+  - Hamburger menu button (only visible on mobile via md:hidden)
+  - Connection status badge on right with color coding:
+    - green when Connected
+    - yellow when Connecting (with animated spinner)
+    - red when Disconnected
+  - Stop Session button (only shown when session is active)
+- Updated src/App.tsx with responsive layout:
+  - Header component at top using flex-col layout
+  - Desktop sidebar with `hidden md:block` classes for responsive behavior
+  - Mobile drawer using Sheet component with `mobileDrawerOpen` state
+  - useStopSession hook integrated for stop button functionality
+  - connectionStatus from useWebSocket passed to header
+- Fixed import paths in sheet.tsx and badge.tsx (changed "src/lib/utils" to relative paths)
+- Updated src/components/index.ts to export AppHeader
+- Verified TypeScript compiles without errors
+
+**Learnings:**
+- The Sheet component from shadcn/ui uses @radix-ui/react-dialog under the hood
+- For responsive layouts in Tailwind, use `hidden md:block` pattern to show on desktop only
+- Mobile drawer state needs to be local component state (useState), not in Zustand store
+- The Badge component with variant="outline" provides good base for status indicators
+- Connection status colors (green/yellow/red) are applied via className overrides on Badge
+- The layout structure is: flex-col parent -> header + flex row for sidebar/content
+- Desktop sidebar is always visible but hidden on mobile; drawer is separate for mobile only
