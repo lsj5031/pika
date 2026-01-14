@@ -35,8 +35,8 @@ export function ChatInput({
   const isDisabled =
     disabled ||
     !sessionId ||
-    !isSessionActive ||
     content.trim().length === 0;
+  // Removed: !isSessionActive - chat should work even if session isn't active
 
   const handleSend = () => {
     const trimmed = content.trim();
@@ -68,19 +68,23 @@ export function ChatInput({
           placeholder={
             !sessionId
               ? "Select a session"
-              : !isSessionActive
-                ? "Session is not active"
-                : "Type a message... (Shift+Enter for new line)"
+              : "Type a message... (Shift+Enter for new line)"
           }
-          disabled={!sessionId || !isSessionActive || disabled}
+          disabled={!sessionId || disabled}
+          // Removed: !isSessionActive check
           className="min-h-[44px] max-h-[200px] resize-none"
           rows={1}
+          id="chat-input"
+          data-testid="chat-input"
+          enterKeyHint="send"
         />
         <Button
           onClick={handleSend}
           disabled={isDisabled}
           size="icon"
           className="h-[44px] w-[44px] shrink-0"
+          id="send-button"
+          data-testid="send-button"
         >
           <Send className="h-4 w-4" />
         </Button>

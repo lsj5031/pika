@@ -5,3 +5,10 @@
 project_root_paths = [
     "/home/leo/appifex/appifex",
 ]
+
+# HTTP Basic Authentication (optional)
+# If both username and password are set, auth is required for all routes except /health
+# These can also be set via environment variables: AUTH_USERNAME and AUTH_PASSWORD
+auth_username = "leo"
+auth_password = "Oj7yokxPVGnX0J70bbjnFOFxgvg9jSKM"
+

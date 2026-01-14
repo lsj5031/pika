@@ -1,4 +1,5 @@
 use axum::{
+    middleware,
     routing::get,
     Router,
     response::Json,
@@ -10,12 +11,14 @@ use std::path::PathBuf;
 use tower_http::cors::{CorsLayer, Any};
 use tokio::net::TcpListener;
 
+mod auth;
 mod config;
 mod sessions;
 mod websocket;
 mod pi;
 mod api;
 mod static_files;
+use auth::AuthCredentials;
 use config::ProjectConfig;
 use websocket::{WSState, WSEvent};
 use api::ApiState;
@@ -82,20 +85,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load port from CLI arg, environment variable, or use default
     let port = cli.port
         .or_else(|| std::env::var("PORT").ok().and_then(|p| p.parse().ok()))
-        .unwrap_or(3000);
+        .unwrap_or(7847);
     
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     
     // Create combined application state
     let app_state = AppState::new(config.clone());
-    
-    // Build our application with health check, WebSocket, and API routes
-    let app = Router::new()
-        .route("/health", get(health_check))
-        .route("/ws", get(websocket::ws_handler))
+
+    // Set up auth credentials
+    let auth_credentials = AuthCredentials::new(
+        config.get_auth_username().unwrap_or_default(),
+        config.get_auth_password().unwrap_or_default(),
+    );
+    let auth_enabled = auth_credentials.is_enabled();
+
+    // Build protected routes (require auth via HTTP header if enabled)
+    let protected_routes = Router::new()
         .merge(api::create_api_router())
         .fallback(static_files::serve_static_files)
         .with_state(app_state.clone())
+        .layer(middleware::from_fn(move |req, next| {
+            let creds = auth_credentials.clone();
+            auth::basic_auth_middleware(req, next, creds)
+        }));
+
+    // Build the full application
+    // - /health is always public
+    // - /ws handles its own auth via query params (WebSocket doesn't support headers)
+    // - All other routes use HTTP Basic Auth middleware
+    let app = Router::new()
+        .route("/health", get(health_check))
+        .route("/ws", get(websocket::ws_handler))
+        .with_state(app_state.clone())
+        .merge(protected_routes)
         .layer(
             // CORS layer for local development and production
             CorsLayer::new()
@@ -106,6 +128,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🚀 Pi Agent Manager server listening on http://{}", addr);
     println!("📡 WebSocket endpoint available at ws://{}", addr);
+    if auth_enabled {
+        println!("🔐 HTTP Basic Auth enabled");
+    } else {
+        println!("⚠️  HTTP Basic Auth disabled (no credentials configured)");
+    }
 
     let listener = TcpListener::bind(addr).await?;
 
