@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { config } from "../config/env";
 import type { WSEvent } from "../types";
 
@@ -18,8 +18,12 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
   const onMessageRef = useRef(onMessage);
   const onErrorRef = useRef(onError);
   const hasConnectedOnceRef = useRef(false);
+  const enabledRef = useRef(enabled);
+  const connectionStatusRef = useRef<ConnectionStatus>(
+    enabled ? "connecting" : "disconnected"
+  );
 
-  // Keep onMessageRef updated without triggering connect to change
+  // Keep onMessageRef updated
   useEffect(() => {
     onMessageRef.current = onMessage;
   }, [onMessage]);
@@ -29,12 +33,23 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
     onErrorRef.current = onError;
   }, [onError]);
 
+  // Track enabled state
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
     enabled ? "connecting" : "disconnected"
   );
 
-  const connect = useCallback(() => {
-    if (!enabled) return;
+  // Keep ref in sync with state
+  useEffect(() => {
+    connectionStatusRef.current = connectionStatus;
+  }, [connectionStatus]);
+
+  // Function to create WebSocket connection
+  const createConnection = () => {
+    if (!enabledRef.current) return;
 
     // Clear any existing reconnect timeout
     if (reconnectTimeoutRef.current) {
@@ -70,7 +85,7 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
         }
 
         // Attempt to reconnect with exponential backoff if not explicitly closed
-        if (!event.wasClean && enabled) {
+        if (!event.wasClean && enabledRef.current) {
           const delay = Math.min(
             1000 * Math.pow(2, reconnectAttemptsRef.current),
             maxReconnectDelay
@@ -78,13 +93,12 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
           reconnectAttemptsRef.current++;
 
           reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
+            createConnection();
           }, delay);
         }
       };
 
       ws.onerror = (error) => {
-        // Only log error to console, let onclose handle the toast
         console.error("WebSocket error:", error);
       };
 
@@ -100,9 +114,10 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
       console.error("Failed to create WebSocket connection:", error);
       setConnectionStatus("disconnected");
     }
-  }, [enabled]);
+  };
 
-  const disconnect = useCallback(() => {
+  // Function to disconnect
+  const disconnect = () => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -114,18 +129,19 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
     }
 
     setConnectionStatus("disconnected");
-  }, []);
+  };
 
-  // Connect on mount and reconnect on disconnect
+  // Connect on mount and when enabled changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (enabled) {
-      connect();
+      createConnection();
     }
 
     return () => {
       disconnect();
     };
-  }, [enabled, connect, disconnect]);
+  }, [enabled]);
 
   return {
     connectionStatus,
