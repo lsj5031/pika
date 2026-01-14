@@ -31,8 +31,7 @@ pub struct PiProcess {
     process: tokio::process::Child,
     /// Unique process identifier
     pub id: String,
-    /// Path to the project this process is working in
-    pub project_path: PathBuf,
+
     /// Channel sender for broadcasting JSON-RPC events
     tx: Sender<JsonRpcEvent>,
     /// stdin handle for sending commands
@@ -106,7 +105,6 @@ impl PiProcess {
         Ok(PiProcess {
             process,
             id,
-            project_path,
             tx,
             stdin,
             _stdout_task: stdout_task,
@@ -132,7 +130,7 @@ impl PiProcess {
         });
 
         let request_str = format!("{}\n", request);
-        let mut stdin = &mut self.stdin;
+        let stdin = &mut self.stdin;
 
         stdin
             .write_all(request_str.as_bytes())

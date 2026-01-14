@@ -55,7 +55,6 @@ pub enum SessionError {
         path: PathBuf,
         source: std::io::Error,
     },
-    #[allow(dead_code)]
     #[error("Failed to parse session file {path}: {source}")]
     ParseError {
         path: PathBuf,
