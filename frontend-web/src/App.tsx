@@ -168,7 +168,14 @@ function App() {
   // Handle mobile menu toggle
   const handleMenuToggle = useCallback(() => {
     setMobileDrawerOpen((prev) => !prev);
-  }, []);
+    // Focus the close button when opening for better mobile UX
+    if (!mobileDrawerOpen) {
+      setTimeout(() => {
+        const closeButton = document.querySelector('[data-radix-dialog-close]') as HTMLButtonElement;
+        closeButton?.focus();
+      }, 100);
+    }
+  }, [mobileDrawerOpen]);
 
   return (
     <>
@@ -197,10 +204,6 @@ function App() {
               side="left"
               className="w-[85vw] max-w-[320px] p-0 sm:w-64"
               id="mobile-drawer-content"
-              style={{
-                touchAction: "auto",
-                WebkitOverflowScrolling: "touch",
-              }}
             >
               <div className="h-full overflow-y-auto">
                 <SessionList />
