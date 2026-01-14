@@ -285,8 +285,8 @@
         "README updated with new development instructions"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": "Done last - only after new frontend is fully functional"
+      "passes": true,
+      "notes": "Deleted frontend/ directory containing all Makepad WASM code (app.rs, sessions.rs, chat_input.rs, history.rs, websocket.rs, etc.). Removed old PRD files (prd.md, prd.json, prd-frontend-fixes.json, progress.txt). Updated .gitignore to remove frontend/target reference. README.md was already updated in US-017. Only remaining Makepad reference is in tasks/web-frontend-replace-svx87/prd-web-frontend-replace.md which is historical documentation of the replacement project."
     }
   ]
 }

@@ -421,3 +421,44 @@ Started: 2026-01-14
 - For functions that reference themselves (like reconnect in useWebSocket), using a regular function declaration instead of useCallback with refs can avoid ESLint warnings about accessing variables before declaration
 - The build script must build frontend BEFORE backend so the backend can serve the static files from frontend-web/dist/
 
+## [2026-01-14] - US-016: Delete old Makepad frontend
+
+**Implementation:**
+- Deleted frontend/ directory containing all Makepad WASM code:
+  - Removed app.rs (954 lines of Makepad UI code)
+  - Removed sessions.rs (713 lines)
+  - Removed chat_input.rs (307 lines)
+  - Removed history.rs (747 lines)
+  - Removed websocket.rs (195 lines)
+  - Removed lib.rs, main.rs, Cargo.toml, Cargo.lock, index.html, .cargo/config.toml
+- Deleted old root-level PRD files:
+  - prd.md (original Markdown PRD describing Makepad frontend)
+  - prd.json (old JSON PRD for frontend fixes)
+  - prd-frontend-fixes.json (frontend fixes PRD)
+  - progress.txt (old progress log from backend development)
+- Updated .gitignore to remove frontend/target reference
+- README.md was already updated in US-017 with new frontend documentation
+- Only remaining Makepad reference is in tasks/web-frontend-replace-svx87/prd-web-frontend-replace.md which is historical documentation of the replacement project
+- Verified cargo check passes with only pre-existing warnings
+- Verified frontend build succeeds (npm run build)
+
+**Learnings:**
+- The old Makepad frontend had ~7,100 lines of code across 16 deleted files
+- Old PRD files at root level should be cleaned up when migrating to task-based PRD structure
+- .gitignore accumulates references to deleted directories over time - should be reviewed when removing major components
+- The frontend/ directory was never added as a workspace member in the root Cargo.toml, so removal was clean (no workspace updates needed)
+- Historical documentation (like prd-web-frontend-replace.md mentioning Makepad) can be valuable to retain as it explains the "why" and "what changed" of the migration
+
+**Final Notes:**
+This completes the web-frontend-replace project. All 18 user stories have been implemented:
+- US-001 to US-011: Core infrastructure and components
+- US-012 to US-015: Backend integration and UX features
+- US-016: Cleanup (this story)
+- US-017 to US-018: Build scripts and configuration
+
+The new React + TypeScript + Vite + shadcn/ui frontend fully replaces the old Makepad WASM frontend with:
+- Modern, standard web development tooling
+- Fast hot-reload development experience
+- Better accessibility and error handling
+- All features of the old frontend maintained
+
