@@ -67,11 +67,12 @@ fn extract_basic_auth(auth_header: &str) -> Option<(String, String)> {
     Some((username.to_string(), password.to_string()))
 }
 
-/// Create an unauthorized response with WWW-Authenticate header
+/// Create an unauthorized response without WWW-Authenticate header
+/// This prevents the browser from showing its native login dialog,
+/// allowing the frontend's custom AuthPrompt component to handle authentication.
 fn unauthorized_response() -> Response<Body> {
     Response::builder()
         .status(StatusCode::UNAUTHORIZED)
-        .header(header::WWW_AUTHENTICATE, r#"Basic realm="Pika""#)
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(r#"{"error":"Unauthorized","message":"Authentication required"}"#))
         .unwrap()
@@ -80,8 +81,9 @@ fn unauthorized_response() -> Response<Body> {
 /// HTTP Basic Auth middleware
 ///
 /// This middleware checks the Authorization header for valid Basic Auth credentials.
-/// If credentials are missing or invalid, it returns 401 Unauthorized with
-/// WWW-Authenticate header to trigger the browser's login prompt.
+/// If credentials are missing or invalid, it returns 401 Unauthorized with a JSON error body.
+/// Note: This does NOT include a WWW-Authenticate header, which prevents the browser from
+/// showing its native login dialog and allows the frontend's custom auth UI to handle authentication.
 pub async fn basic_auth_middleware(
     request: Request<Body>,
     next: Next,
