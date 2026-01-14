@@ -12,15 +12,13 @@ use tokio::io::AsyncWriteExt;
 const MAX_CONCURRENT_PROCESSES: usize = 50;
 
 /// JSON-RPC event emitted by pi process
+/// pi-coding-agent uses events with "type" field, not standard JSON-RPC
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcEvent {
-    /// JSON-RPC method name
-    pub method: Option<String>,
-    /// JSON-RPC params
-    pub params: Option<serde_json::Value>,
-    /// JSON-RPC result (for responses)
-    pub result: Option<serde_json::Value>,
-    /// Raw JSON data
+    /// Event type (e.g., "message_update", "agent_start", "notify", etc.)
+    #[serde(rename = "type")]
+    pub event_type: Option<String>,
+    /// All other fields from the event
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
 }
@@ -62,11 +60,12 @@ impl PiProcess {
                 "@mariozechner/pi-coding-agent",
                 "--mode",
                 "rpc",
-                "--cwd",
-                project_path.to_str().ok_or(PiProcessError::InvalidPath {
-                    path: project_path.clone(),
-                })?,
             ])
+            .current_dir(
+                project_path.canonicalize().map_err(|_e| PiProcessError::InvalidPath {
+                    path: project_path.clone(),
+                })?
+            )
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -119,14 +118,10 @@ impl PiProcess {
 
     /// Send a prompt to the pi process via stdin
     pub async fn send_prompt(&mut self, prompt: &str) -> Result<(), PiProcessError> {
-        // Create JSON-RPC request for prompt
+        // Create RPC command (pi-coding-agent uses "type" not "method")
         let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": "prompt",
-            "params": {
-                "prompt": prompt
-            },
-            "id": uuid::Uuid::new_v4()
+            "type": "prompt",
+            "message": prompt
         });
 
         let request_str = format!("{}\n", request);
@@ -225,6 +220,8 @@ pub struct ProcessManager {
     event_tx: Sender<ProcessManagerEvent>,
     /// Map of session ID to process ID (for tracking which sessions are active)
     session_to_process: HashMap<String, String>,
+    /// Map of process ID to session ID (reverse mapping)
+    process_to_session: HashMap<String, String>,
 }
 
 /// Events from the ProcessManager
@@ -254,6 +251,7 @@ impl ProcessManager {
             processes: HashMap::new(),
             event_tx,
             session_to_process: HashMap::new(),
+            process_to_session: HashMap::new(),
         }
     }
 
@@ -315,6 +313,9 @@ impl ProcessManager {
 
         // Remove session-to-process mapping for this process
         self.session_to_process.retain(|_session, process_id| process_id != id);
+
+        // Remove process-to-session mapping for this process
+        self.process_to_session.remove(id);
 
         // Emit ProcessKilled event
         let _ = self.event_tx.send(ProcessManagerEvent::ProcessKilled {
@@ -424,6 +425,9 @@ impl ProcessManager {
         // Track session-to-process mapping
         self.session_to_process.insert(session_id.to_string(), process_id.clone());
 
+        // Track process-to-session mapping (reverse lookup)
+        self.process_to_session.insert(process_id.clone(), session_id.to_string());
+
         // Emit ProcessSpawned event
         let _ = self.event_tx.send(ProcessManagerEvent::ProcessSpawned {
             id: process_id.clone(),
@@ -451,6 +455,11 @@ impl ProcessManager {
     /// Get the process ID for a session (if running)
     pub fn get_process_id_for_session(&self, session_id: &str) -> Option<String> {
         self.session_to_process.get(session_id).cloned()
+    }
+
+    /// Get the session ID for a process (if running)
+    pub fn get_session_id_for_process(&self, process_id: &str) -> Option<String> {
+        self.process_to_session.get(process_id).cloned()
     }
 }
 

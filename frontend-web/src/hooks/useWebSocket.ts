@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { config } from "../config/env";
 import { getCredentials, encodeBasicAuth, clearCredentials } from "../lib/auth";
 import { AUTH_ERROR_EVENT } from "../lib/api";
@@ -24,6 +24,7 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
   const connectionStatusRef = useRef<ConnectionStatus>(
     enabled ? "connecting" : "disconnected"
   );
+  const createConnectionRef = useRef<(() => void) | null>(null);
 
   // Keep onMessageRef updated
   useEffect(() => {
@@ -53,7 +54,7 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
    * Build WebSocket URL with auth query params
    * WebSocket doesn't support custom headers, so we use query params for auth
    */
-  const buildWsUrl = () => {
+  const buildWsUrl = useCallback(() => {
     const credentials = getCredentials();
     const baseUrl = config.WS_URL;
 
@@ -66,10 +67,10 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
     }
 
     return baseUrl;
-  };
+  }, []);
 
   // Function to create WebSocket connection
-  const createConnection = () => {
+  const createConnection = useCallback(() => {
     if (!enabledRef.current) return;
 
     // Clear any existing reconnect timeout
@@ -122,7 +123,7 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
           reconnectAttemptsRef.current++;
 
           reconnectTimeoutRef.current = setTimeout(() => {
-            createConnection();
+            createConnectionRef.current?.();
           }, delay);
         }
       };
@@ -143,7 +144,12 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
       console.error("Failed to create WebSocket connection:", error);
       setConnectionStatus("disconnected");
     }
-  };
+  }, [buildWsUrl, setConnectionStatus]);
+
+  // Keep ref updated with latest createConnection
+  useEffect(() => {
+    createConnectionRef.current = createConnection;
+  }, [createConnection]);
 
   // Function to disconnect
   const disconnect = () => {
@@ -161,16 +167,16 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
   };
 
   // Connect on mount and when enabled changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (enabled) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       createConnection();
     }
 
     return () => {
       disconnect();
     };
-  }, [enabled]);
+  }, [enabled, createConnection]);
 
   return {
     connectionStatus,

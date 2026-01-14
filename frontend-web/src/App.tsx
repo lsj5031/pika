@@ -16,6 +16,7 @@ import type { WSEvent, Message } from "./types";
 function App() {
   const currentSessionId = useAppStore((state) => state.currentSessionId);
   const markSessionAsRead = useAppStore((state) => state.markSessionAsRead);
+  const clearInvalidSession = useAppStore((state) => state.clearInvalidSession);
 
   // Auth state
   const [needsAuth, setNeedsAuth] = useState(() => !hasCredentials());
@@ -42,6 +43,20 @@ function App() {
       window.removeEventListener(AUTH_ERROR_EVENT, handleAuthError);
     };
   }, []);
+
+  // Listen for session not found events (404s)
+  useEffect(() => {
+    const handleSessionNotFound = ((event: CustomEvent<{ sessionId: string }>) => {
+      const { sessionId } = event.detail;
+      console.warn(`Session ${sessionId} not found, clearing from state`);
+      clearInvalidSession(sessionId);
+    }) as EventListener;
+
+    window.addEventListener("session-not-found", handleSessionNotFound);
+    return () => {
+      window.removeEventListener("session-not-found", handleSessionNotFound);
+    };
+  }, [clearInvalidSession]);
 
   // Handle successful authentication
   const handleAuthenticated = useCallback(() => {

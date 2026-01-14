@@ -9,10 +9,12 @@ import {
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Settings, Loader2 } from "lucide-react";
 import { usePiSettings } from "../hooks/usePiSettings";
 import { useUpdatePiSettings } from "../hooks/useUpdatePiSettings";
+import { ProjectManager } from "./ProjectManager";
 
 const THINKING_LEVELS = [
   { value: "off", label: "Off" },
@@ -76,96 +78,109 @@ export function SettingsDialog({ trigger }: SettingsDialogProps) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>AI Agent Settings</DialogTitle>
+          <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Configure default model and thinking level for new sessions.
+            Configure AI agent settings and manage projects.
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="space-y-6 py-4">
-            {/* Model Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="model" className="font-heading font-bold text-base">Default Model</Label>
-              <Select value={localModel} onValueChange={setLocalModel}>
-                <SelectTrigger id="model" className="min-h-[44px]">
-                  <SelectValue placeholder="Select a model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {settings?.availableModels?.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {localModel && (
-                <p className="text-xs text-muted-foreground">
-                  {settings?.availableModels?.find(m => m.id === localModel)?.provider} • {settings?.availableModels?.find(m => m.id === localModel)?.contextWindow?.toLocaleString()} tokens
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                This model will be used for all new sessions by default.
-              </p>
-            </div>
+        <Tabs defaultValue="ai" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="ai">AI Settings</TabsTrigger>
+            <TabsTrigger value="projects">Projects</TabsTrigger>
+          </TabsList>
 
-            {/* Thinking Level */}
-            <div className="space-y-2">
-              <Label htmlFor="thinking-level" className="font-heading font-bold text-base">Thinking Level</Label>
-              <Select
-                value={localThinkingLevel}
-                onValueChange={setLocalThinkingLevel}
-              >
-                <SelectTrigger id="thinking-level" className="min-h-[44px]">
-                  <SelectValue placeholder="Select thinking level" />
-                </SelectTrigger>
-                <SelectContent>
-                  {THINKING_LEVELS.map((level) => (
-                    <SelectItem key={level.value} value={level.value}>
-                      {level.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Higher thinking levels produce more detailed reasoning but use
-                more tokens and take longer.
-              </p>
-            </div>
+          <TabsContent value="ai" className="space-y-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-6 py-4">
+                {/* Model Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="model" className="font-heading font-bold text-base">Default Model</Label>
+                  <Select value={localModel} onValueChange={setLocalModel}>
+                    <SelectTrigger id="model" className="min-h-[44px]">
+                      <SelectValue placeholder="Select a model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {settings?.availableModels?.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {localModel && (
+                    <p className="text-xs text-muted-foreground">
+                      {settings?.availableModels?.find(m => m.id === localModel)?.provider} • {settings?.availableModels?.find(m => m.id === localModel)?.contextWindow?.toLocaleString()} tokens
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    This model will be used for all new sessions by default.
+                  </p>
+                </div>
 
-            {/* Current Settings Display */}
-            {settings && (
-              <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
-                <div className="font-medium">Current Settings:</div>
-                <div className="text-muted-foreground">
-                  Provider: {settings.defaultProvider || "Not set"}
+                {/* Thinking Level */}
+                <div className="space-y-2">
+                  <Label htmlFor="thinking-level" className="font-heading font-bold text-base">Thinking Level</Label>
+                  <Select
+                    value={localThinkingLevel}
+                    onValueChange={setLocalThinkingLevel}
+                  >
+                    <SelectTrigger id="thinking-level" className="min-h-[44px]">
+                      <SelectValue placeholder="Select thinking level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {THINKING_LEVELS.map((level) => (
+                        <SelectItem key={level.value} value={level.value}>
+                          {level.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Higher thinking levels produce more detailed reasoning but use
+                    more tokens and take longer.
+                  </p>
                 </div>
-                <div className="text-muted-foreground">
-                  Model: {settings.defaultModel || "Not set"}
-                </div>
-                <div className="text-muted-foreground">
-                  Thinking: {settings.defaultThinkingLevel || "off"}
+
+                {/* Current Settings Display */}
+                {settings && (
+                  <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
+                    <div className="font-medium">Current Settings:</div>
+                    <div className="text-muted-foreground">
+                      Provider: {settings.defaultProvider || "Not set"}
+                    </div>
+                    <div className="text-muted-foreground">
+                      Model: {settings.defaultModel || "Not set"}
+                    </div>
+                    <div className="text-muted-foreground">
+                      Thinking: {settings.defaultThinkingLevel || "off"}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 justify-end pt-4">
+                  <Button variant="outline" onClick={() => setOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={updateSettingsMutation.isPending}
+                  >
+                    {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
                 </div>
               </div>
             )}
-          </div>
-        )}
+          </TabsContent>
 
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={updateSettingsMutation.isPending}
-          >
-            {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
-          </Button>
-        </div>
+          <TabsContent value="projects" className="space-y-4">
+            <ProjectManager />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
