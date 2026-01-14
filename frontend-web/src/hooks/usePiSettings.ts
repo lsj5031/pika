@@ -24,7 +24,7 @@ export function usePiSettings() {
   return useQuery<PiSettings>({
     queryKey: ["pi-settings"],
     queryFn: async () => {
-      return apiClient.get<PiSettings>("/settings");
+      return apiClient.get<PiSettings>("/api/settings");
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

@@ -37,7 +37,7 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
         try {
             // Test credentials by making a request to the API
             const encoded = btoa(`${username}:${password}`);
-            const response = await fetch(`${config.API_URL}/projects`, {
+            const response = await fetch(`${config.API_URL}/api/projects`, {
                 headers: {
                     Authorization: `Basic ${encoded}`,
                 },

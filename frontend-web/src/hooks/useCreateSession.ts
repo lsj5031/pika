@@ -14,7 +14,7 @@ export function useCreateSession() {
   return useMutation<CreateSessionResponse, Error, CreateSessionVariables>({
     mutationFn: ({ projectId, request }) =>
       apiClient.post<CreateSessionResponse>(
-        `/projects/${projectId}/sessions`,
+        `/api/projects/${projectId}/sessions`,
         request
       ),
     onSuccess: () => {
