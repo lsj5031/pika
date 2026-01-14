@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use crate::sessions::{scan_sessions, get_session_messages as fetch_session_messages, create_session, CreateSessionRequest};
 use crate::AppState;
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use crate::config::ProjectConfig;
 
 /// API state shared across all handlers
@@ -203,7 +203,7 @@ pub async fn add_project(
     State(state): State<AppState>,
     Json(request): Json<AddProjectRequest>,
 ) -> Result<Json<AddProjectResponse>, ErrorResponse> {
-    use crate::config::ProjectConfig;
+    
     
     // Expand ~ to home directory
     let expanded_path = if request.path.starts_with("~/") {
@@ -271,7 +271,7 @@ pub async fn remove_project(
     State(state): State<AppState>,
     Path(project_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    use crate::config::ProjectConfig;
+    
     
     // Update config
     {
@@ -666,7 +666,6 @@ pub struct CreateStandaloneSessionResponse {
 
 /// POST /api/sessions/create - create a new session in any folder
 pub async fn create_standalone_session(
-    State(state): State<AppState>,
     Json(request): Json<CreateStandaloneSessionRequest>,
 ) -> Result<Json<CreateStandaloneSessionResponse>, ErrorResponse> {
     use crate::sessions::{create_session, CreateSessionRequest};
