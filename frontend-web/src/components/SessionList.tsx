@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useSessions } from "../hooks/useSessions";
 import { useProjects } from "../hooks/useProjects";
 import { useAppStore } from "../store/appStore";
-import { useStopSession } from "../hooks/useStopSession";
 import { ScrollArea } from "./ui/scroll-area";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { ProjectManager } from "./ProjectManager";
@@ -42,7 +41,6 @@ export function SessionList({ className }: SessionListProps) {
   const { data: projects, isLoading: projectsLoading } = useProjects();
   const currentSessionId = useAppStore((state) => state.currentSessionId);
   const setCurrentSession = useAppStore((state) => state.setCurrentSession);
-  const stopSessionMutation = useStopSession();
   const activeSessionIds = useAppStore((state) => state.activeSessionIds);
   const thinkingSessionIds = useAppStore((state) => state.thinkingSessionIds);
   const unreadSessions = useAppStore((state) => state.unreadSessions);
@@ -84,14 +82,7 @@ export function SessionList({ className }: SessionListProps) {
   };
 
   const handleSessionSelect = (sessionId: string) => {
-    // Stop the currently active session if different
-    if (currentSessionId && currentSessionId !== sessionId) {
-      if (activeSessionIds.has(currentSessionId)) {
-        stopSessionMutation.mutate(currentSessionId);
-      }
-    }
-
-    // Set the new session (don't auto-start)
+    // Just switch to the session, don't stop anything
     setCurrentSession(sessionId);
   };
 
