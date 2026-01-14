@@ -70,6 +70,12 @@
     border-color: var(--border);
   }
 
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   body {
     background-color: var(--background);
     background-image: radial-gradient(var(--muted) 1px, transparent 1px);

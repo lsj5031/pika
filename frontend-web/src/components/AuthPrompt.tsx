@@ -51,7 +51,7 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
             } else {
                 setError(`Authentication failed: ${response.statusText}`);
             }
-        } catch (err) {
+        } catch {
             // Network error - might mean server doesn't have auth enabled
             // Store credentials anyway and let the user proceed
             storeCredentials({ username, password });

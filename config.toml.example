@@ -3,12 +3,11 @@
 # List of project root paths to scan for agent sessions
 # Add absolute paths to your projects here
 project_root_paths = [
-    "/home/youruser/appifex/appifex",
+    "/path/to/your/project",
 ]
 
 # HTTP Basic Authentication (optional)
 # If both username and password are set, auth is required for all routes except /health
 # These can also be set via environment variables: AUTH_USERNAME and AUTH_PASSWORD
-auth_username = "leo"
-auth_password = "Oj7yokxPVGnX0J70bbjnFOFxgvg9jSKM"
-
+# auth_username = "admin"
+# auth_password = "your-secure-password"

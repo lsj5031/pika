@@ -148,15 +148,13 @@ function MessageBubble({ message }: { message: Message }) {
           "max-w-[92%] md:max-w-[80%] px-4 py-3 border-2 shadow-sm transition-all hover:shadow-md",
           colors.bg,
           colors.border,
-          "overflow-hidden" // Ensure nothing leaks out
+          "overflow-hidden min-w-0" // Ensure nothing leaks out
         )}
       >
         {/* Response content */}
         {response && (
           <div className={cn(
-            "text-sm whitespace-pre-wrap break-words leading-relaxed",
-            // For tool calls/results that usually have very long non-breaking strings
-            (hasToolUse || response.length > 500) ? "break-all" : "break-words",
+            "text-sm whitespace-pre-wrap break-all md:break-words leading-relaxed",
             colors.text
           )}>
             {response}

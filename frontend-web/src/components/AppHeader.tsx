@@ -33,11 +33,13 @@ export function AppHeader({
           <Menu className="h-5 w-5 pointer-events-none" />
           <span className="sr-only">Toggle menu</span>
         </Button>
-        <h1 className="text-2xl font-heading font-bold tracking-tight">Pika</h1>
+        <h1 className="text-xl md:text-2xl font-heading font-bold tracking-tight whitespace-nowrap">
+          PI Agent <span className="hidden xs:inline">Manager</span>
+        </h1>
       </div>
 
       {/* Right: Connection status + Settings + Stop button */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-1.5 md:gap-4">
         {/* Settings dialog */}
         <SettingsDialog />
 
@@ -45,7 +47,7 @@ export function AppHeader({
         <Badge
           variant="outline"
           className={cn(
-            "border-2 font-heading font-bold px-3 py-1 rounded-wobblyMd shadow-sm transition-all",
+            "border-2 font-heading font-bold px-2 py-1 md:px-3 rounded-wobblyMd shadow-sm transition-all text-xs md:text-sm",
             connectionStatus === "connected"
               ? "border-green-500/50 text-green-700 bg-green-50 shadow-green-100"
               : connectionStatus === "connecting"
@@ -55,18 +57,18 @@ export function AppHeader({
         >
           {connectionStatus === "connected" ? (
             <>
-              <Wifi className="mr-1.5 h-3.5 w-3.5" />
-              Connected
+              <Wifi className="md:mr-1.5 h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Connected</span>
             </>
           ) : connectionStatus === "connecting" ? (
             <>
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              Connecting...
+              <Loader2 className="md:mr-1.5 h-3.5 w-3.5 animate-spin" />
+              <span className="hidden sm:inline">Connecting...</span>
             </>
           ) : (
             <>
-              <WifiOff className="mr-1.5 h-3.5 w-3.5" />
-              Disconnected
+              <WifiOff className="md:mr-1.5 h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Disconnected</span>
             </>
           )}
         </Badge>
@@ -77,12 +79,13 @@ export function AppHeader({
             variant="destructive"
             size="sm"
             onClick={onStopSession}
-            className="gap-2 min-h-[40px] rounded-wobblyMd border-2 shadow-hard-sm font-heading font-bold"
+            className="gap-2 min-h-[40px] px-2 md:px-3 rounded-wobblyMd border-2 shadow-hard-sm font-heading font-bold"
             id="stop-session-button"
             data-testid="stop-session-button"
           >
             <Square className="h-3.5 w-3.5 fill-current" />
-            Stop Session
+            <span className="hidden xs:inline">Stop Session</span>
+            <span className="xs:hidden">Stop</span>
           </Button>
         )}
       </div>
