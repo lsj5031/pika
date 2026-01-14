@@ -1,6 +1,7 @@
 import { Menu, Square, Wifi, WifiOff, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { SettingsDialog } from "./SettingsDialog";
 import { cn } from "../lib/utils";
 
 interface AppHeaderProps {
@@ -35,8 +36,11 @@ export function AppHeader({
         <h1 className="text-2xl font-heading font-bold tracking-tight">PI Agent Manager</h1>
       </div>
 
-      {/* Right: Connection status + Stop button */}
+      {/* Right: Connection status + Settings + Stop button */}
       <div className="flex items-center gap-4">
+        {/* Settings dialog */}
+        <SettingsDialog />
+
         {/* Connection status indicator */}
         <Badge
           variant="outline"
