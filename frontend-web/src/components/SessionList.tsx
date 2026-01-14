@@ -2,6 +2,7 @@ import { useSessions } from "../hooks/useSessions";
 import { useProjects } from "../hooks/useProjects";
 import { useAppStore } from "../store/appStore";
 import { ScrollArea } from "./ui/scroll-area";
+import { NewSessionDialog } from "./NewSessionDialog";
 import { cn } from "../lib/utils";
 
 interface SessionListProps {
@@ -42,8 +43,9 @@ export function SessionList({ className }: SessionListProps) {
   return (
     <div className={cn("flex flex-col h-full", className)}>
       {/* Header */}
-      <div className="p-4 border-b">
+      <div className="p-4 border-b flex items-center justify-between">
         <h2 className="text-lg font-semibold">Sessions</h2>
+        <NewSessionDialog />
       </div>
 
       {/* Sessions list */}
