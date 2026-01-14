@@ -1,0 +1,19 @@
+[Unit]
+Description=Pika
+After=network.target cloudflared-pi.service
+
+[Service]
+Type=simple
+User=youruser
+WorkingDirectory=/home/youruser/code/pika
+ExecStart=/home/youruser/code/pika/target/release/pika
+Restart=always
+RestartSec=5
+Environment=PORT=7847
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
