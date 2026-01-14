@@ -122,3 +122,70 @@
     padding-top: env(safe-area-inset-top);
   }
 }
+
+@layer components {
+  /* Mobile sheet/session list fixes */
+  [data-radix-scroll-area-viewport] {
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Ensure buttons in sheets are clickable */
+  [role="dialog"] button,
+  [role="dialog"] [role="button"] {
+    touch-action: manipulation;
+    cursor: pointer;
+    -webkit-tap-highlight-color: rgba(255, 77, 77, 0.2);
+  }
+
+  /* Fix sheet close button on mobile */
+  [data-radix-dialog-close] {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+
+  /* Prevent body scroll when sheet is open */
+  body[data-radix-dialog-open] {
+    overflow: hidden !important;
+    position: fixed;
+    width: 100%;
+  }
+
+  /* Dialog/Modal visibility fixes */
+  [data-radix-dialog-content] {
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Ensure text is visible in dialogs */
+  [role="dialog"],
+  [data-radix-dialog-content] {
+    color: var(--foreground);
+  }
+
+  [role="dialog"] h1,
+  [role="dialog"] h2,
+  [role="dialog"] h3,
+  [role="dialog"] label {
+    color: var(--foreground);
+  }
+
+  /* Input visibility in dialogs */
+  [role="dialog"] input,
+  [role="dialog"] textarea {
+    background-color: white !important;
+    color: var(--foreground) !important;
+    border-color: var(--border) !important;
+  }
+
+  /* Dark mode support for dialogs */
+  .dark [role="dialog"] input,
+  .dark [role="dialog"] textarea {
+    background-color: var(--background) !important;
+    color: var(--foreground) !important;
+  }
+
+  /* Dialog overlay should darken but not too much */
+  [data-radix-dialog-overlay] {
+    backdrop-filter: blur(2px);
+  }
+}

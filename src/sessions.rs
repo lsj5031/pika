@@ -269,19 +269,82 @@ pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec
                 .to_string();
 
             // Get content from message.content array
+            // Handle both text content and tool call results
             let content = if let Some(content_array) = message_obj.get("content").and_then(|c| c.as_array()) {
-                // Concatenate all text parts
-                content_array
+                // Try to get text parts first
+                let text_parts: Vec<String> = content_array
                     .iter()
                     .filter_map(|part| {
                         part.get("text")
                             .and_then(|t| t.as_str())
                             .map(|s| s.to_string())
                     })
-                    .collect::<Vec<_>>()
-                    .join("\n")
+                    .collect();
+
+                if !text_parts.is_empty() {
+                    text_parts.join("\n")
+                } else {
+                    // Try to extract tool call information
+                    let tool_parts: Vec<String> = content_array
+                        .iter()
+                        .filter_map(|part| {
+                            // Handle tool_use type
+                            if let Some(tool_use) = part.get("tool_use").and_then(|t| t.as_object()) {
+                                let name = tool_use.get("name")
+                                    .and_then(|n| n.as_str())
+                                    .unwrap_or("unknown_tool");
+                                let input = tool_use.get("input")
+                                    .map(|i| {
+                                        if i.is_string() {
+                                            i.as_str().unwrap_or("").to_string()
+                                        } else if i.is_object() {
+                                            serde_json::to_string(i).unwrap_or_default()
+                                        } else {
+                                            String::new()
+                                        }
+                                    })
+                                    .unwrap_or_default();
+                                Some(format!("Tool Call: {}({})", name, input))
+                            }
+                            // Handle tool_result type
+                            else if let Some(tool_result) = part.get("tool_result").and_then(|t| t.as_object()) {
+                                let is_error = tool_result.get("is_error")
+                                    .and_then(|e| e.as_bool())
+                                    .unwrap_or(false);
+                                let content = tool_result.get("content")
+                                    .map(|c| {
+                                        if c.is_string() {
+                                            c.as_str().unwrap_or("").to_string()
+                                        } else if c.is_array() {
+                                            serde_json::to_string(c).unwrap_or_default()
+                                        } else {
+                                            String::new()
+                                        }
+                                    })
+                                    .unwrap_or_default();
+                                Some(format!("Tool Result{}: {}",
+                                    if is_error { " (Error)" } else { "" },
+                                    content
+                                ))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    if !tool_parts.is_empty() {
+                        tool_parts.join("\n")
+                    } else {
+                        // Fallback: show entire content array as JSON for debugging
+                        format!("Tool call: {}", serde_json::to_string(content_array).unwrap_or_default())
+                    }
+                }
+            } else if let Some(content_str) = message_obj.get("content").and_then(|c| c.as_str()) {
+                // Handle string content directly
+                content_str.to_string()
             } else {
-                continue;
+                // Empty or unparseable content - don't skip, show placeholder
+                String::from("[Tool call or system message - no text content]")
             };
 
             // Get timestamp

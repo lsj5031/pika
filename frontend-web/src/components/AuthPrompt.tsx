@@ -70,23 +70,23 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
     return (
         <Dialog open={open} onOpenChange={() => { }}>
             <DialogContent
-                className="sm:max-w-md"
+                className="sm:max-w-md bg-white shadow-2xl"
                 onInteractOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
             >
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
+                <DialogHeader className="text-foreground">
+                    <DialogTitle className="flex items-center gap-2 text-xl">
                         <Lock className="h-5 w-5" />
-                        Authentication Required
+                        <span>Authentication Required</span>
                     </DialogTitle>
-                    <DialogDescription>
+                    <DialogDescription className="text-muted-foreground">
                         Please enter your credentials to access Pika.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="auth-username">Username</Label>
+                        <Label htmlFor="auth-username" className="text-foreground">Username</Label>
                         <Input
                             id="auth-username"
                             type="text"
@@ -96,11 +96,12 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
                             onKeyDown={handleKeyDown}
                             autoComplete="username"
                             autoFocus
+                            className="bg-white border-input"
                         />
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="auth-password">Password</Label>
+                        <Label htmlFor="auth-password" className="text-foreground">Password</Label>
                         <Input
                             id="auth-password"
                             type="password"
@@ -109,11 +110,12 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
                             onChange={(e) => setPassword(e.target.value)}
                             onKeyDown={handleKeyDown}
                             autoComplete="current-password"
+                            className="bg-white border-input"
                         />
                     </div>
 
                     {error && (
-                        <p className="text-sm text-destructive font-medium">{error}</p>
+                        <p className="text-sm text-destructive font-medium bg-destructive/10 p-2 rounded">{error}</p>
                     )}
                 </div>
 

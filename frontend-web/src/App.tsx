@@ -15,6 +15,7 @@ import type { WSEvent } from "./types";
 
 function App() {
   const currentSessionId = useAppStore((state) => state.currentSessionId);
+  const markSessionAsRead = useAppStore((state) => state.markSessionAsRead);
 
   // Auth state
   const [needsAuth, setNeedsAuth] = useState(() => !hasCredentials());
@@ -54,31 +55,53 @@ function App() {
   const currentSession = sessions?.find((s) => s.id === currentSessionId);
   const isSessionActive = currentSession?.is_active ?? false;
 
+  // Mark current session as read when selected
+  useEffect(() => {
+    if (currentSessionId) {
+      // Mark current session as read when selected
+      const session = sessions?.find((s) => s.id === currentSessionId);
+      if (session) {
+        // Get current message count
+        queryClient.fetchQuery({
+          queryKey: ["sessions", currentSessionId, "messages"],
+        }).then((messages: any) => {
+          markSessionAsRead(currentSessionId, messages?.length || 0);
+        });
+      }
+    }
+  }, [currentSessionId, sessions, queryClient, markSessionAsRead]);
+
   // WebSocket event handler
   const handleWebSocketMessage = useCallback(
     (event: WSEvent) => {
       switch (event.type) {
         case "SessionStarted": {
           // Update session active status
+          useAppStore.getState().setActiveSession(event.data.session_id, true);
           queryClient.invalidateQueries({ queryKey: ["sessions"] });
           break;
         }
         case "SessionStopped": {
-          // Clear thinking state for stopped session
+          // Clear thinking state and active status
           clearThinking(event.data.session_id);
-          // Update session active status
+          useAppStore.getState().setActiveSession(event.data.session_id, false);
           queryClient.invalidateQueries({ queryKey: ["sessions"] });
           break;
         }
         case "ThinkingDelta": {
-          // Append thinking content
+          // Set thinking state
+          useAppStore.getState().setThinkingSession(event.data.session_id, true);
           appendThinking(event.data.session_id, event.data.content);
           break;
         }
         case "MessageAdded": {
-          // Clear thinking state when message is added (thinking complete)
+          // Mark as unread if not current session
+          if (currentSessionId !== event.data.session_id) {
+            useAppStore.getState().incrementUnreadCount(event.data.session_id);
+          }
+          // Clear thinking state when message is added
+          useAppStore.getState().setThinkingSession(event.data.session_id, false);
           clearThinking(event.data.session_id);
-          // Invalidate messages query to fetch new messages
           queryClient.invalidateQueries({
             queryKey: ["sessions", event.data.session_id, "messages"],
           });
@@ -86,7 +109,7 @@ function App() {
         }
       }
     },
-    [queryClient, appendThinking, clearThinking]
+    [queryClient, appendThinking, clearThinking, currentSessionId]
   );
 
   // WebSocket error handler with debounce to prevent toast spam
@@ -170,8 +193,18 @@ function App() {
 
           {/* Mobile Drawer Sidebar */}
           <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
-            <SheetContent side="left" className="w-[280px] p-0 sm:w-64" id="mobile-drawer-content">
-              <SessionList />
+            <SheetContent
+              side="left"
+              className="w-[85vw] max-w-[320px] p-0 sm:w-64"
+              id="mobile-drawer-content"
+              style={{
+                touchAction: "auto",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <div className="h-full overflow-y-auto">
+                <SessionList />
+              </div>
             </SheetContent>
           </Sheet>
 
@@ -182,7 +215,6 @@ function App() {
             </div>
             <ChatInput
               sessionId={currentSessionId}
-              isSessionActive={isSessionActive}
               onSendMessage={handleSendMessage}
             />
           </main>
