@@ -12,6 +12,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Lock } from "lucide-react";
 import { storeCredentials } from "../lib/auth";
+import { config } from "../config/env";
 
 interface AuthPromptProps {
     open: boolean;
@@ -36,7 +37,7 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
         try {
             // Test credentials by making a request to the API
             const encoded = btoa(`${username}:${password}`);
-            const response = await fetch("/api/projects", {
+            const response = await fetch(`${config.API_URL}/projects`, {
                 headers: {
                     Authorization: `Basic ${encoded}`,
                 },
