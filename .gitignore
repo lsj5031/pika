@@ -1,6 +1,5 @@
 # Rust build artifacts
 /target
-frontend/target
 
 # Cargo lock file (optional - uncomment if you want to ignore it)
 # Cargo.lock
