@@ -28,6 +28,7 @@ A web application for managing multiple pi-coding-agent sessions across projects
 ### Technical Features
 - **WebSocket Support**: Real-time session status updates
 - **Diff Viewer**: View code changes with syntax highlighting
+- **Thinking Indicator**: Real-time AI thinking state visualization
 - **Error Handling**: Comprehensive error messages and toasts
 - **Loading States**: Clear feedback during operations
 
@@ -165,8 +166,9 @@ pi-agent-manager/
 │   │   │   ├── ProjectManager.tsx  # Project folder management
 │   │   │   ├── SessionHistory.tsx  # Conversation history
 │   │   │   ├── SessionList.tsx     # Main session list
-│   │   │   └── SettingsDialog.tsx  # Settings dialog
-│   │   ├── hooks/         # Custom React hooks
+│   │   │   ├── SettingsDialog.tsx  # Settings dialog
+│   │   │   └── ThinkingIndicator.tsx # AI thinking state indicator
+│   │   ├── hooks/         # Custom React hooks (13 hooks)
 │   │   ├── lib/           # Utilities (API client, toasts)
 │   │   ├── store/         # Zustand state stores
 │   │   └── types/         # TypeScript types
@@ -174,9 +176,7 @@ pi-agent-manager/
 │   └── package.json
 ├── docs/                  # Documentation
 │   ├── DEPLOYMENT.md      # Deployment guide
-│   ├── IMPLEMENTATION_PLAN.md
-│   ├── MOBILE_TEST_REPORT.md  # Mobile usability test results
-│   └── REVIEW_FIXES_SUMMARY.md
+│   └── MOBILE_TEST_REPORT.md  # Mobile usability test results
 ├── deploy/                # Deployment scripts
 ├── config/                # Configuration templates
 ├── templates/             # Template files
@@ -214,22 +214,21 @@ pi-agent-manager/
 
 ## Known Issues
 
-### Mobile Overflow on Small Screens
-- **Issue**: Horizontal scroll overflow on devices with viewport <390px
+### ✅ Mobile Overflow - FIXED
+- **Previous Issue**: Horizontal scroll overflow on devices with viewport <390px
 - **Affected**: ~60% of mobile users (iPhone SE, iPhone 12/13, Android phones)
-- **Fix**: Change header spacing from `gap-4` to `gap-2 md:gap-4`
-- **Status**: Documented in `docs/MOBILE_TEST_REPORT.md`
-- **Workaround**: Use larger devices or landscape mode
+- **Fix Applied**: Changed header spacing to `gap-1.5 md:gap-4` in AppHeader.tsx
+- **Status**: ✅ **RESOLVED** - Mobile layout now works correctly on all screen sizes
+- **Reference**: See `docs/MOBILE_TEST_REPORT.md` for detailed analysis
 
-See `docs/MOBILE_TEST_REPORT.md` for detailed analysis and fix recommendations.
+**Current Implementation**: The AppHeader component uses responsive spacing that adjusts based on screen size, preventing horizontal overflow on mobile devices.
 
 ## Documentation
 
 - `QUICK_START.md` - One-command deployment guide
-- `DEPLOYMENT.md` - Detailed deployment instructions
-- `TUNNEL.md` - Cloudflare tunnel configuration
-- `docs/MOBILE_TEST_REPORT.md` - Mobile usability test results
-- `docs/IMPLEMENTATION_PLAN.md` - Original implementation plan
+- `STATUS.md` - Current project status and metrics
+- `docs/DEPLOYMENT.md` - Detailed deployment instructions
+- `docs/MOBILE_TEST_REPORT.md` - Mobile usability test results and fix verification
 
 ## License
 
