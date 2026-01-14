@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 use tokio::io::AsyncWriteExt;
 
 /// Maximum number of concurrent pi processes allowed
-const MAX_CONCURRENT_PROCESSES: usize = 10;
+const MAX_CONCURRENT_PROCESSES: usize = 50;
 
 /// JSON-RPC event emitted by pi process
 #[derive(Debug, Clone, Serialize, Deserialize)]
