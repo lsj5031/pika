@@ -387,3 +387,37 @@ Started: 2026-01-14
 - mime_guess crate provides first_or_octet_stream() for sensible MIME type defaults
 - Static files should have cache-control headers; index.html should use "no-cache" to prevent stale builds
 - The fs feature on tower-http is needed for ServeDir (though we ended up implementing custom serving)
+
+## [2026-01-14] - US-017: Update build and deployment scripts
+
+**Implementation:**
+- Created root Makefile with targets:
+  - `make build` or `make all` - builds frontend then backend (default)
+  - `make frontend` - builds frontend only (runs npm run build in frontend-web/)
+  - `make backend` - builds backend only (runs cargo build --release)
+  - `make dev-frontend` - starts frontend dev server (Vite on port 5173)
+  - `make dev-backend` - starts backend with hot reload (cargo run)
+  - `make clean` - removes all build artifacts
+  - `make run` - builds and runs production server
+  - `make help` - shows all available targets
+- Created comprehensive README.md with:
+  - Project overview and features
+  - Prerequisites (Rust, Node.js, npm)
+  - Development setup instructions
+  - Environment variable documentation (VITE_API_URL, VITE_WS_URL)
+  - Production build process using Makefile
+  - Complete technology stack listing
+- Updated root .gitignore to exclude frontend-web/node_modules/ and frontend-web/dist/
+- Fixed ESLint issues:
+  - Added eslint-disable comments to shadcn/ui components (badge.tsx, button.tsx) for react-refresh/only-export-components rule
+  - Refactored useWebSocket.ts to use regular function instead of useCallback to avoid "accessed before declaration" ESLint warning
+  - Added eslint-disable-next-line for exhaustive-deps warning (function uses refs, safe to omit)
+- Fixed unused variable warning in thinkingStore.ts with eslint-disable comment
+
+**Learnings:**
+- Makefiles use tabs for indentation, not spaces - the Write tool preserves tabs correctly
+- When using shadcn/ui components that export constants (like badgeVariants, buttonVariants), the react-refresh/only-export-components ESLint rule will complain because fast refresh only works when files export only components
+- ESLint's react-hooks/exhaustive-deps warning can be safely disabled when a hook uses refs instead of dependencies in the dependency array - this is a valid pattern when you want to avoid recreating the callback on every change
+- For functions that reference themselves (like reconnect in useWebSocket), using a regular function declaration instead of useCallback with refs can avoid ESLint warnings about accessing variables before declaration
+- The build script must build frontend BEFORE backend so the backend can serve the static files from frontend-web/dist/
+
