@@ -99,10 +99,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let auth_enabled = auth_credentials.is_enabled();
 
-    // Build protected routes (require auth via HTTP header if enabled)
+    // Build protected API routes (require auth via HTTP header if enabled)
     let protected_routes = Router::new()
         .merge(api::create_api_router())
-        .fallback(static_files::serve_static_files)
         .with_state(app_state.clone())
         .layer(middleware::from_fn(move |req, next| {
             let creds = auth_credentials.clone();
@@ -112,10 +111,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Build the full application
     // - /health is always public
     // - /ws handles its own auth via query params (WebSocket doesn't support headers)
-    // - All other routes use HTTP Basic Auth middleware
+    // - Static files are public (the frontend itself must load to show auth UI)
+    // - API routes are protected
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/ws", get(websocket::ws_handler))
+        .fallback(static_files::serve_static_files)
         .with_state(app_state.clone())
         .merge(protected_routes)
         .layer(

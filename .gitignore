@@ -24,3 +24,6 @@ frontend-web/.env.local
 # Configuration and Secrets
 config.toml
 deploy/cloudflared-tunnel.yml
+
+# Pi Agent local data
+.pi/

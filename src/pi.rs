@@ -54,7 +54,7 @@ impl PiProcess {
         // Create broadcast channel for events
         let (tx, _rx) = broadcast::channel(1000);
 
-        // Spawn pi process
+        // Spawn pi process with environment variables inherited
         let mut process = Command::new("npx")
             .args([
                 "@mariozechner/pi-coding-agent",
@@ -69,6 +69,8 @@ impl PiProcess {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .env_clear()
+            .envs(std::env::vars())
             .spawn()
             .map_err(|e| PiProcessError::SpawnFailed {
                 path: project_path.clone(),
