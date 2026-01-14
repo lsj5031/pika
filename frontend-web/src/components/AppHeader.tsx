@@ -22,8 +22,10 @@ export function AppHeader({
         <Button
           variant="ghost"
           size="icon"
-          className="md:hidden"
+          className="md:hidden min-w-[44px] min-h-[44px]"
           onClick={onMenuToggle}
+          id="session-list-button"
+          data-testid="session-list-button"
         >
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle menu</span>
@@ -68,7 +70,9 @@ export function AppHeader({
             variant="destructive"
             size="sm"
             onClick={onStopSession}
-            className="gap-1"
+            className="gap-1 min-h-[44px]"
+            id="stop-session-button"
+            data-testid="stop-session-button"
           >
             <Square className="h-3 w-3 fill-current" />
             Stop Session

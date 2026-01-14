@@ -1,16 +1,26 @@
 use axum::{
     extract::{
-        State,
+        Query, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
-    response::Response,
+    http::StatusCode,
+    response::{IntoResponse, Response},
 };
+use base64::{engine::general_purpose::STANDARD, Engine};
 use futures::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
+use crate::auth::AuthCredentials;
 use crate::AppState;
+
+/// Query parameters for WebSocket connection (auth is passed via query param)
+#[derive(Debug, Deserialize)]
+pub struct WsQueryParams {
+    /// Base64-encoded credentials (username:password)
+    pub auth: Option<String>,
+}
 
 /// WebSocket events that can be broadcast to connected clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,10 +84,53 @@ impl Default for WSState {
 }
 
 /// Handle WebSocket upgrade and manage the connection
+/// Auth is validated via query param since WebSocket doesn't support custom headers
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
+    Query(params): Query<WsQueryParams>,
     State(state): State<AppState>,
 ) -> Response {
+    // Get auth credentials from config (need to await the RwLock)
+    let config = state.api_state.config.read().await;
+    let auth_creds = AuthCredentials::new(
+        config.get_auth_username().unwrap_or_default(),
+        config.get_auth_password().unwrap_or_default(),
+    );
+    drop(config); // Release lock before potentially long-lived upgrade
+
+    // Validate auth if enabled
+    if auth_creds.is_enabled() {
+        match params.auth {
+            Some(encoded) => {
+                // Decode base64 and validate
+                if let Ok(decoded) = STANDARD.decode(&encoded) {
+                    if let Ok(decoded_str) = String::from_utf8(decoded) {
+                        if let Some((username, password)) = decoded_str.split_once(':') {
+                            if auth_creds.validate(username, password) {
+                                // Auth passed - proceed with WebSocket
+                                let ws_state = state.ws_state.clone();
+                                return ws.on_upgrade(|socket| handle_socket(socket, ws_state));
+                            }
+                        }
+                    }
+                }
+                // Invalid credentials
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    "Invalid credentials",
+                ).into_response();
+            }
+            None => {
+                // No auth provided
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    "Authentication required",
+                ).into_response();
+            }
+        }
+    }
+
+    // Auth not enabled - proceed without validation
     let ws_state = state.ws_state.clone();
     ws.on_upgrade(|socket| handle_socket(socket, ws_state))
 }
