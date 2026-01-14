@@ -56,12 +56,15 @@ function MessageBubble({ message }: { message: Message }) {
   );
 }
 
+// Empty thinking state as a constant to avoid infinite loops
+const EMPTY_THINKING_STATE = { content: "", isThinking: false } as const;
+
 export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   const { data: messages, isLoading } = useSessionHistory({ sessionId });
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const thinkingState = useThinkingStore((state) =>
-    sessionId ? state.thinkingBySession[sessionId] ?? { content: "", isThinking: false } : { content: "", isThinking: false }
+    sessionId ? state.thinkingBySession[sessionId] ?? EMPTY_THINKING_STATE : EMPTY_THINKING_STATE
   );
 
   // Auto-scroll to bottom when new messages arrive or thinking updates

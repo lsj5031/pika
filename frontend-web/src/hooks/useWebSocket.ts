@@ -14,6 +14,12 @@ export function useWebSocket({ onMessage, enabled = true }: UseWebSocketOptions 
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectDelay = 30000; // 30 seconds max
+  const onMessageRef = useRef(onMessage);
+
+  // Keep onMessageRef updated without triggering connect to change
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
     enabled ? "connecting" : "disconnected"
@@ -70,7 +76,7 @@ export function useWebSocket({ onMessage, enabled = true }: UseWebSocketOptions 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data) as WSEvent;
-          onMessage?.(data);
+          onMessageRef.current?.(data);
         } catch (error) {
           console.error("Failed to parse WebSocket message:", error);
         }
@@ -79,7 +85,7 @@ export function useWebSocket({ onMessage, enabled = true }: UseWebSocketOptions 
       console.error("Failed to create WebSocket connection:", error);
       setConnectionStatus("disconnected");
     }
-  }, [enabled, onMessage]);
+  }, [enabled]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {

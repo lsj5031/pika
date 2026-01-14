@@ -209,8 +209,8 @@
         "Verify in browser using webapp-testing skill"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "All WebSocket events are properly wired in App.tsx handleWebSocketMessage callback. Fixed infinite loop bug caused by unstable Zustand selector in SessionHistory.tsx - added EMPTY_THINKING_STATE constant. Fixed useWebSocket hook to use ref for onMessage to prevent unnecessary reconnections. Verified in browser - app renders correctly with all WebSocket event handlers in place."
     },
     {
       "id": "US-013",
