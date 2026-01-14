@@ -9,7 +9,7 @@ interface UseSessionHistoryOptions {
 export function useSessionHistory({ sessionId }: UseSessionHistoryOptions) {
   return useQuery<Message[]>({
     queryKey: ["sessions", sessionId, "messages"],
-    queryFn: () => apiClient.get<Message[]>(`/sessions/${sessionId}/messages`),
+    queryFn: () => apiClient.get<Message[]>(`/api/sessions/${sessionId}/messages`),
     enabled: !!sessionId,
   });
 }
