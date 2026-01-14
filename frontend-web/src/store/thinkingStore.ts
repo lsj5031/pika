@@ -40,6 +40,7 @@ export const useThinkingStore = create<ThinkingStore>((set, get) => ({
 
   clearThinking: (sessionId) =>
     set((state) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [sessionId]: _, ...rest } = state.thinkingBySession;
       return { thinkingBySession: rest };
     }),
