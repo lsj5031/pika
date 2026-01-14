@@ -1,6 +1,7 @@
 import { Menu, Square, Wifi, WifiOff, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { cn } from "../lib/utils";
 
 interface AppHeaderProps {
   connectionStatus: "connecting" | "connected" | "disconnected";
@@ -31,35 +32,36 @@ export function AppHeader({
           <Menu className="h-5 w-5 pointer-events-none" />
           <span className="sr-only">Toggle menu</span>
         </Button>
-        <h1 className="text-xl font-heading font-bold">PI Agent Manager</h1>
+        <h1 className="text-2xl font-heading font-bold tracking-tight">PI Agent Manager</h1>
       </div>
 
       {/* Right: Connection status + Stop button */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         {/* Connection status indicator */}
         <Badge
           variant="outline"
-          className={
+          className={cn(
+            "border-2 font-heading font-bold px-3 py-1 rounded-wobblyMd shadow-sm transition-all",
             connectionStatus === "connected"
-              ? "border-green-500 text-green-700 dark:text-green-400"
+              ? "border-green-500/50 text-green-700 bg-green-50 shadow-green-100"
               : connectionStatus === "connecting"
-                ? "border-yellow-500 text-yellow-700 dark:text-yellow-400"
-                : "border-red-500 text-red-700 dark:text-red-400"
-          }
+                ? "border-yellow-500/50 text-yellow-700 bg-yellow-50 shadow-yellow-100"
+                : "border-red-500/50 text-red-700 bg-red-50 shadow-red-100"
+          )}
         >
           {connectionStatus === "connected" ? (
             <>
-              <Wifi className="mr-1 h-3 w-3" />
+              <Wifi className="mr-1.5 h-3.5 w-3.5" />
               Connected
             </>
           ) : connectionStatus === "connecting" ? (
             <>
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               Connecting...
             </>
           ) : (
             <>
-              <WifiOff className="mr-1 h-3 w-3" />
+              <WifiOff className="mr-1.5 h-3.5 w-3.5" />
               Disconnected
             </>
           )}
@@ -71,11 +73,11 @@ export function AppHeader({
             variant="destructive"
             size="sm"
             onClick={onStopSession}
-            className="gap-1 min-h-[44px]"
+            className="gap-2 min-h-[40px] rounded-wobblyMd border-2 shadow-hard-sm font-heading font-bold"
             id="stop-session-button"
             data-testid="stop-session-button"
           >
-            <Square className="h-3 w-3 fill-current" />
+            <Square className="h-3.5 w-3.5 fill-current" />
             Stop Session
           </Button>
         )}
