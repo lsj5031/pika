@@ -11,7 +11,7 @@ import { Sheet, SheetContent } from "./components/ui/sheet";
 import { toast } from "sonner";
 import { hasCredentials } from "./lib/auth";
 import { AUTH_ERROR_EVENT } from "./lib/api";
-import type { WSEvent } from "./types";
+import type { WSEvent, Message } from "./types";
 
 function App() {
   const currentSessionId = useAppStore((state) => state.currentSessionId);
@@ -62,9 +62,9 @@ function App() {
       const session = sessions?.find((s) => s.id === currentSessionId);
       if (session) {
         // Get current message count
-        queryClient.fetchQuery({
+        queryClient.fetchQuery<Message[]>({
           queryKey: ["sessions", currentSessionId, "messages"],
-        }).then((messages: any) => {
+        }).then((messages) => {
           markSessionAsRead(currentSessionId, messages?.length || 0);
         });
       }

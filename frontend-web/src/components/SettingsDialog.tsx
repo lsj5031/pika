@@ -62,9 +62,10 @@ export function SettingsDialog({ trigger }: SettingsDialogProps) {
   };
 
   const defaultTrigger = (
-    <Button variant="ghost" size="sm" className="gap-2">
+    <Button variant="ghost" size="sm" className="gap-2 px-2 md:px-3">
       <Settings className="h-4 w-4" />
-      Settings
+      <span className="hidden md:inline">Settings</span>
+      <span className="sr-only">Settings</span>
     </Button>
   );
 
@@ -89,7 +90,7 @@ export function SettingsDialog({ trigger }: SettingsDialogProps) {
           <div className="space-y-6 py-4">
             {/* Model Selection */}
             <div className="space-y-2">
-              <Label htmlFor="model">Default Model</Label>
+              <Label htmlFor="model" className="font-heading font-bold text-base">Default Model</Label>
               <Select value={localModel} onValueChange={setLocalModel}>
                 <SelectTrigger id="model" className="min-h-[44px]">
                   <SelectValue placeholder="Select a model" />
@@ -97,16 +98,16 @@ export function SettingsDialog({ trigger }: SettingsDialogProps) {
                 <SelectContent>
                   {settings?.availableModels?.map((model) => (
                     <SelectItem key={model.id} value={model.id}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{model.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {model.provider} • {model.contextWindow?.toLocaleString()} tokens
-                        </span>
-                      </div>
+                      {model.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {localModel && (
+                <p className="text-xs text-muted-foreground">
+                  {settings?.availableModels?.find(m => m.id === localModel)?.provider} • {settings?.availableModels?.find(m => m.id === localModel)?.contextWindow?.toLocaleString()} tokens
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 This model will be used for all new sessions by default.
               </p>
@@ -114,7 +115,7 @@ export function SettingsDialog({ trigger }: SettingsDialogProps) {
 
             {/* Thinking Level */}
             <div className="space-y-2">
-              <Label htmlFor="thinking-level">Thinking Level</Label>
+              <Label htmlFor="thinking-level" className="font-heading font-bold text-base">Thinking Level</Label>
               <Select
                 value={localThinkingLevel}
                 onValueChange={setLocalThinkingLevel}

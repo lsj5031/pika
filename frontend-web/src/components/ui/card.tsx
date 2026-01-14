@@ -1,4 +1,3 @@
-/* eslint-disable react/style-prop-object */
 import * as React from "react"
 
 import { cn } from "../../lib/utils"
