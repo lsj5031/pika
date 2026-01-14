@@ -1,4 +1,4 @@
-.PHONY: all build frontend-backend frontend backend clean dev-frontend dev-backend run test test-mobile test-install help
+.PHONY: all build frontend-backend frontend backend clean dev-frontend dev-backend run test test-mobile test-install deploy install-service restart-service status help
 
 # Default target
 all: build
@@ -66,18 +66,75 @@ test-mobile:
 	@echo "Make sure the server is running on port 7847"
 	cd /tmp/pi-agent-manager-test && npx playwright test --project=mobile --headed
 
+# Deploy: Build everything and install systemd services
+deploy: build
+	@echo "🚀 Deploying pi.liu.nz..."
+	@echo "Installing systemd services (requires sudo)..."
+	sudo cp cloudflared-pi.service /etc/systemd/system/
+	sudo cp pi-agent-manager.service /etc/systemd/system/
+	sudo systemctl daemon-reload
+	@echo "Stopping any existing pi-agent-manager process on port 7847..."
+	-pkill -f pi-agent-manager || true
+	@echo "Waiting for port to be released..."
+	@sleep 1
+	@echo "Enabling and starting services..."
+	sudo systemctl enable cloudflared-pi.service
+	sudo systemctl start cloudflared-pi.service
+	sudo systemctl enable pi-agent-manager.service
+	sudo systemctl restart pi-agent-manager.service
+	@echo "✅ Deployment complete!"
+	@echo "🌐 Your app is available at: https://pi.liu.nz"
+	@echo ""
+	@echo "Service status:"
+	sudo systemctl status cloudflared-pi.service --no-pager -l
+	@echo ""
+	sudo systemctl status pi-agent-manager.service --no-pager -l
+
+# Install systemd services only (without building)
+install-service:
+	@echo "Installing systemd services..."
+	sudo cp cloudflared-pi.service /etc/systemd/system/
+	sudo cp pi-agent-manager.service /etc/systemd/system/
+	sudo systemctl daemon-reload
+	sudo systemctl enable cloudflared-pi.service
+	sudo systemctl enable pi-agent-manager.service
+	@echo "✅ Services installed (not started)"
+	@echo "Use 'make restart-service' to start them"
+
+# Restart systemd services
+restart-service:
+	@echo "Restarting services..."
+	@echo "Stopping any existing pi-agent-manager process..."
+	-pkill -f pi-agent-manager || true
+	@sleep 1
+	sudo systemctl restart cloudflared-pi.service
+	sudo systemctl restart pi-agent-manager.service
+	@echo "✅ Services restarted"
+
+# Check service status
+status:
+	@echo "=== Cloudflare Tunnel ==="
+	sudo systemctl status cloudflared-pi.service --no-pager -l
+	@echo ""
+	@echo "=== Pi Agent Manager ==="
+	sudo systemctl status pi-agent-manager.service --no-pager -l
+
 # Help target
 help:
 	@echo "Available targets:"
-	@echo "  make all          - Build frontend and backend (default)"
-	@echo "  make build        - Same as 'make all'"
-	@echo "  make frontend     - Build frontend only"
-	@echo "  make backend      - Build backend only"
-	@echo "  make dev-frontend - Start frontend dev server (Vite)"
-	@echo "  make dev-backend  - Start backend with hot reload (port 7847)"
-	@echo "  make clean        - Remove build artifacts"
-	@echo "  make run          - Build and run production server"
-	@echo "  make test-install - Install E2E test dependencies"
-	@echo "  make test         - Run all E2E tests (server must be running)"
-	@echo "  make test-mobile  - Run mobile E2E tests with visible browser"
-	@echo "  make help         - Show this help message"
+	@echo "  make all             - Build frontend and backend (default)"
+	@echo "  make build           - Same as 'make all'"
+	@echo "  make frontend        - Build frontend only"
+	@echo "  make backend         - Build backend only"
+	@echo "  make dev-frontend    - Start frontend dev server (Vite)"
+	@echo "  make dev-backend     - Start backend with hot reload (port 7847)"
+	@echo "  make clean           - Remove build artifacts"
+	@echo "  make run             - Build and run production server"
+	@echo "  make test-install    - Install E2E test dependencies"
+	@echo "  make test            - Run all E2E tests (server must be running)"
+	@echo "  make test-mobile     - Run mobile E2E tests with visible browser"
+	@echo "  make deploy          - Build and deploy to production (pi.liu.nz)"
+	@echo "  make install-service - Install systemd services only"
+	@echo "  make restart-service - Restart systemd services"
+	@echo "  make status          - Check service status"
+	@echo "  make help            - Show this help message"
