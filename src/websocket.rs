@@ -58,7 +58,7 @@ pub struct WSState {
 
 impl WSState {
     pub fn new() -> Self {
-        let (tx, _) = broadcast::channel(100);
+        let (tx, _) = broadcast::channel(1000);
         Self {
             tx,
             clients: Arc::new(RwLock::new(std::collections::HashSet::new())),
