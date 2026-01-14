@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useSessions } from "../hooks/useSessions";
 import { useProjects } from "../hooks/useProjects";
 import { useAppStore } from "../store/appStore";
@@ -5,12 +6,15 @@ import { useStartSession } from "../hooks/useStartSession";
 import { ScrollArea } from "./ui/scroll-area";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { Badge } from "./ui/badge";
-import { Loader2 } from "lucide-react";
+import { Button } from "./ui/button";
+import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface SessionListProps {
   className?: string;
 }
+
+const DEFAULT_SESSION_LIMIT = 5;
 
 export function SessionList({ className }: SessionListProps) {
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
@@ -22,13 +26,38 @@ export function SessionList({ className }: SessionListProps) {
   const thinkingSessionIds = useAppStore((state) => state.thinkingSessionIds);
   const unreadSessions = useAppStore((state) => state.unreadSessions);
 
+  // Track which projects are expanded
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+
   const isLoading = sessionsLoading || projectsLoading;
 
-  // Group sessions by project
-  const sessionsByProject = projects?.map((project) => ({
-    ...project,
-    sessions: sessions?.filter((session) => session.project_id === project.id) ?? [],
-  }));
+  // Group sessions by project and limit to DEFAULT_SESSION_LIMIT
+  const sessionsByProject = projects?.map((project) => {
+    const projectSessions = sessions?.filter((session) => session.project_id === project.id) ?? [];
+    const isExpanded = expandedProjects.has(project.id);
+    const displayedSessions = isExpanded ? projectSessions : projectSessions.slice(0, DEFAULT_SESSION_LIMIT);
+    const hasMore = projectSessions.length > DEFAULT_SESSION_LIMIT;
+
+    return {
+      ...project,
+      sessions: projectSessions,
+      displayedSessions,
+      hasMore,
+      isExpanded,
+    };
+  });
+
+  const toggleProjectExpanded = (projectId: string) => {
+    setExpandedProjects((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(projectId)) {
+        newSet.delete(projectId);
+      } else {
+        newSet.add(projectId);
+      }
+      return newSet;
+    });
+  };
 
   const handleSessionSelect = (sessionId: string) => {
     setCurrentSession(sessionId);
@@ -60,19 +89,34 @@ export function SessionList({ className }: SessionListProps) {
           <div className="p-2">
             {sessionsByProject?.map((project) => (
               <div key={project.id} className="mb-4">
-                {/* Project header */}
-                <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase">
-                  {project.name}
-                </div>
+                {/* Project header with expand/collapse */}
+                <button
+                  onClick={() => toggleProjectExpanded(project.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1.5 text-xs font-semibold",
+                    "text-muted-foreground uppercase hover:text-foreground transition-colors",
+                    "rounded hover:bg-accent/50"
+                  )}
+                >
+                  {project.isExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  <span className="flex-1 text-left">{project.name}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {project.sessions.length}
+                  </Badge>
+                </button>
 
                 {/* Project sessions */}
-                {project.sessions.length === 0 ? (
-                  <div className="px-2 py-1 text-sm text-muted-foreground">
+                {project.displayedSessions.length === 0 ? (
+                  <div className="px-8 py-2 text-sm text-muted-foreground">
                     No sessions
                   </div>
                 ) : (
-                  <ul className="space-y-1">
-                    {project.sessions.map((session) => (
+                  <ul className="space-y-1 mt-1">
+                    {project.displayedSessions.map((session) => (
                       <li key={session.id}>
                         <button
                           onClick={() => handleSessionSelect(session.id)}
@@ -127,6 +171,24 @@ export function SessionList({ className }: SessionListProps) {
                       </li>
                     ))}
                   </ul>
+                )}
+
+                {/* Show more/less button */}
+                {project.hasMore && (
+                  <div className="px-2 mt-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleProjectExpanded(project.id)}
+                      className="w-full justify-start text-xs h-7"
+                    >
+                      {project.isExpanded ? (
+                        <span>Show less ({DEFAULT_SESSION_LIMIT})</span>
+                      ) : (
+                        <span>Show {project.sessions.length - DEFAULT_SESSION_LIMIT} more...</span>
+                      )}
+                    </Button>
+                  </div>
                 )}
               </div>
             ))}
