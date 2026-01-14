@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 import { SessionList, SessionHistory, ChatInput, AppHeader } from "./components";
 import { useAppStore } from "./store/appStore";
 import { useThinkingStore } from "./store/thinkingStore";
@@ -8,6 +8,7 @@ import { useStopSession } from "./hooks/useStopSession";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent } from "./components/ui/sheet";
+import { toast } from "sonner";
 import type { WSEvent } from "./types";
 
 function App() {
@@ -62,37 +63,45 @@ function App() {
     [queryClient, appendThinking, clearThinking]
   );
 
+  // WebSocket error handler with debounce to prevent toast spam
+  const wsErrorToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleWebSocketError = useCallback(() => {
+    // Debounce error toasts - only show one every 5 seconds
+    if (wsErrorToastTimeoutRef.current) return;
+
+    toast.error("Connection lost", {
+      description: "WebSocket connection lost. Reconnecting...",
+    });
+
+    wsErrorToastTimeoutRef.current = setTimeout(() => {
+      wsErrorToastTimeoutRef.current = null;
+    }, 5000);
+  }, []);
+
   // Establish WebSocket connection and get connection status
-  const { connectionStatus } = useWebSocket({ onMessage: handleWebSocketMessage });
+  const { connectionStatus } = useWebSocket({
+    onMessage: handleWebSocketMessage,
+    onError: handleWebSocketError,
+  });
 
   // Handle sending messages
   const handleSendMessage = useCallback(
-    async (content: string) => {
+    (content: string) => {
       if (!currentSessionId) return;
 
-      try {
-        await sendPromptMutation.mutateAsync({
-          sessionId: currentSessionId,
-          prompt: content,
-        });
-      } catch (error) {
-        console.error("Failed to send prompt:", error);
-        // TODO: Show toast error in US-014
-      }
+      sendPromptMutation.mutate({
+        sessionId: currentSessionId,
+        prompt: content,
+      });
     },
     [currentSessionId, sendPromptMutation]
   );
 
   // Handle stopping the current session
-  const handleStopSession = useCallback(async () => {
+  const handleStopSession = useCallback(() => {
     if (!currentSessionId) return;
 
-    try {
-      await stopSessionMutation.mutateAsync(currentSessionId);
-    } catch (error) {
-      console.error("Failed to stop session:", error);
-      // TODO: Show toast error in US-014
-    }
+    stopSessionMutation.mutate(currentSessionId);
   }, [currentSessionId, stopSessionMutation]);
 
   // Handle mobile menu toggle

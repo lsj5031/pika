@@ -301,3 +301,68 @@ Started: 2026-01-14
 - For callbacks in custom hooks, use useRef to store the latest callback without triggering the hook's dependencies to change
 - The pattern `const callbackRef = useRef(callback); useEffect(() => { callbackRef.current = callback; }, [callback]);` allows updating the ref without changing memoized functions that depend on it
 - Chrome DevTools Protocol via browser-tools skill is invaluable for diagnosing React errors - captured the actual error message which led to finding the Zustand selector issue
+
+## [2026-01-14] - US-013: Create new session dialog
+
+**Implementation:**
+- Installed shadcn/ui Dialog, Select, Input, and Label components via `npx shadcn@latest add dialog select input label`
+- Fixed import paths in new shadcn components to use relative paths (../../lib/utils)
+- Created src/components/NewSessionDialog.tsx with:
+  - Dialog component using shadcn/ui Dialog primitives
+  - Project dropdown selector populated via useProjects hook
+  - Optional session name input with placeholder text
+  - Create button that calls useCreateSession mutation
+  - Dialog closes on successful creation and newly created session is automatically selected
+  - Enter key support for quick creation
+  - Loading states during project fetch and session creation
+  - Form reset when dialog closes
+- Updated src/components/SessionList.tsx to include NewSessionDialog trigger in sidebar header
+- Updated src/components/index.ts to export NewSessionDialog
+- Verified TypeScript compiles without errors (`npm run build`)
+- Verified in browser - New Session button visible in sidebar header with Plus icon
+
+**Learnings:**
+- shadcn/ui Dialog component uses @radix-ui/react-dialog under the hood with proper Portal, Overlay, and Content components
+- The Select component from shadcn/ui requires SelectTrigger, SelectValue, and SelectContent to work together
+- When using controlled components for dialog open state, need to reset form state when dialog closes to prevent stale data on next open
+- The New Session button placement in the sidebar header (next to "Sessions" title) provides good UX - it's always visible and accessible
+- Dialog components should handle loading states gracefully (disable buttons, show loading text)
+
+## [2026-01-14] - US-014: Add error handling with toasts
+
+**Implementation:**
+- Installed sonner (v2.0.7) package for toast notifications (the deprecated shadcn toast component now redirects to sonner)
+- Installed next-themes (v0.4.6) as a dependency of the shadcn sonner component
+- Created src/lib/toast.ts with utility functions:
+  - showError(title, error) - shows error toast with error message
+  - showSuccess(title, description) - shows success toast
+  - showInfo(title, description) - shows info toast
+- Updated src/main.tsx to import and render Toaster from sonner with light theme
+  - Toaster must be placed as a direct child of StrictMode (not inside QueryClientProvider) to render correctly
+- Added onError handlers to all mutation hooks:
+  - useCreateSession: shows "Failed to create session" error toast, "Session created" success toast
+  - useStartSession: shows "Failed to start session" error toast, "Session started" success toast
+  - useStopSession: shows "Failed to stop session" error toast, "Session stopped" success toast
+  - useSendPrompt: shows "Failed to send message" error toast
+- Updated src/hooks/useWebSocket.ts:
+  - Added onError callback parameter to options interface
+  - Added onErrorRef to track the latest callback without triggering reconnections
+  - Added hasConnectedOnceRef to track if we've ever connected (to avoid showing error toast on initial connection failure)
+  - WebSocket error handler now calls onError callback on unexpected disconnect
+- Updated src/App.tsx:
+  - Added handleWebSocketError callback with debouncing (5 seconds) to prevent toast spam
+  - Shows "Connection lost" toast with "Reconnecting..." description
+  - Removed try-catch blocks from handleSendMessage and handleStopSession (error handling now in hooks)
+- Updated src/components/NewSessionDialog.tsx:
+  - Removed try-catch block from handleCreate (error handling now in hook)
+  - Used mutate with onSuccess callback instead of mutateAsync
+
+**Learnings:**
+- shadcn/ui toast component is deprecated in favor of sonner - the CLI now installs sonner.tsx instead of toast.tsx
+- The default shadcn sonner wrapper uses next-themes which is designed for Next.js - simplified the wrapper to use hardcoded "light" theme instead
+- Toaster component from sonner renders as a <section> element in the DOM (not a div with class="toaster")
+- Toaster must be rendered outside the QueryClientProvider as a direct child of StrictMode to properly mount to the DOM
+- In Vite + React projects, JSX works without importing React (react-jsx transform handles this)
+- Error handling in React Query mutations should be in the mutation hooks, not in the components that call them - this follows DRY principles and ensures consistent error handling
+- Debouncing WebSocket error toasts is important because the reconnection logic can trigger multiple close events in quick succession
+- Sonner's toast function is imported directly from the "sonner" package - no need for wrapper components for basic usage

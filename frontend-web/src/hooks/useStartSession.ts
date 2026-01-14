@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api";
+import { showError, showSuccess } from "../lib/toast";
 import type { StartSessionResponse } from "../types";
 
 export function useStartSession() {
@@ -21,6 +22,10 @@ export function useStartSession() {
       );
       // Invalidate sessions list to get fresh data
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      showSuccess("Session started", "The session is now active.");
+    },
+    onError: (error) => {
+      showError("Failed to start session", error);
     },
   });
 }

@@ -226,8 +226,8 @@
         "Verify in browser using webapp-testing skill"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created NewSessionDialog.tsx using shadcn/ui Dialog, Select, Input, and Label components. Project dropdown populated via useProjects hook. Optional session name input with Enter key support. Dialog closes on successful creation and newly created session is automatically selected. Fixed import paths in new shadcn components to use relative paths. Verified in browser - button visible in sidebar header."
     },
     {
       "id": "US-014",
@@ -242,8 +242,8 @@
         "Verify in browser using webapp-testing skill"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Installed sonner (v2.0.7) package for toast notifications. Created lib/toast.ts with showError, showSuccess, and showInfo utilities. Added Toaster component from sonner to main.tsx with light theme. All mutation hooks (useCreateSession, useStartSession, useStopSession, useSendPrompt) now show error toasts on failure. Success toasts added for session creation, start, and stop operations. WebSocket error handler added to App.tsx with debouncing (5s) to prevent toast spam. Toaster renders as <section> element in DOM. TypeScript compiles without errors. Verified in browser - Toaster component is present in DOM and app renders correctly."
     },
     {
       "id": "US-012",

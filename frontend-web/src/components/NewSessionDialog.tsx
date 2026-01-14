@@ -41,28 +41,28 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
     createSessionMutation.isPending ||
     projectsLoading;
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!selectedProjectId) return;
 
-    try {
-      const result = await createSessionMutation.mutateAsync({
+    createSessionMutation.mutate(
+      {
         projectId: selectedProjectId,
         request: sessionName.trim() ? { name: sessionName.trim() } : {},
-      });
+      },
+      {
+        onSuccess: (result) => {
+          // Close the dialog
+          setOpen(false);
 
-      // Close the dialog
-      setOpen(false);
+          // Select the newly created session
+          setCurrentSession(result.session_id);
 
-      // Select the newly created session
-      setCurrentSession(result.session_id);
-
-      // Reset form
-      setSelectedProjectId("");
-      setSessionName("");
-    } catch (error) {
-      console.error("Failed to create session:", error);
-      // TODO: Show toast error in US-014
-    }
+          // Reset form
+          setSelectedProjectId("");
+          setSessionName("");
+        },
+      }
+    );
   };
 
   const handleOpenChange = (newOpen: boolean) => {
