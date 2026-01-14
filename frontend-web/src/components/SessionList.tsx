@@ -1,6 +1,7 @@
 import { useSessions } from "../hooks/useSessions";
 import { useProjects } from "../hooks/useProjects";
 import { useAppStore } from "../store/appStore";
+import { useStartSession } from "../hooks/useStartSession";
 import { ScrollArea } from "./ui/scroll-area";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { cn } from "../lib/utils";
@@ -14,6 +15,7 @@ export function SessionList({ className }: SessionListProps) {
   const { data: projects, isLoading: projectsLoading } = useProjects();
   const currentSessionId = useAppStore((state) => state.currentSessionId);
   const setCurrentSession = useAppStore((state) => state.setCurrentSession);
+  const startSessionMutation = useStartSession();
 
   const isLoading = sessionsLoading || projectsLoading;
 
@@ -25,6 +27,12 @@ export function SessionList({ className }: SessionListProps) {
 
   const handleSessionSelect = (sessionId: string) => {
     setCurrentSession(sessionId);
+
+    // Auto-start the session if it's not already active
+    const session = sessions?.find((s) => s.id === sessionId);
+    if (session && !session.is_active) {
+      startSessionMutation.mutate(sessionId);
+    }
   };
 
   if (isLoading) {
@@ -70,10 +78,10 @@ export function SessionList({ className }: SessionListProps) {
                       <button
                         onClick={() => handleSessionSelect(session.id)}
                         className={cn(
-                          "w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors",
-                          "hover:bg-accent hover:text-accent-foreground",
+                          "w-full flex items-center gap-2 px-3 py-2 text-sm rounded-wobbly transition-all",
+                          "hover:bg-accent hover:text-accent-foreground hover:rotate-1",
                           currentSessionId === session.id &&
-                            "bg-accent text-accent-foreground"
+                          "bg-accent text-accent-foreground rotate-1 shadow-sm"
                         )}
                       >
                         {/* Active status indicator */}
