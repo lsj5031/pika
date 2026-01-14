@@ -161,7 +161,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                   onValueChange={setSelectedProjectId}
                   disabled={projectsLoading}
                 >
-                  <SelectTrigger id="project" data-testid="project-select" className="min-h-[44px]">
+                  <SelectTrigger id="project" data-testid="project-select" className="h-auto min-h-[44px] [&>span]:line-clamp-none">
                     <SelectValue
                       placeholder={
                         projectsLoading

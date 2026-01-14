@@ -66,4 +66,8 @@ export const apiClient = {
       body: JSON.stringify(data),
     });
   },
+
+  delete<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint, { method: "DELETE" });
+  },
 };

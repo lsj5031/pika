@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
@@ -178,6 +178,128 @@ pub async fn get_projects(
         .collect();
     
     Ok(Json(projects))
+}
+
+/// Request to add a new project
+#[derive(Debug, Deserialize)]
+pub struct AddProjectRequest {
+    /// Path to the project root
+    pub path: String,
+}
+
+/// Response when adding a project
+#[derive(Debug, Serialize)]
+pub struct AddProjectResponse {
+    /// The project ID
+    pub id: String,
+    /// The project name
+    pub name: String,
+    /// The project path
+    pub path: PathBuf,
+}
+
+/// POST /api/projects - add a new project to config
+pub async fn add_project(
+    State(state): State<AppState>,
+    Json(request): Json<AddProjectRequest>,
+) -> Result<Json<AddProjectResponse>, ErrorResponse> {
+    use crate::config::ProjectConfig;
+    
+    // Expand ~ to home directory
+    let expanded_path = if request.path.starts_with("~/") {
+        if let Some(home) = dirs::home_dir() {
+            home.join(&request.path[2..])
+        } else {
+            PathBuf::from(&request.path)
+        }
+    } else {
+        PathBuf::from(&request.path)
+    };
+    
+    // Convert to absolute path
+    let absolute_path = if expanded_path.is_absolute() {
+        expanded_path
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(&expanded_path)
+    };
+    
+    // Validate path exists
+    if !absolute_path.exists() {
+        return Err(ErrorResponse {
+            error: "INVALID_PATH".to_string(),
+            message: format!("Path does not exist: {}", absolute_path.display()),
+        });
+    }
+    
+    let project_id = project_id_from_path(&absolute_path);
+    
+    // Update config
+    {
+        let mut config = state.api_state.config.write().await;
+        
+        // Check if project already exists
+        if config.project_root_paths.contains(&absolute_path) {
+            return Err(ErrorResponse {
+                error: "PROJECT_EXISTS".to_string(),
+                message: format!("Project already exists: {}", absolute_path.display()),
+            });
+        }
+        
+        // Add project
+        config.project_root_paths.push(absolute_path.clone());
+        
+        // Save to config file
+        if let Err(e) = config.to_file("config.toml") {
+            return Err(ErrorResponse {
+                error: "CONFIG_SAVE_FAILED".to_string(),
+                message: format!("Failed to save config: {}", e),
+            });
+        }
+    }
+    
+    Ok(Json(AddProjectResponse {
+        id: project_id,
+        name: project_name_from_path(&absolute_path),
+        path: absolute_path,
+    }))
+}
+
+/// DELETE /api/projects/:id - remove a project from config
+pub async fn remove_project(
+    State(state): State<AppState>,
+    Path(project_id): Path<String>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    use crate::config::ProjectConfig;
+    
+    // Update config
+    {
+        let mut config = state.api_state.config.write().await;
+        
+        // Find and remove the project
+        let original_len = config.project_root_paths.len();
+        config.project_root_paths.retain(|path| {
+            project_id_from_path(path) != project_id
+        });
+        
+        if config.project_root_paths.len() == original_len {
+            return Err(ErrorResponse {
+                error: "PROJECT_NOT_FOUND".to_string(),
+                message: format!("Project not found: {}", project_id),
+            });
+        }
+        
+        // Save to config file
+        if let Err(e) = config.to_file("config.toml") {
+            return Err(ErrorResponse {
+                error: "CONFIG_SAVE_FAILED".to_string(),
+                message: format!("Failed to save config: {}", e),
+            });
+        }
+    }
+    
+    Ok(Json(serde_json::json!({ "success": true })))
 }
 
 /// GET /api/projects/:id/sessions - returns sessions for a specific project
@@ -662,7 +784,8 @@ pub async fn create_session_in_project(
 /// Create the API router with all endpoints
 pub fn create_api_router() -> Router<AppState> {
     Router::new()
-        .route("/api/projects", get(get_projects))
+        .route("/api/projects", get(get_projects).post(add_project))
+        .route("/api/projects/{id}", delete(remove_project))
         .route("/api/projects/{id}/sessions", get(get_project_sessions))
         .route("/api/projects/{id}/sessions", post(create_session_in_project))
         .route("/api/sessions", get(get_sessions))

@@ -204,6 +204,10 @@ function App() {
               side="left"
               className="w-[85vw] max-w-[320px] p-0 sm:w-64"
               id="mobile-drawer-content"
+              style={{
+                touchAction: "auto",
+                WebkitOverflowScrolling: "touch",
+              }}
             >
               <div className="h-full overflow-y-auto">
                 <SessionList />

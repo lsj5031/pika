@@ -5,4 +5,5 @@ export { ThinkingIndicator } from "./ThinkingIndicator";
 export { AppHeader } from "./AppHeader";
 export { NewSessionDialog } from "./NewSessionDialog";
 export { AuthPrompt } from "./AuthPrompt";
+export { ProjectManager } from "./ProjectManager";
 

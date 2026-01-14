@@ -61,8 +61,10 @@ const SheetContent = React.forwardRef<
       ref={ref}
       className={cn(
         sheetVariants({ side }),
+        "z-[70]",
         className
-      )}
+      )
+      }
       style={{
         touchAction: 'auto',
         WebkitOverflowScrolling: 'touch',
