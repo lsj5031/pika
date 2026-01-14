@@ -155,7 +155,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
             // Project-based creation
             <>
               <div className="grid gap-2">
-                <Label htmlFor="project">Project</Label>
+                <Label htmlFor="project" className="font-heading font-bold text-base">Project</Label>
                 <Select
                   value={selectedProjectId}
                   onValueChange={setSelectedProjectId}
@@ -173,9 +173,9 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                   <SelectContent>
                     {projects?.map((project) => (
                       <SelectItem key={project.id} value={project.id}>
-                        <div className="flex flex-col">
-                          <span>{project.name}</span>
-                          <span className="text-muted-foreground text-xs">
+                        <div className="flex flex-col py-1">
+                          <span className="font-heading font-bold">{project.name}</span>
+                          <span className="text-muted-foreground text-xs font-mono opacity-80 mt-0.5">
                             {project.path}
                           </span>
                         </div>
@@ -191,7 +191,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="session-name-project">Session Name (Optional)</Label>
+                <Label htmlFor="session-name-project" className="font-heading font-bold text-base">Session Name (Optional)</Label>
                 <Input
                   id="session-name-project"
                   placeholder="e.g., Debug session, Feature discussion"
@@ -228,7 +228,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
             // Custom path creation
             <>
               <div className="grid gap-2">
-                <Label htmlFor="custom-path">Folder Path</Label>
+                <Label htmlFor="custom-path" className="font-heading font-bold text-base">Folder Path</Label>
                 <Input
                   id="custom-path"
                   placeholder="e.g., ~/code/my-project or /absolute/path/to/project"
@@ -248,7 +248,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="session-name-custom">Session Name (Optional)</Label>
+                <Label htmlFor="session-name-custom" className="font-heading font-bold text-base">Session Name (Optional)</Label>
                 <Input
                   id="session-name-custom"
                   placeholder="e.g., Quick chat, Code review"

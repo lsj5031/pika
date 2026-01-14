@@ -21,7 +21,7 @@ function formatTimestamp(timestamp: string | null): string {
 }
 
 function parseDiffFromMessage(content: string) {
-  // Look for code blocks with file paths
+  // Pattern 1: Markdown code blocks
   const fileBlockRegex = /```(\w+)?\n(?:\/\/ (.+?)\n)?([\s\S]*?)```/g;
   const matches = [...content.matchAll(fileBlockRegex)];
 
@@ -33,6 +33,36 @@ function parseDiffFromMessage(content: string) {
       newContent: matches[1][3]?.trim(),
     };
   }
+
+  // Pattern 2: Tool call JSON (e.g. from replace_file_content)
+  try {
+    const trimmed = content.trim();
+    if (trimmed.startsWith("{")) {
+      const data = JSON.parse(trimmed);
+      // Check for replacement_content or code_content patterns
+      const args = data.function?.arguments ? JSON.parse(data.function.arguments) : data.arguments || data;
+
+      if (args.ReplacementContent && args.TargetContent) {
+        return {
+          filePath: args.TargetFile || undefined,
+          language: args.TargetFile?.split('.').pop() || "text",
+          oldContent: args.TargetContent,
+          newContent: args.ReplacementContent,
+        };
+      }
+      if (args.CodeContent && args.TargetFile) {
+        return {
+          filePath: args.TargetFile,
+          language: args.TargetFile.split('.').pop() || "text",
+          oldContent: "", // New file creation
+          newContent: args.CodeContent,
+        };
+      }
+    }
+  } catch {
+    // Ignore parse errors
+  }
+
   return null;
 }
 
@@ -115,16 +145,22 @@ function MessageBubble({ message }: { message: Message }) {
       {/* Main message card */}
       <Card
         className={cn(
-          "max-w-[85%] px-4 py-3 border-2 shadow-sm transition-all hover:shadow-md",
+          "max-w-[92%] md:max-w-[80%] px-4 py-3 border-2 shadow-sm transition-all hover:shadow-md",
           colors.bg,
-          colors.border
+          colors.border,
+          "overflow-hidden" // Ensure nothing leaks out
         )}
       >
         {/* Response content */}
         {response && (
-          <p className={cn("text-sm whitespace-pre-wrap break-words leading-relaxed", colors.text)}>
+          <div className={cn(
+            "text-sm whitespace-pre-wrap break-words leading-relaxed",
+            // For tool calls/results that usually have very long non-breaking strings
+            (hasToolUse || response.length > 500) ? "break-all" : "break-words",
+            colors.text
+          )}>
             {response}
-          </p>
+          </div>
         )}
 
         {/* Thinking block - styled distinctly */}
@@ -160,7 +196,7 @@ function MessageBubble({ message }: { message: Message }) {
       {diff && (
         <DiffViewer
           diff={diff}
-          className="max-w-[85%]"
+          className="max-w-[92%] md:max-w-[85%]"
         />
       )}
     </div>

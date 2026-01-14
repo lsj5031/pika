@@ -106,8 +106,8 @@ export function SessionList({ className }: SessionListProps) {
 
   return (
     <div className={cn("flex flex-col h-full bg-background", className)} data-testid="session-list">
-      {/* Header - added pr-12 on mobile to avoid sheet close button */}
-      <div className="p-4 border-b-2 flex items-center justify-between gap-2 bg-card text-card-foreground shadow-sm z-10 pr-12 md:pr-4" data-testid="session-list-header">
+      {/* Header - added pr-20 on mobile to avoid sheet close button */}
+      <div className="p-4 border-b-2 flex items-center justify-between gap-2 bg-card text-card-foreground shadow-sm z-10 pr-20 md:pr-4" data-testid="session-list-header">
         <h2 className="text-2xl font-heading font-bold tracking-tight">Sessions</h2>
         <div className="flex items-center gap-2">
           <ProjectManager trigger={
