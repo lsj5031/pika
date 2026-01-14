@@ -28,7 +28,7 @@ export function AppHeader({
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle menu</span>
         </Button>
-        <h1 className="text-lg font-semibold">Pika</h1>
+        <h1 className="text-xl font-heading font-bold">Pika</h1>
       </div>
 
       {/* Right: Connection status + Stop button */}

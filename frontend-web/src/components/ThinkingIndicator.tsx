@@ -10,15 +10,15 @@ interface ThinkingIndicatorProps {
 export function ThinkingIndicator({ content, className }: ThinkingIndicatorProps) {
   return (
     <div className={cn("flex w-full justify-start", className)}>
-      <Card className="max-w-[80%] px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
+      <Card className="max-w-[80%] px-4 py-3 bg-[#fff9c4] border-2 border-primary rotate-1 shadow-hard-sm">
         <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin text-amber-600 dark:text-amber-500" />
-          <span className="text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wide">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-xs font-bold text-primary uppercase tracking-wide font-body">
             Thinking
           </span>
         </div>
         {content && (
-          <p className="text-sm whitespace-pre-wrap break-words mt-2 text-amber-900 dark:text-amber-100 font-mono">
+          <p className="text-lg whitespace-pre-wrap break-words mt-2 text-primary font-body leading-snug">
             {content}
           </p>
         )}

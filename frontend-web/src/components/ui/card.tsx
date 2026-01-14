@@ -1,3 +1,4 @@
+/* eslint-disable react/style-prop-object */
 import * as React from "react"
 
 import { cn } from "../../lib/utils"
@@ -9,7 +10,7 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-lg border bg-card text-card-foreground shadow-sm",
+      "rounded-wobblyMd border-2 border-primary bg-card text-card-foreground shadow-[3px_3px_0px_0px_rgba(45,45,45,0.1)] transition-transform duration-300 hover:rotate-1 hover:shadow-[4px_4px_0px_0px_rgba(45,45,45,0.2)]",
       className
     )}
     {...props}
@@ -36,7 +37,7 @@ const CardTitle = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "text-2xl font-semibold leading-none tracking-tight",
+      "text-2xl font-heading font-bold leading-none tracking-tight",
       className
     )}
     {...props}
@@ -50,7 +51,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-base font-body text-muted-foreground", className)}
     {...props}
   />
 ))
@@ -60,7 +61,7 @@ const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+  <div ref={ref} className={cn("p-6 pt-0 font-body", className)} {...props} />
 ))
 CardContent.displayName = "CardContent"
 
