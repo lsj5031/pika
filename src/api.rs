@@ -460,11 +460,44 @@ pub async fn send_prompt_to_session(
     Path(session_id): Path<String>,
     Json(req): Json<PromptRequest>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    // Lock the process manager and send the prompt
+    // First, find the session to get its project path
+    let config = state.api_state.config.read().await;
+    let sessions = scan_sessions(&config);
+
+    let session = sessions
+        .into_iter()
+        .find(|s| s.id == session_id);
+
+    let session = match session {
+        Some(s) => s,
+        None => {
+            return Err(ErrorResponse {
+                error: "NOT_FOUND".to_string(),
+                message: format!("Session with ID '{}' not found", session_id),
+            });
+        }
+    };
+
+    // Lock the process manager
     let mut process_manager = state.process_manager.lock().await;
 
+    // Check if the session is already running
+    let process_id = if process_manager.is_session_running(&session_id) {
+        // Get the existing process ID
+        process_manager.get_process_id_for_session(&session_id).unwrap()
+    } else {
+        // Start the session (spawn a new process)
+        process_manager
+            .spawn_for_session(&session_id, session.project_path.clone())
+            .map_err(|e| ErrorResponse {
+                error: "INTERNAL_ERROR".to_string(),
+                message: format!("Failed to start session: {}", e),
+            })?
+    };
+
+    // Send the prompt to the process
     process_manager
-        .send_prompt(&session_id, &req.prompt)
+        .send_prompt(&process_id, &req.prompt)
         .await
         .map_err(|e| ErrorResponse {
             error: "INTERNAL_ERROR".to_string(),
@@ -474,6 +507,7 @@ pub async fn send_prompt_to_session(
     Ok(Json(serde_json::json!({
         "status": "ok",
         "session_id": session_id,
+        "process_id": process_id,
         "message": "Prompt sent successfully"
     })))
 }
@@ -666,10 +700,11 @@ pub struct CreateStandaloneSessionResponse {
 
 /// POST /api/sessions/create - create a new session in any folder
 pub async fn create_standalone_session(
+    State(state): State<AppState>,
     Json(request): Json<CreateStandaloneSessionRequest>,
 ) -> Result<Json<CreateStandaloneSessionResponse>, ErrorResponse> {
     use crate::sessions::{create_session, CreateSessionRequest};
-    
+
     // Expand ~ to home directory
     let expanded_path = if request.path.starts_with("~/") {
         if let Some(home) = dirs::home_dir() {
@@ -680,8 +715,8 @@ pub async fn create_standalone_session(
     } else {
         PathBuf::from(&request.path)
     };
-    
-    // Convert to absolute path
+
+    // Convert to absolute path and canonicalize
     let absolute_path = if expanded_path.is_absolute() {
         expanded_path
     } else {
@@ -689,30 +724,48 @@ pub async fn create_standalone_session(
             .unwrap_or_else(|_| PathBuf::from("."))
             .join(&expanded_path)
     };
-    
+
+    // Canonicalize the path
+    let canonical_path = absolute_path
+        .canonicalize()
+        .map_err(|_| ErrorResponse {
+            error: "INVALID_PATH".to_string(),
+            message: format!("Cannot canonicalize path: {}", absolute_path.display()),
+        })?;
+
     // Validate path exists
-    if !absolute_path.exists() {
+    if !canonical_path.exists() {
         return Err(ErrorResponse {
             error: "INVALID_PATH".to_string(),
-            message: format!("Path does not exist: {}", absolute_path.display()),
+            message: format!("Path does not exist: {}", canonical_path.display()),
         });
     }
-    
+
     // Create the session
     let create_request = CreateSessionRequest {
         name: request.name,
     };
-    
-    let result = create_session(&absolute_path, create_request)
+
+    let result = create_session(&canonical_path, create_request)
         .map_err(|e| ErrorResponse {
             error: "SESSION_CREATE_FAILED".to_string(),
             message: format!("Failed to create session: {}", e),
         })?;
-    
+
+    // Register the folder path in project_root_paths for discoverability
+    // This ensures the session shows up in the session list
+    {
+        let mut config = state.api_state.config.write().await;
+        // Only add if not already present
+        if !config.project_root_paths.contains(&canonical_path) {
+            config.project_root_paths.push(canonical_path.clone());
+        }
+    }
+
     Ok(Json(CreateStandaloneSessionResponse {
         session_id: result.session_id,
         name: result.name,
-        path: absolute_path,
+        path: canonical_path,
         created_at: result.created_at,
     }))
 }
@@ -802,16 +855,22 @@ pub fn create_api_router() -> Router<AppState> {
 #[derive(Debug, Serialize)]
 pub struct PiSettingsResponse {
     /// Default provider
+    #[serde(rename = "defaultProvider")]
     pub default_provider: Option<String>,
     /// Default model
+    #[serde(rename = "defaultModel")]
     pub default_model: Option<String>,
     /// Default thinking level
+    #[serde(rename = "defaultThinkingLevel")]
     pub default_thinking_level: Option<String>,
     /// Theme
+    #[serde(rename = "theme")]
     pub theme: Option<String>,
     /// Hide thinking block
+    #[serde(rename = "hideThinkingBlock")]
     pub hide_thinking_block: Option<bool>,
     /// Available models
+    #[serde(rename = "availableModels")]
     pub available_models: Vec<ModelInfo>,
 }
 

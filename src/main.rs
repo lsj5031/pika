@@ -162,16 +162,36 @@ async fn event_bridge_task(app_state: AppState) {
         match event {
             ProcessManagerEvent::ProcessSpawned { id, project_path } => {
                 println!("🚀 Process spawned: {} in {}", id, project_path.display());
+
+                // Look up the session ID for this process
+                let session_id = {
+                    let pm = app_state.process_manager.lock().await;
+                    pm.get_session_id_for_process(&id)
+                };
+
+                // Use session_id if found, otherwise fall back to process_id
+                let ws_id = session_id.unwrap_or_else(|| id.clone());
+
                 let ws_event = WSEvent::SessionStarted {
-                    session_id: id.clone(),
+                    session_id: ws_id,
                     project_path: project_path.to_string_lossy().to_string(),
                 };
                 app_state.ws_state.broadcast(ws_event);
             }
             ProcessManagerEvent::ProcessKilled { id } => {
                 println!("🛑 Process killed: {}", id);
+
+                // Look up the session ID for this process
+                let session_id = {
+                    let pm = app_state.process_manager.lock().await;
+                    pm.get_session_id_for_process(&id)
+                };
+
+                // Use session_id if found, otherwise fall back to process_id
+                let ws_id = session_id.unwrap_or_else(|| id.clone());
+
                 let ws_event = WSEvent::SessionStopped {
-                    session_id: id.clone(),
+                    session_id: ws_id,
                 };
                 app_state.ws_state.broadcast(ws_event);
             }
@@ -181,52 +201,138 @@ async fn event_bridge_task(app_state: AppState) {
                 // but we keep it for future use if we need to distinguish between the two
             }
             ProcessManagerEvent::JsonRpc { id, event } => {
-                println!("📨 JSON-RPC event from {}: {:?}", id, event);
+                // Look up the session ID for this process
+                let session_id = {
+                    let pm = app_state.process_manager.lock().await;
+                    pm.get_session_id_for_process(&id)
+                };
 
-                // Convert JsonRpcEvent to WSEvent
-                // The pi process emits events with method names
-                if let Some(method) = &event.method {
-                    match method.as_str() {
-                        "thinking" => {
-                            // Thinking delta event
-                            if let Some(params) = &event.params {
-                                let content = params.get("content")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
+                // Use session_id if found, otherwise fall back to process_id
+                let ws_id = session_id.unwrap_or_else(|| id.clone());
 
-                                let ws_event = WSEvent::ThinkingDelta {
-                                    session_id: id.clone(),
-                                    content: content.to_string(),
-                                };
-                                app_state.ws_state.broadcast(ws_event);
+                // Convert pi event to WSEvent
+                // pi-coding-agent sends events with "type" field
+                if let Some(event_type) = &event.event_type {
+                    match event_type.as_str() {
+                        "message_update" => {
+                            // Streaming update - check if it's thinking or text
+                            if let Some(msg_event) = event.extra.get("assistantMessageEvent") {
+                                if let Some(delta_type) = msg_event.get("type").and_then(|t| t.as_str()) {
+                                    match delta_type {
+                                        "thinking_delta" => {
+                                            let content = msg_event.get("delta")
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("");
+
+                                            if !content.is_empty() {
+                                                let ws_event = WSEvent::ThinkingDelta {
+                                                    session_id: ws_id.clone(),
+                                                    content: content.to_string(),
+                                                };
+                                                app_state.ws_state.broadcast(ws_event);
+                                            }
+                                        }
+                                        "text_delta" => {
+                                            // Text streaming - could broadcast this too if we want real-time text
+                                            // For now, we'll wait for message_end to add the complete message
+                                        }
+                                        _ => {
+                                            // Other delta types (toolcall, etc.)
+                                        }
+                                    }
+                                }
                             }
                         }
-                        "message" => {
-                            // New message added
-                            if let Some(params) = &event.params {
-                                let role = params.get("role")
+                        "message_end" => {
+                            // Message completed - extract role and content
+                            if let Some(message) = event.extra.get("message") {
+                                let role = message.get("role")
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("assistant");
 
-                                let content = params.get("content")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
+                                // Get timestamp
+                                let timestamp = message.get("timestamp")
+                                    .and_then(|v| v.as_i64())
+                                    .map(|ts| {
+                                        // Convert milliseconds to seconds if needed
+                                        // Millisecond timestamps are > 10_000_000_000_000 (year 2286)
+                                        let ts_seconds = if ts > 10_000_000_000_000 {
+                                            ts / 1000
+                                        } else {
+                                            ts
+                                        };
 
-                                let timestamp = params.get("timestamp")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or(""); // Empty string if no timestamp provided
+                                        // Use from_timestamp for conversion (returns Option, handles both secs and ms)
+                                        chrono::DateTime::from_timestamp(ts_seconds, 0)
+                                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                            .unwrap_or_else(|| {
+                                                chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
+                                            })
+                                    })
+                                    .unwrap_or_else(|| {
+                                        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
+                                    });
+
+                                // Extract content from message
+                                let content = if let Some(content_array) = message.get("content").and_then(|c| c.as_array()) {
+                                    // Join text blocks
+                                    content_array
+                                        .iter()
+                                        .filter_map(|part| {
+                                            part.get("text")
+                                                .and_then(|t| t.as_str())
+                                                .or_else(|| {
+                                                    part.get("thinking")
+                                                        .and_then(|t| t.as_str())
+                                                })
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join("\n")
+                                } else {
+                                    message.get("content")
+                                        .and_then(|c| c.as_str())
+                                        .unwrap_or("")
+                                        .to_string()
+                                };
 
                                 let ws_event = WSEvent::MessageAdded {
-                                    session_id: id.clone(),
+                                    session_id: ws_id.clone(),
                                     role: role.to_string(),
-                                    content: content.to_string(),
-                                    timestamp: timestamp.to_string(),
+                                    content,
+                                    timestamp,
                                 };
                                 app_state.ws_state.broadcast(ws_event);
                             }
                         }
+                        "agent_start" => {
+                            // Agent started processing
+                            println!("🤖 Agent started for session {}", ws_id);
+                        }
+                        "agent_end" => {
+                            // Agent completed
+                            println!("✅ Agent completed for session {}", ws_id);
+                        }
+                        "notify" => {
+                            // Notification from pi (e.g., tools loaded)
+                            let message = event.extra.get("message")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            println!("📢 Notification: {}", message);
+                        }
+                        "response" => {
+                            // Response to a command
+                            let success = event.extra.get("success")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(true);
+                            if !success {
+                                let error = event.extra.get("error")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("Unknown error");
+                                println!("❌ Command failed: {}", error);
+                            }
+                        }
                         _ => {
-                            println!("Unhandled JSON-RPC method: {}", method);
+                            println!("Unhandled event type: {}", event_type);
                         }
                     }
                 }

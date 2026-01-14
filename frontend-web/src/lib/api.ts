@@ -50,6 +50,18 @@ export const apiClient = {
       } catch {
         // Could not parse error response
       }
+
+      // Special handling for 404 on session messages - session may have been deleted
+      if (response.status === 404 && endpoint.includes("/messages")) {
+        // Extract session ID from endpoint
+        const match = endpoint.match(/\/api\/sessions\/([^/]+)\/messages/);
+        if (match) {
+          const sessionId = match[1];
+          // Dispatch event to clear invalid session
+          window.dispatchEvent(new CustomEvent("session-not-found", { detail: { sessionId } }));
+        }
+      }
+
       throw new Error(errorMessage);
     }
 
