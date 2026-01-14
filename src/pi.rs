@@ -55,7 +55,7 @@ impl PiProcess {
         let id = uuid::Uuid::new_v4().to_string();
 
         // Create broadcast channel for events
-        let (tx, _rx) = broadcast::channel(100);
+        let (tx, _rx) = broadcast::channel(1000);
 
         // Spawn pi process
         let mut process = Command::new("npx")
@@ -251,7 +251,7 @@ impl Default for ProcessManager {
 impl ProcessManager {
     /// Create a new process manager
     pub fn new() -> Self {
-        let (event_tx, _) = broadcast::channel(100);
+        let (event_tx, _) = broadcast::channel(1000);
         ProcessManager {
             processes: HashMap::new(),
             event_tx,
