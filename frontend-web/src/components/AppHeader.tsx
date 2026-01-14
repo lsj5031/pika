@@ -22,12 +22,13 @@ export function AppHeader({
         <Button
           variant="ghost"
           size="icon"
-          className="md:hidden min-w-[44px] min-h-[44px]"
+          className="md:hidden min-w-[44px] min-h-[44px] touch-manipulation"
           onClick={onMenuToggle}
           id="session-list-button"
           data-testid="session-list-button"
+          style={{ touchAction: "manipulation" }}
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-5 w-5 pointer-events-none" />
           <span className="sr-only">Toggle menu</span>
         </Button>
         <h1 className="text-xl font-heading font-bold">Pika</h1>

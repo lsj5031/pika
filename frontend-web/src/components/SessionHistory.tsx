@@ -4,6 +4,7 @@ import { useThinkingStore } from "../store/thinkingStore";
 import { Card } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { ThinkingIndicator } from "./ThinkingIndicator";
+import { DiffViewer } from "./DiffViewer";
 import { cn } from "../lib/utils";
 import type { Message } from "../types";
 
@@ -18,14 +19,31 @@ function formatTimestamp(timestamp: string | null): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function parseDiffFromMessage(content: string) {
+  // Look for code blocks with file paths
+  const fileBlockRegex = /```(\w+)?\n(?:\/\/ (.+?)\n)?([\s\S]*?)```/g;
+  const matches = [...content.matchAll(fileBlockRegex)];
+
+  if (matches.length >= 2) {
+    return {
+      filePath: matches[0][2] || undefined,
+      language: matches[0][1] || "text",
+      oldContent: matches[0][3]?.trim(),
+      newContent: matches[1][3]?.trim(),
+    };
+  }
+  return null;
+}
+
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
+  const diff = !isUser ? parseDiffFromMessage(message.content) : null;
 
   return (
     <div
       className={cn(
-        "flex w-full",
-        isUser ? "justify-end" : "justify-start"
+        "flex w-full flex-col gap-2",
+        isUser ? "items-end" : "items-start"
       )}
     >
       <Card
@@ -52,6 +70,14 @@ function MessageBubble({ message }: { message: Message }) {
           </p>
         )}
       </Card>
+
+      {/* Show diff viewer if code changes detected */}
+      {diff && (
+        <DiffViewer
+          diff={diff}
+          className="max-w-[80%]"
+        />
+      )}
     </div>
   );
 }

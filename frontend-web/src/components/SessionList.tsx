@@ -4,6 +4,8 @@ import { useAppStore } from "../store/appStore";
 import { useStartSession } from "../hooks/useStartSession";
 import { ScrollArea } from "./ui/scroll-area";
 import { NewSessionDialog } from "./NewSessionDialog";
+import { Badge } from "./ui/badge";
+import { Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface SessionListProps {
@@ -16,6 +18,9 @@ export function SessionList({ className }: SessionListProps) {
   const currentSessionId = useAppStore((state) => state.currentSessionId);
   const setCurrentSession = useAppStore((state) => state.setCurrentSession);
   const startSessionMutation = useStartSession();
+  const activeSessionIds = useAppStore((state) => state.activeSessionIds);
+  const thinkingSessionIds = useAppStore((state) => state.thinkingSessionIds);
+  const unreadSessions = useAppStore((state) => state.unreadSessions);
 
   const isLoading = sessionsLoading || projectsLoading;
 
@@ -79,21 +84,45 @@ export function SessionList({ className }: SessionListProps) {
                           )}
                           data-testid={`session-item-${session.id}`}
                         >
-                          {/* Active status indicator */}
-                          {session.is_active && (
-                            <span
-                              className="h-2 w-2 rounded-full bg-green-500"
-                              aria-label="Active session"
-                            />
-                          )}
-                          {!session.is_active && (
-                            <span className="h-2 w-2" aria-hidden="true" />
-                          )}
+                          {/* Status indicator with multiple states */}
+                          <div className="relative">
+                            {/* Active/inactive dot */}
+                            {(activeSessionIds.has(session.id) || session.is_active) && (
+                              <span
+                                className="h-2 w-2 rounded-full bg-green-500"
+                                aria-label="Active session"
+                              />
+                            )}
+                            {/* Thinking spinner overlay */}
+                            {thinkingSessionIds.has(session.id) && (
+                              <span className="absolute -top-1 -right-1">
+                                <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                              </span>
+                            )}
+                            {/* Empty placeholder for spacing */}
+                            {!activeSessionIds.has(session.id) &&
+                             !session.is_active &&
+                             !thinkingSessionIds.has(session.id) && (
+                              <span className="h-2 w-2" aria-hidden="true" />
+                            )}
+                          </div>
 
-                          {/* Session name */}
-                          <span className="flex-1 text-left truncate">
-                            {session.name || "Untitled Session"}
-                          </span>
+                          {/* Session name with unread indicator */}
+                          <div className="flex-1 flex items-center gap-2">
+                            <span className="flex-1 text-left truncate">
+                              {session.name || "Untitled Session"}
+                            </span>
+
+                            {/* Unread badge */}
+                            {unreadSessions.has(session.id) && (
+                              <Badge
+                                variant="default"
+                                className="h-5 px-1.5 text-xs bg-accent text-accent-foreground"
+                              >
+                                •
+                              </Badge>
+                            )}
+                          </div>
                         </button>
                       </li>
                     ))}
