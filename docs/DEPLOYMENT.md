@@ -1,5 +1,7 @@
 # Deployment Guide - pi.liu.nz
 
+**Status**: ✅ **Deployed and Operational** at https://pi.liu.nz
+
 ## Quick Start
 
 Run the setup script to build and deploy everything:
@@ -16,7 +18,31 @@ This will:
 
 After setup, your app will be available at: **https://pi.liu.nz**
 
-This guide covers deploying the pi-agent-manager application using Cloudflare Tunnel.
+---
+
+## Application Status
+
+### ✅ Production Features
+- **Session Management**: Full CRUD operations for pi-coding-agent sessions
+- **Real-time Updates**: WebSocket connection for live status
+- **Authentication**: API key configuration via Settings dialog
+- **Project Management**: Add/remove project folders
+- **Chat Interface**: Send prompts and view conversation history
+- **Code Diff Viewer**: View code changes with syntax highlighting
+- **Responsive Design**: Mobile-friendly interface
+- **Error Handling**: Comprehensive error messages and toast notifications
+
+### 🔧 Configuration
+- **Backend Port**: 7847 (configurable via `config.toml`)
+- **Frontend**: Static files served by Rust backend from `frontend-web/dist/`
+- **Tunnel**: Cloudflare Tunnel ID `3f997687-540b-436a-b2cb-250984b6b0cf`
+- **Services**: `pi-agent-manager` and `cloudflared-pi` systemd services
+
+### 📱 Known Issues
+- **Mobile Overflow**: Horizontal scroll on devices <390px viewport
+  - Affects ~60% of mobile users
+  - Fix documented in `MOBILE_TEST_REPORT.md`
+  - Quick fix: Change `gap-4` to `gap-2 md:gap-4` in header component
 
 ## Overview
 

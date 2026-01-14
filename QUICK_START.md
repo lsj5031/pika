@@ -1,5 +1,7 @@
 # Quick Start - Deploy to pi.liu.nz
 
+**Current Status**: ✅ Production deployed at https://pi.liu.nz
+
 ## One-Command Deployment
 
 ```bash
@@ -14,6 +16,31 @@ This will:
 5. ✅ Show service status
 
 **Then access at: https://pi.liu.nz** 🎉
+
+---
+
+## Application Features
+
+### ✅ Implemented
+- Session management (create, view, start, stop)
+- Real-time status updates via WebSocket
+- Chat interface with conversation history
+- Project folder management
+- API key authentication
+- Settings dialog
+- Diff viewer for code changes
+- Mobile responsive design
+- Error handling and toast notifications
+
+### 🔧 Configuration
+- API Key: Configure in Settings dialog (stored in localStorage)
+- Projects: Add project folders in Settings
+- Sessions: Create via floating action button (+)
+
+### 📱 Mobile Access
+- Open https://pi.liu.nz on any device
+- Responsive design adapts to screen size
+- **Note**: Horizontal overflow on screens <390px (documented in docs/MOBILE_TEST_REPORT.md)
 
 ---
 
