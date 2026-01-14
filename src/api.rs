@@ -227,7 +227,15 @@ pub async fn get_sessions(
 ) -> Result<Json<Vec<SessionResponse>>, ErrorResponse> {
     let config = state.api_state.config.read().await;
     
-    let sessions = scan_sessions(&config);
+    let mut sessions = scan_sessions(&config);
+    
+    // Sort by last_message_time (most recent first), fall back to created_at
+    sessions.sort_by(|a, b| {
+        let time_a = a.last_message_time.as_ref().unwrap_or(&a.created_at);
+        let time_b = b.last_message_time.as_ref().unwrap_or(&b.created_at);
+        time_b.cmp(time_a) // Reverse order for most recent first
+    });
+    
     let session_responses: Vec<SessionResponse> = sessions
         .into_iter()
         .map(|s| {
@@ -511,6 +519,83 @@ pub struct CreateSessionInProjectResponse {
     pub process_id: Option<String>,
 }
 
+/// Request to create a standalone session in any folder
+#[derive(Debug, Deserialize)]
+pub struct CreateStandaloneSessionRequest {
+    /// Path to the folder where the session should be created
+    pub path: String,
+    /// Optional session name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// Response when creating a standalone session
+#[derive(Debug, Serialize)]
+pub struct CreateStandaloneSessionResponse {
+    /// The newly created session ID
+    pub session_id: String,
+    /// The session name
+    pub name: String,
+    /// The path where the session was created
+    pub path: PathBuf,
+    /// The session creation timestamp
+    pub created_at: String,
+}
+
+/// POST /api/sessions/create - create a new session in any folder
+pub async fn create_standalone_session(
+    State(state): State<AppState>,
+    Json(request): Json<CreateStandaloneSessionRequest>,
+) -> Result<Json<CreateStandaloneSessionResponse>, ErrorResponse> {
+    use crate::sessions::{create_session, CreateSessionRequest};
+    
+    // Expand ~ to home directory
+    let expanded_path = if request.path.starts_with("~/") {
+        if let Some(home) = dirs::home_dir() {
+            home.join(&request.path[2..])
+        } else {
+            PathBuf::from(&request.path)
+        }
+    } else {
+        PathBuf::from(&request.path)
+    };
+    
+    // Convert to absolute path
+    let absolute_path = if expanded_path.is_absolute() {
+        expanded_path
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(&expanded_path)
+    };
+    
+    // Validate path exists
+    if !absolute_path.exists() {
+        return Err(ErrorResponse {
+            error: "INVALID_PATH".to_string(),
+            message: format!("Path does not exist: {}", absolute_path.display()),
+        });
+    }
+    
+    // Create the session
+    let create_request = CreateSessionRequest {
+        name: request.name,
+    };
+    
+    let result = create_session(&absolute_path, create_request)
+        .map_err(|e| ErrorResponse {
+            error: "SESSION_CREATE_FAILED".to_string(),
+            message: format!("Failed to create session: {}", e),
+        })?;
+    
+    Ok(Json(CreateStandaloneSessionResponse {
+        session_id: result.session_id,
+        name: result.name,
+        path: absolute_path,
+        created_at: result.created_at,
+    }))
+}
+
 /// POST /api/projects/:id/sessions - create a new session in a project
 pub async fn create_session_in_project(
     State(state): State<AppState>,
@@ -581,6 +666,7 @@ pub fn create_api_router() -> Router<AppState> {
         .route("/api/projects/{id}/sessions", get(get_project_sessions))
         .route("/api/projects/{id}/sessions", post(create_session_in_project))
         .route("/api/sessions", get(get_sessions))
+        .route("/api/sessions/create", post(create_standalone_session))
         .route("/api/sessions/{id}", get(get_session))
         .route("/api/sessions/{id}/messages", get(get_session_messages))
         .route("/api/sessions/{id}/prompt", post(send_prompt_to_session))

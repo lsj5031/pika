@@ -19,6 +19,9 @@ pub struct SessionInfo {
     pub created_at: String,
     /// Whether the session is currently active
     pub is_active: bool,
+    /// Timestamp of the most recent message (if any)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_message_time: Option<String>,
 }
 
 /// Message in a session
@@ -102,6 +105,37 @@ fn encode_project_path(path: &Path) -> String {
     format!("--{}--", normalized)
 }
 
+/// Get the timestamp of the most recent message in a session file
+fn get_last_message_timestamp(session_file: &Path) -> Result<String, SessionError> {
+    let file = fs::File::open(session_file)
+        .map_err(|e| SessionError::IoError {
+            path: session_file.to_path_buf(),
+            source: e,
+        })?;
+
+    let reader = BufReader::new(file);
+    let mut last_timestamp: Option<String> = None;
+
+    for line in reader.lines() {
+        let line = line.map_err(|e| SessionError::IoError {
+            path: session_file.to_path_buf(),
+            source: e,
+        })?;
+
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+            // Try to extract timestamp from the message
+            if let Some(ts) = json.get("timestamp").and_then(|t| t.as_str()) {
+                last_timestamp = Some(ts.to_string());
+            }
+        }
+    }
+
+    last_timestamp.ok_or_else(|| SessionError::IoError {
+        path: session_file.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::NotFound, "No messages found"),
+    })
+}
+
 /// Scan a single project directory for sessions
 fn scan_project_sessions(project_path: &Path, sessions_dir: &Path) -> Result<Vec<SessionInfo>, SessionError> {
     let mut sessions = Vec::new();
@@ -172,12 +206,16 @@ fn scan_project_sessions(project_path: &Path, sessions_dir: &Path) -> Result<Vec
             })
             .unwrap_or_else(|| timestamp.clone());
 
+        // Try to get the last message timestamp by parsing the session file
+        let last_message_time = get_last_message_timestamp(&path).unwrap_or_else(|_| modified.clone());
+
         sessions.push(SessionInfo {
             id: session_id,
             project_path: project_path.to_path_buf(),
             name: file_name.to_string(),
             created_at: modified,
             is_active: false,
+            last_message_time: Some(last_message_time),
         });
     }
 
