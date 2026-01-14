@@ -15,6 +15,7 @@ mod sessions;
 mod websocket;
 mod pi;
 mod api;
+mod static_files;
 use config::ProjectConfig;
 use websocket::{WSState, WSEvent};
 use api::ApiState;
@@ -93,9 +94,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health_check))
         .route("/ws", get(websocket::ws_handler))
         .merge(api::create_api_router())
+        .fallback(static_files::serve_static_files)
         .with_state(app_state.clone())
         .layer(
-            // CORS layer for local development
+            // CORS layer for local development and production
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(Any)

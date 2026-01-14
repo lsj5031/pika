@@ -257,8 +257,8 @@
         "cargo check passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": "Backend integration - done after frontend is functional"
+      "passes": true,
+      "notes": "Created src/static_files.rs with serve_static_files function that serves files from frontend-web/dist/. Added fallback route to Router in main.rs for SPA routing. Static files served with proper MIME types via mime_guess crate. CORS layer updated with allow_origin(Any) for both development and production. Added fs feature to tower-http dependency. Added mime_guess dependency. Cargo check passes with only pre-existing warnings."
     },
     {
       "id": "US-017",

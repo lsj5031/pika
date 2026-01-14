@@ -366,3 +366,24 @@ Started: 2026-01-14
 - Error handling in React Query mutations should be in the mutation hooks, not in the components that call them - this follows DRY principles and ensures consistent error handling
 - Debouncing WebSocket error toasts is important because the reconnection logic can trigger multiple close events in quick succession
 - Sonner's toast function is imported directly from the "sonner" package - no need for wrapper components for basic usage
+
+## [2026-01-14] - US-012: Add static file serving to backend
+
+**Implementation:**
+- Created src/static_files.rs with serve_static_files function that serves files from frontend-web/dist/
+- Added static_files module to src/main.rs
+- Updated Cargo.toml to add fs feature to tower-http and added mime_guess dependency
+- Updated Router in main.rs to include .fallback(static_files::serve_static_files) for SPA routing
+- CORS layer already configured with allow_origin(Any) for both development and production
+- Static files are served with proper MIME types detected by mime_guess crate
+- SPA routing works by falling back to index.html for non-file paths (except /api and /ws)
+- Verified cargo check passes with only pre-existing warnings
+
+**Learnings:**
+- Axum's Router.fallback() accepts a handler function that runs when no other route matches
+- For SPA routing, the fallback handler needs to serve index.html for all client-side routes
+- The serve_static_files function checks if the requested file exists before serving it
+- API routes and WebSocket routes should return 404 in the fallback handler since they're handled by other routes
+- mime_guess crate provides first_or_octet_stream() for sensible MIME type defaults
+- Static files should have cache-control headers; index.html should use "no-cache" to prevent stale builds
+- The fs feature on tower-http is needed for ServeDir (though we ended up implementing custom serving)
