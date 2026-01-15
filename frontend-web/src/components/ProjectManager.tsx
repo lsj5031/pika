@@ -61,7 +61,7 @@ export function ProjectManager({ trigger }: ProjectManagerProps) {
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto mx-4">
         <DialogHeader>
           <DialogTitle>Manage Projects</DialogTitle>
           <DialogDescription>
@@ -134,31 +134,35 @@ export function ProjectManager({ trigger }: ProjectManagerProps) {
                   {projects.map((project) => (
                     <div
                       key={project.id}
-                      className="flex items-center gap-2 p-2 rounded border bg-card hover:bg-accent/50 transition-colors group"
+                      className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded border bg-card hover:bg-accent/50 transition-colors group"
                     >
-                      <FolderOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">
-                          {project.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground truncate font-mono">
-                          {project.path}
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <FolderOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {project.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate font-mono">
+                            {project.path}
+                          </div>
                         </div>
                       </div>
-                      <Badge variant="secondary" className="flex-shrink-0">
-                        {project.session_count} sessions
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          handleRemoveProject(project.id, project.name)
-                        }
-                        disabled={removeProjectMutation.isPending}
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-2 justify-between sm:justify-end pl-6 sm:pl-0">
+                        <Badge variant="secondary" className="flex-shrink-0">
+                          {project.session_count} sessions
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            handleRemoveProject(project.id, project.name)
+                          }
+                          disabled={removeProjectMutation.isPending}
+                          className="flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
