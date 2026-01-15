@@ -205,7 +205,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                 />
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="flex-row gap-2">
                 <Button
                   variant="outline"
                   onClick={() => setOpen(false)}
@@ -276,7 +276,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                 </Button>
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="flex-row gap-2">
                 <Button
                   variant="outline"
                   onClick={() => setOpen(false)}
