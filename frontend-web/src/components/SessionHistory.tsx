@@ -148,8 +148,28 @@ function MessageBubble({ message }: { message: Message }) {
   const hasToolUse = message.content.includes("tool_use") || /\bTool (Call|Result|call)\b/.test(message.content);
   const colors = getMessageColors(message.role, hasToolUse);
   const showThinking = thinking && thinking.length > 0;
-  const { truncated: truncatedResponse, isTruncated } = truncateContent(response);
+  const { truncated: truncatedResponse, isTruncated: textIsTruncated } = truncateContent(response);
   const displayResponse = isExpanded ? response : truncatedResponse;
+  
+  // Check if JSON content would be truncated (for tool use messages)
+  const jsonIsTruncated = (() => {
+    if (!hasToolUse) return false;
+    try {
+      const firstBrace = response.indexOf("{");
+      const firstBracket = response.indexOf("[");
+      const indices = [firstBrace, firstBracket].filter(i => i !== -1);
+      const firstJsonIdx = indices.length > 0 ? Math.min(...indices) : -1;
+      if (firstJsonIdx === -1) return false;
+      let jsonPart = response.slice(firstJsonIdx).trim().replace(/\)\s*$/, "");
+      const parsed = JSON.parse(jsonPart);
+      const formatted = JSON.stringify(parsed, null, 2);
+      return formatted.split("\n").length > COLLAPSE_THRESHOLD;
+    } catch {
+      return false;
+    }
+  })();
+  
+  const isTruncated = textIsTruncated || jsonIsTruncated;
 
   return (
     <div
@@ -325,17 +345,23 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   const prevSessionIdRef = useRef<string | null>(null);
   const initialScrollDoneRef = useRef<boolean>(false);
 
+  // Track previous message count to detect new messages
+  const prevMessageCountRef = useRef<number>(0);
+
   // Auto-scroll to bottom when new messages arrive or thinking updates
   useEffect(() => {
     // If session ID changed, reset scroll flag
     if (sessionId !== prevSessionIdRef.current) {
       prevSessionIdRef.current = sessionId;
       initialScrollDoneRef.current = false;
+      prevMessageCountRef.current = 0;
     }
 
     if (!messages) return;
 
-    const shouldScroll = !initialScrollDoneRef.current || thinkingState.isThinking;
+    const messageCount = messages.length;
+    const hasNewMessages = messageCount > prevMessageCountRef.current;
+    const shouldScroll = !initialScrollDoneRef.current || thinkingState.isThinking || hasNewMessages;
 
     if (shouldScroll) {
       // Use requestAnimationFrame to ensure DOM is updated
@@ -350,6 +376,8 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
 
       requestAnimationFrame(scroll);
     }
+
+    prevMessageCountRef.current = messageCount;
   }, [messages, thinkingState, sessionId]);
 
   if (!sessionId) {
