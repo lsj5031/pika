@@ -69,8 +69,7 @@ export function ChatInput({
               : "Type a message..."
           }
           disabled={!sessionId || disabled}
-          // Removed: !isSessionActive check
-          className="min-h-[40px] max-h-[200px] resize-none text-base py-2"
+          className="min-h-[44px] max-h-[200px] resize-none text-base py-2.5"
           rows={1}
           id="chat-input"
           data-testid="chat-input"
@@ -80,7 +79,7 @@ export function ChatInput({
           onClick={handleSend}
           disabled={isDisabled}
           size="icon"
-          className="h-[40px] w-[40px] shrink-0"
+          className="h-[44px] w-[44px] shrink-0"
           id="send-button"
           data-testid="send-button"
         >
