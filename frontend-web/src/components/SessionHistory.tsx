@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSessionHistory } from "../hooks/useSessionHistory";
 import { useThinkingStore } from "../store/thinkingStore";
 import { Card } from "./ui/card";
@@ -7,7 +7,7 @@ import { ThinkingIndicator } from "./ThinkingIndicator";
 import { DiffViewer } from "./DiffViewer";
 import { cn } from "../lib/utils";
 import type { Message } from "../types";
-import { Bot, User, Wrench } from "lucide-react";
+import { Bot, User, Wrench, ChevronDown, ChevronUp } from "lucide-react";
 
 interface SessionHistoryProps {
   sessionId: string | null;
@@ -21,9 +21,23 @@ function formatTimestamp(timestamp: string | null): string {
 }
 
 function parseDiffFromMessage(content: string) {
+  // Strip "Tool Result:" or "Tool Result (Error):" prefix
+  let cleanContent = content.replace(/^Tool Result(\s+\(Error\))?:\s*/, "");
+
+  // Strip "Tool Call: name(...)" wrapper to get inner JSON
+  const toolCallMatch = cleanContent.match(/^Tool Call:\s*\w+\(([\s\S]*)\)\s*$/);
+  if (toolCallMatch) {
+    cleanContent = toolCallMatch[1];
+  } else {
+    // Fallback for lowercase "Tool call:" prefix
+    cleanContent = cleanContent.replace(/^Tool call:\s*/, "");
+  }
+
+  cleanContent = cleanContent.trim();
+
   // Pattern 1: Markdown code blocks
   const fileBlockRegex = /```(\w+)?\n(?:\/\/ (.+?)\n)?([\s\S]*?)```/g;
-  const matches = [...content.matchAll(fileBlockRegex)];
+  const matches = [...cleanContent.matchAll(fileBlockRegex)];
 
   if (matches.length >= 2) {
     return {
@@ -36,11 +50,13 @@ function parseDiffFromMessage(content: string) {
 
   // Pattern 2: Tool call JSON (e.g. from replace_file_content)
   try {
-    const trimmed = content.trim();
-    if (trimmed.startsWith("{")) {
-      const data = JSON.parse(trimmed);
+    if (cleanContent.startsWith("{") || cleanContent.startsWith("[")) {
+      const data = JSON.parse(cleanContent);
+      // If it's an array, take the first item if it looks like an object
+      const root = Array.isArray(data) ? data[0] : data;
+
       // Check for replacement_content or code_content patterns
-      const args = data.function?.arguments ? JSON.parse(data.function.arguments) : data.arguments || data;
+      const args = root.function?.arguments ? JSON.parse(root.function.arguments) : root.arguments || root;
 
       if (args.ReplacementContent && args.TargetContent) {
         return {
@@ -64,6 +80,23 @@ function parseDiffFromMessage(content: string) {
   }
 
   return null;
+}
+
+const COLLAPSE_THRESHOLD = 12; // Lines before we collapse
+const PREVIEW_LINES = 3; // Lines to show at start and end when collapsed
+
+function truncateContent(content: string): { truncated: string; isTruncated: boolean } {
+  const lines = content.split("\n");
+  if (lines.length <= COLLAPSE_THRESHOLD) {
+    return { truncated: content, isTruncated: false };
+  }
+  const firstLines = lines.slice(0, PREVIEW_LINES).join("\n");
+  const lastLines = lines.slice(-PREVIEW_LINES).join("\n");
+  const hiddenCount = lines.length - PREVIEW_LINES * 2;
+  return {
+    truncated: `${firstLines}\n\n... ${hiddenCount} more lines ...\n\n${lastLines}`,
+    isTruncated: true,
+  };
 }
 
 function parseThinkingBlocks(content: string): { thinking: string; response: string } {
@@ -108,12 +141,15 @@ function getMessageColors(role: string, hasToolUse: boolean) {
 }
 
 function MessageBubble({ message }: { message: Message }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const isUser = message.role === "user";
   const diff = !isUser ? parseDiffFromMessage(message.content) : null;
   const { thinking, response } = !isUser ? parseThinkingBlocks(message.content) : { thinking: "", response: message.content };
-  const hasToolUse = message.content.includes("tool_use") || message.content.includes("Tool Call");
+  const hasToolUse = message.content.includes("tool_use") || /\bTool (Call|Result|call)\b/.test(message.content);
   const colors = getMessageColors(message.role, hasToolUse);
   const showThinking = thinking && thinking.length > 0;
+  const { truncated: truncatedResponse, isTruncated } = truncateContent(response);
+  const displayResponse = isExpanded ? response : truncatedResponse;
 
   return (
     <div
@@ -157,7 +193,82 @@ function MessageBubble({ message }: { message: Message }) {
             "text-sm whitespace-pre-wrap break-all md:break-words leading-relaxed",
             colors.text
           )}>
-            {response}
+            {(/^Tool (Result|Call|call)/i.test(displayResponse)) && (displayResponse.includes("{") || displayResponse.includes("[")) ? (
+              <div className="space-y-2">
+                <span className="font-bold opacity-70 block mb-1">
+                  {displayResponse.split(":")[0]}:
+                </span>
+                <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-[10px] font-mono whitespace-pre">
+                  {(() => {
+                    // Find first JSON delimiter (either { or [)
+                    const firstBrace = displayResponse.indexOf("{");
+                    const firstBracket = displayResponse.indexOf("[");
+                    const indices = [firstBrace, firstBracket].filter(i => i !== -1);
+                    const firstJsonIdx = indices.length > 0 ? Math.min(...indices) : -1;
+
+                    if (firstJsonIdx === -1) return displayResponse;
+
+                    let jsonPart = displayResponse.slice(firstJsonIdx).trim();
+                    // Strip trailing ) from "Tool Call: name({...})" format
+                    jsonPart = jsonPart.replace(/\)\s*$/, "");
+
+                    try {
+                      const parsed = JSON.parse(jsonPart);
+                      const formatted = JSON.stringify(parsed, null, 2);
+                      // Apply truncation to formatted JSON if collapsed
+                      if (!isExpanded) {
+                        const { truncated, isTruncated: jsonTruncated } = truncateContent(formatted);
+                        return jsonTruncated ? truncated : formatted;
+                      }
+                      return formatted;
+                    } catch {
+                      return jsonPart;
+                    }
+                  })()}
+                </pre>
+              </div>
+            ) : displayResponse.trim().startsWith("{") || displayResponse.trim().startsWith("[") ? (
+              <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-[10px] font-mono whitespace-pre">
+                {(() => {
+                  try {
+                    const parsed = JSON.parse(displayResponse);
+                    const formatted = JSON.stringify(parsed, null, 2);
+                    if (!isExpanded) {
+                      const { truncated, isTruncated: jsonTruncated } = truncateContent(formatted);
+                      return jsonTruncated ? truncated : formatted;
+                    }
+                    return formatted;
+                  } catch {
+                    return displayResponse;
+                  }
+                })()}
+              </pre>
+            ) : (
+              displayResponse
+            )}
+
+            {/* Expand/Collapse button */}
+            {isTruncated && (
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className={cn(
+                  "mt-2 flex items-center gap-1 text-xs font-medium opacity-70 hover:opacity-100 transition-opacity",
+                  colors.text
+                )}
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp className="h-3 w-3" />
+                    Show less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-3 w-3" />
+                    Show more
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
 
@@ -211,11 +322,35 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   const thinkingState = useThinkingStore((state) =>
     sessionId ? state.thinkingBySession[sessionId] ?? EMPTY_THINKING_STATE : EMPTY_THINKING_STATE
   );
+  const prevSessionIdRef = useRef<string | null>(null);
+  const initialScrollDoneRef = useRef<boolean>(false);
 
   // Auto-scroll to bottom when new messages arrive or thinking updates
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, thinkingState]);
+    // If session ID changed, reset scroll flag
+    if (sessionId !== prevSessionIdRef.current) {
+      prevSessionIdRef.current = sessionId;
+      initialScrollDoneRef.current = false;
+    }
+
+    if (!messages) return;
+
+    const shouldScroll = !initialScrollDoneRef.current || thinkingState.isThinking;
+
+    if (shouldScroll) {
+      // Use requestAnimationFrame to ensure DOM is updated
+      const scroll = () => {
+        messagesEndRef.current?.scrollIntoView({
+          behavior: initialScrollDoneRef.current ? "smooth" : "auto"
+        });
+        if (!initialScrollDoneRef.current && messages.length > 0) {
+          initialScrollDoneRef.current = true;
+        }
+      };
+
+      requestAnimationFrame(scroll);
+    }
+  }, [messages, thinkingState, sessionId]);
 
   if (!sessionId) {
     return (

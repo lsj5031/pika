@@ -56,8 +56,8 @@ export function ChatInput({
   };
 
   return (
-    <div className={cn("border-t bg-background p-4", className)}>
-      <div className="flex items-end gap-2 max-w-4xl mx-auto">
+    <div className={cn("border-t bg-background p-3", className)}>
+      <div className="flex items-center gap-2 max-w-4xl mx-auto">
         <Textarea
           ref={textareaRef}
           value={content}
@@ -66,11 +66,11 @@ export function ChatInput({
           placeholder={
             !sessionId
               ? "Select a session"
-              : "Type a message... (Shift+Enter for new line)"
+              : "Type a message..."
           }
           disabled={!sessionId || disabled}
           // Removed: !isSessionActive check
-          className="min-h-[44px] max-h-[200px] resize-none"
+          className="min-h-[40px] max-h-[200px] resize-none text-base py-2"
           rows={1}
           id="chat-input"
           data-testid="chat-input"
@@ -80,7 +80,7 @@ export function ChatInput({
           onClick={handleSend}
           disabled={isDisabled}
           size="icon"
-          className="h-[44px] w-[44px] shrink-0"
+          className="h-[40px] w-[40px] shrink-0"
           id="send-button"
           data-testid="send-button"
         >
