@@ -4,15 +4,15 @@ import { useProjects } from "../hooks/useProjects";
 import { useAppStore } from "../store/appStore";
 import { ScrollArea } from "./ui/scroll-area";
 import { NewSessionDialog } from "./NewSessionDialog";
-import { ProjectManager } from "./ProjectManager";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Loader2, ChevronDown, ChevronRight, MessageSquare, Calendar, Settings, Plus } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, MessageSquare, Calendar, Plus } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { Session } from "../types";
 
 interface SessionListProps {
   className?: string;
+  onSelect?: (sessionId: string) => void;
 }
 
 const DEFAULT_SESSION_LIMIT = 5;
@@ -36,7 +36,7 @@ const formatDate = (dateString: string) => {
   }
 };
 
-export function SessionList({ className }: SessionListProps) {
+export function SessionList({ className, onSelect }: SessionListProps) {
   const { data: sessions, isLoading: sessionsLoading } = useSessions();
   const { data: projects, isLoading: projectsLoading } = useProjects();
   const currentSessionId = useAppStore((state) => state.currentSessionId);
@@ -84,6 +84,7 @@ export function SessionList({ className }: SessionListProps) {
   const handleSessionSelect = (sessionId: string) => {
     // Just switch to the session, don't stop anything
     setCurrentSession(sessionId);
+    onSelect?.(sessionId);
   };
 
   const getSessionDisplay = (session: Session) => {
@@ -110,16 +111,6 @@ export function SessionList({ className }: SessionListProps) {
       <div className="p-4 border-b-2 flex items-center justify-between gap-2 bg-card text-card-foreground shadow-sm z-10 pl-16 pr-4 md:pl-4" data-testid="session-list-header">
         <h2 className="text-2xl font-heading font-bold tracking-tight">Sessions</h2>
         <div className="flex items-center gap-2">
-          <ProjectManager trigger={
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-9 w-9 rounded-wobblyMd border-2 shadow-hard-sm bg-white hover:bg-muted transition-all"
-              title="Manage Projects"
-            >
-              <Settings className="h-5 w-5" />
-            </Button>
-          } />
           <NewSessionDialog trigger={
             <Button
               variant="outline"

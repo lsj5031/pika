@@ -338,9 +338,25 @@ pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec
                 .to_string();
 
             // Get content from message.content array
-            // Handle both text content and tool call results
+            // Handle text content, thinking blocks, and tool call results
             let content = if let Some(content_array) = message_obj.get("content").and_then(|c| c.as_array()) {
-                // Try to get text parts first
+                // Extract thinking blocks first
+                let thinking_parts: Vec<String> = content_array
+                    .iter()
+                    .filter_map(|part| {
+                        // Check for type: "thinking" with thinking field
+                        if part.get("type").and_then(|t| t.as_str()) == Some("thinking") {
+                            part.get("thinking")
+                                .and_then(|t| t.as_str())
+                                .filter(|s| !s.is_empty())
+                                .map(|s| format!("<thinking>{}</thinking>", s))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                // Try to get text parts
                 let text_parts: Vec<String> = content_array
                     .iter()
                     .filter_map(|part| {
@@ -350,8 +366,12 @@ pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec
                     })
                     .collect();
 
-                if !text_parts.is_empty() {
-                    text_parts.join("\n")
+                // Combine thinking and text parts
+                let mut all_parts = thinking_parts;
+                all_parts.extend(text_parts);
+
+                if !all_parts.is_empty() {
+                    all_parts.join("\n")
                 } else {
                     // Try to extract tool call information
                     let tool_parts: Vec<String> = content_array
