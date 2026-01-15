@@ -120,7 +120,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-full max-w-[calc(100vw-2rem)] sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Create New Session</DialogTitle>
           <DialogDescription>
@@ -128,26 +128,26 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-2 sm:py-4">
           {/* Toggle between project and custom path */}
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <Button
               type="button"
               variant={!useCustomPath ? "default" : "outline"}
               onClick={() => setUseCustomPath(false)}
-              className="flex-1"
+              className="text-sm sm:text-base px-2 sm:px-4"
             >
-              <FolderOpen className="mr-2 h-4 w-4" />
-              From Project
+              <FolderOpen className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+              <span className="truncate">From Project</span>
             </Button>
             <Button
               type="button"
               variant={useCustomPath ? "default" : "outline"}
               onClick={() => setUseCustomPath(true)}
-              className="flex-1"
+              className="text-sm sm:text-base px-2 sm:px-4"
             >
-              <Home className="mr-2 h-4 w-4" />
-              Any Folder
+              <Home className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
+              <span className="truncate">Any Folder</span>
             </Button>
           </div>
 
@@ -194,7 +194,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                 <Label htmlFor="session-name-project" className="font-heading font-bold text-base">Session Name (Optional)</Label>
                 <Input
                   id="session-name-project"
-                  placeholder="e.g., Debug session, Feature discussion"
+                  placeholder="e.g., Debugging, Feature work"
                   value={sessionName}
                   onChange={(e) => setSessionName(e.target.value)}
                   onKeyDown={(e) => {
@@ -205,11 +205,12 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                 />
               </div>
 
-              <DialogFooter className="flex-row gap-2">
+              <DialogFooter className="flex-row justify-start gap-2 pt-2">
                 <Button
                   variant="outline"
                   onClick={() => setOpen(false)}
                   disabled={createSessionMutation.isPending}
+                  className="text-sm sm:text-base"
                 >
                   Cancel
                 </Button>
@@ -218,7 +219,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                   disabled={isProjectCreateDisabled}
                   id="create-session-button"
                   data-testid="create-session-button"
-                  className="min-h-[44px]"
+                  className="min-h-[44px] text-sm sm:text-base"
                 >
                   {createSessionMutation.isPending ? "Creating..." : "Create"}
                 </Button>
@@ -231,7 +232,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                 <Label htmlFor="custom-path" className="font-heading font-bold text-base">Folder Path</Label>
                 <Input
                   id="custom-path"
-                  placeholder="e.g., ~/code/my-project or /absolute/path/to/project"
+                  placeholder="e.g., ~/code/my-project"
                   value={customPath}
                   onChange={(e) => setCustomPath(e.target.value)}
                   onKeyDown={(e) => {
@@ -251,7 +252,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                 <Label htmlFor="session-name-custom" className="font-heading font-bold text-base">Session Name (Optional)</Label>
                 <Input
                   id="session-name-custom"
-                  placeholder="e.g., Quick chat, Code review"
+                  placeholder="e.g., Quick chat"
                   value={sessionName}
                   onChange={(e) => setSessionName(e.target.value)}
                   onKeyDown={(e) => {
@@ -276,11 +277,12 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                 </Button>
               </div>
 
-              <DialogFooter className="flex-row gap-2">
+              <DialogFooter className="flex-row justify-start gap-2 pt-2">
                 <Button
                   variant="outline"
                   onClick={() => setOpen(false)}
                   disabled={createStandaloneMutation.isPending}
+                  className="text-sm sm:text-base"
                 >
                   Cancel
                 </Button>
@@ -289,7 +291,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                   disabled={isCustomCreateDisabled}
                   id="create-custom-session-button"
                   data-testid="create-custom-session-button"
-                  className="min-h-[44px]"
+                  className="min-h-[44px] text-sm sm:text-base"
                 >
                   {createStandaloneMutation.isPending ? "Creating..." : "Create"}
                 </Button>
