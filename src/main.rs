@@ -244,20 +244,8 @@ async fn event_bridge_task(app_state: AppState) {
             ProcessManagerEvent::ProcessSpawned { id, project_path } => {
                 println!("🚀 Process spawned: {} in {}", id, project_path.display());
 
-                // Look up the session ID for this process
-                let session_id = {
-                    let pm = app_state.process_manager.lock().await;
-                    pm.get_session_id_for_process(&id)
-                };
-
-                // Use session_id if found, otherwise fall back to process_id
-                let ws_id = session_id.unwrap_or_else(|| id.clone());
-
-                let ws_event = WSEvent::SessionStarted {
-                    session_id: ws_id,
-                    project_path: project_path.to_string_lossy().to_string(),
-                };
-                app_state.ws_state.broadcast(ws_event);
+                // Don't mark session as active yet - wait for agent_start event
+                // The process being spawned doesn't mean the agent is actively working
             }
             ProcessManagerEvent::ProcessKilled { id } => {
                 println!("🛑 Process killed: {}", id);
@@ -354,21 +342,68 @@ async fn event_bridge_task(app_state: AppState) {
                                         chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
                                     });
 
-                                // Extract content from message
+                                // Extract content from message (matching sessions.rs format)
                                 let content = if let Some(content_array) = message.get("content").and_then(|c| c.as_array()) {
-                                    // Join text blocks
-                                    content_array
+                                    // Extract thinking blocks first
+                                    let thinking_parts: Vec<String> = content_array
+                                        .iter()
+                                        .filter_map(|part| {
+                                            if part.get("type").and_then(|t| t.as_str()) == Some("thinking") {
+                                                part.get("thinking")
+                                                    .and_then(|t| t.as_str())
+                                                    .filter(|s| !s.is_empty())
+                                                    .map(|s| format!("<thinking>{}</thinking>", s))
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect();
+
+                                    // Extract text parts
+                                    let text_parts: Vec<String> = content_array
                                         .iter()
                                         .filter_map(|part| {
                                             part.get("text")
                                                 .and_then(|t| t.as_str())
-                                                .or_else(|| {
-                                                    part.get("thinking")
-                                                        .and_then(|t| t.as_str())
-                                                })
+                                                .map(|s| s.to_string())
                                         })
-                                        .collect::<Vec<_>>()
-                                        .join("\n")
+                                        .collect();
+
+                                    // Combine thinking and text
+                                    let mut all_parts = thinking_parts;
+                                    all_parts.extend(text_parts);
+
+                                    if !all_parts.is_empty() {
+                                        all_parts.join("\n")
+                                    } else {
+                                        // Try tool_use / tool_result patterns
+                                        let tool_parts: Vec<String> = content_array
+                                            .iter()
+                                            .filter_map(|part| {
+                                                if let Some(tool_use) = part.get("tool_use").and_then(|t| t.as_object()) {
+                                                    let name = tool_use.get("name").and_then(|n| n.as_str()).unwrap_or("unknown_tool");
+                                                    let input = tool_use.get("input")
+                                                        .map(|i| if i.is_string() { i.as_str().unwrap_or("").to_string() } else { serde_json::to_string(i).unwrap_or_default() })
+                                                        .unwrap_or_default();
+                                                    Some(format!("Tool Call: {}({})", name, input))
+                                                } else if let Some(tool_result) = part.get("tool_result").and_then(|t| t.as_object()) {
+                                                    let is_error = tool_result.get("is_error").and_then(|e| e.as_bool()).unwrap_or(false);
+                                                    let content = tool_result.get("content")
+                                                        .map(|c| if c.is_string() { c.as_str().unwrap_or("").to_string() } else { serde_json::to_string(c).unwrap_or_default() })
+                                                        .unwrap_or_default();
+                                                    Some(format!("Tool Result{}: {}", if is_error { " (Error)" } else { "" }, content))
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .collect();
+
+                                        if !tool_parts.is_empty() {
+                                            tool_parts.join("\n")
+                                        } else {
+                                            format!("Tool call: {}", serde_json::to_string(content_array).unwrap_or_default())
+                                        }
+                                    }
                                 } else {
                                     message.get("content")
                                         .and_then(|c| c.as_str())
@@ -386,12 +421,21 @@ async fn event_bridge_task(app_state: AppState) {
                             }
                         }
                         "agent_start" => {
-                            // Agent started processing
+                            // Agent started processing - mark session as active
                             println!("🤖 Agent started for session {}", ws_id);
+                            let ws_event = WSEvent::SessionStarted {
+                                session_id: ws_id.clone(),
+                                project_path: "".to_string(), // Not used for this purpose
+                            };
+                            app_state.ws_state.broadcast(ws_event);
                         }
                         "agent_end" => {
-                            // Agent completed
+                            // Agent completed - mark session as inactive
                             println!("✅ Agent completed for session {}", ws_id);
+                            let ws_event = WSEvent::SessionStopped {
+                                session_id: ws_id.clone(),
+                            };
+                            app_state.ws_state.broadcast(ws_event);
                         }
                         "notify" => {
                             // Notification from pi (e.g., tools loaded)

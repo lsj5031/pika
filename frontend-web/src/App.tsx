@@ -117,9 +117,17 @@ function App() {
           // Clear thinking state when message is added
           useAppStore.getState().setThinkingSession(event.data.session_id, false);
           clearThinking(event.data.session_id);
-          queryClient.invalidateQueries({
-            queryKey: ["sessions", event.data.session_id, "messages"],
-          });
+          
+          // Append message directly to cache for real-time updates
+          const newMessage: Message = {
+            role: event.data.role as "user" | "assistant",
+            content: event.data.content,
+            timestamp: event.data.timestamp,
+          };
+          queryClient.setQueryData<Message[]>(
+            ["sessions", event.data.session_id, "messages"],
+            (old) => old ? [...old, newMessage] : [newMessage]
+          );
           break;
         }
       }
@@ -224,7 +232,7 @@ function App() {
                 WebkitOverflowScrolling: "touch",
               }}
             >
-              <SessionList />
+              <SessionList onSelect={() => setMobileDrawerOpen(false)} />
             </SheetContent>
           </Sheet>
 
