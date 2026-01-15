@@ -1,5 +1,6 @@
-import { useCallback, useState, useRef, useEffect } from "react";
-import { SessionList, SessionHistory, ChatInput, AppHeader, AuthPrompt } from "./components";
+import { useCallback, useState, useRef, useEffect, lazy, Suspense } from "react";
+import { ChatInput, AppHeader, AuthPrompt } from "./components";
+import { Loader2 } from "lucide-react";
 import { useAppStore } from "./store/appStore";
 import { useThinkingStore } from "./store/thinkingStore";
 import { useSessions } from "./hooks/useSessions";
@@ -12,6 +13,10 @@ import { toast } from "sonner";
 import { hasCredentials } from "./lib/auth";
 import { AUTH_ERROR_EVENT } from "./lib/api";
 import type { WSEvent, Message } from "./types";
+
+// Lazy load heavy components
+const SessionList = lazy(() => import("./components/SessionList").then(module => ({ default: module.SessionList })));
+const SessionHistory = lazy(() => import("./components/SessionHistory").then(module => ({ default: module.SessionHistory })));
 
 function App() {
   const currentSessionId = useAppStore((state) => state.currentSessionId);
@@ -117,7 +122,7 @@ function App() {
           // Clear thinking state when message is added
           useAppStore.getState().setThinkingSession(event.data.session_id, false);
           clearThinking(event.data.session_id);
-          
+
           // Append message directly to cache for real-time updates
           const newMessage: Message = {
             role: event.data.role as "user" | "assistant",
@@ -218,7 +223,9 @@ function App() {
         <div className="flex flex-1 overflow-hidden">
           {/* Desktop Sidebar */}
           <aside className="hidden w-64 border-r-2 border-dashed border-primary bg-background md:block">
-            <SessionList />
+            <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+              <SessionList />
+            </Suspense>
           </aside>
 
           {/* Mobile Drawer Sidebar */}
@@ -227,19 +234,19 @@ function App() {
               side="left"
               className="w-[85vw] max-w-[320px] p-0 sm:w-64"
               id="mobile-drawer-content"
-              style={{
-                touchAction: "auto",
-                WebkitOverflowScrolling: "touch",
-              }}
             >
-              <SessionList onSelect={() => setMobileDrawerOpen(false)} />
+              <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+                <SessionList onSelect={() => setMobileDrawerOpen(false)} />
+              </Suspense>
             </SheetContent>
           </Sheet>
 
           {/* Main content area */}
           <main className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-hidden">
-              <SessionHistory sessionId={currentSessionId} />
+              <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+                <SessionHistory sessionId={currentSessionId} />
+              </Suspense>
             </div>
             <ChatInput
               sessionId={currentSessionId}
