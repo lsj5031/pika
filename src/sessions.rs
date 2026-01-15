@@ -1,7 +1,8 @@
 use crate::config::ProjectConfig;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use uuid::Uuid;
@@ -36,17 +37,6 @@ pub struct SessionMessage {
     pub timestamp: Option<String>,
 }
 
-/// Raw session entry from session.jsonl file
-#[derive(Debug, Serialize, Deserialize)]
-struct SessionEntry {
-    #[serde(rename = "sessionId")]
-    session_id: String,
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    timestamp: String,
-}
-
 /// Session discovery errors
 #[derive(Debug, Error)]
 pub enum SessionError {
@@ -54,11 +44,6 @@ pub enum SessionError {
     IoError {
         path: PathBuf,
         source: std::io::Error,
-    },
-    #[error("Failed to parse session file {path}: {source}")]
-    ParseError {
-        path: PathBuf,
-        source: serde_json::Error,
     },
 }
 
@@ -94,7 +79,7 @@ pub fn scan_sessions(config: &ProjectConfig) -> Vec<SessionInfo> {
 }
 
 /// Encode a project path to match pi-coding-agent's directory naming convention
-fn encode_project_path(path: &Path) -> String {
+pub fn encode_project_path(path: &Path) -> String {
     // Convert path to string, remove leading /, replace / with -, wrap with --
     let path_str = path.to_string_lossy();
     let normalized = path_str
@@ -102,6 +87,53 @@ fn encode_project_path(path: &Path) -> String {
         .replace('/', "-")
         .replace('\\', "-"); // Handle Windows paths too
     format!("--{}--", normalized)
+}
+
+/// Build a lookup map from encoded project names to their original paths
+/// This is needed because decoding is lossy (e.g., paths with '-' in them)
+pub fn build_encoded_project_map(config: &ProjectConfig) -> HashMap<String, PathBuf> {
+    let mut map = HashMap::new();
+    for path in &config.project_root_paths {
+        let encoded = encode_project_path(path);
+        map.insert(encoded, path.clone());
+    }
+    map
+}
+
+/// Get the pi sessions directory for a project path
+/// Uses the standard ~/.pi/agent/sessions/{encoded-path}/ structure
+pub fn get_pi_sessions_dir(project_path: &Path) -> PathBuf {
+    let pi_sessions_base = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".pi")
+        .join("agent")
+        .join("sessions");
+    
+    let encoded_path = encode_project_path(project_path);
+    pi_sessions_base.join(encoded_path)
+}
+
+/// Get the full path to a session file
+pub fn get_session_file_path(session_id: &str, project_path: &Path) -> Option<PathBuf> {
+    let sessions_dir = get_pi_sessions_dir(project_path);
+    
+    if !sessions_dir.exists() {
+        return None;
+    }
+    
+    // Find the session file with the given ID
+    fs::read_dir(&sessions_dir)
+        .ok()?
+        .find_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            let file_name = path.file_stem()?.to_str()?;
+            if file_name.contains(session_id) {
+                Some(path)
+            } else {
+                None
+            }
+        })
 }
 
 /// Get the timestamp of the most recent message in a session file
@@ -432,6 +464,7 @@ pub struct CreateSessionResponse {
 }
 
 /// Create a new session in the specified project
+/// Sessions are stored in ~/.pi/agent/sessions/{encoded-project-path}/ to match pi-coding-agent
 pub fn create_session(
     project_path: &Path,
     request: CreateSessionRequest,
@@ -451,26 +484,20 @@ pub fn create_session(
     let session_id = Uuid::new_v4().to_string();
 
     // Generate session name (use provided name or default to timestamp)
-    let name = request.name.unwrap_or_else(|| {
+    let _name = request.name.unwrap_or_else(|| {
         // Default name: timestamp
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap();
-        format!("Session {}", duration.as_secs())
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
     });
 
-    // Generate timestamp
-    let created_at = {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap();
-        format!("{:.3?}", duration)
-    };
+    // Generate timestamp in pi-coding-agent format: 2026-01-13T00-20-44-881Z
+    let now = chrono::Utc::now();
+    let timestamp_for_filename = now.format("%Y-%m-%dT%H-%M-%S").to_string();
+    let millis = now.timestamp_subsec_millis();
+    let timestamp_str = format!("{}-{:03}Z", timestamp_for_filename, millis);
+    let created_at = now.format("%Y-%m-%d %H:%M:%S").to_string();
 
-    // Construct path to .pi/agent/sessions/
-    let sessions_dir = project_path.join(".pi").join("agent").join("sessions");
+    // Use the standard ~/.pi/agent/sessions/{encoded-path}/ directory
+    let sessions_dir = get_pi_sessions_dir(project_path);
 
     // Create sessions directory if it doesn't exist
     fs::create_dir_all(&sessions_dir)
@@ -479,38 +506,13 @@ pub fn create_session(
             source: e,
         })?;
 
-    // Create or append to session.jsonl file
-    let session_file = sessions_dir.join("session.jsonl");
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&session_file)
-        .map_err(|e| SessionError::IoError {
-            path: session_file.clone(),
-            source: e,
-        })?;
-
-    // Write the session entry as JSONL
-    let entry = SessionEntry {
-        session_id: session_id.clone(),
-        name: name.clone(),
-        timestamp: created_at.clone(),
-    };
-
-    let json_line = serde_json::to_string(&entry)
-        .map_err(|e| SessionError::ParseError {
-            path: session_file.clone(),
-            source: e,
-        })?;
-
-    writeln!(file, "{}", json_line)
-        .map_err(|e| SessionError::IoError {
-            path: session_file.clone(),
-            source: e,
-        })?;
-
-    // Flush to ensure data is written
-    file.flush()
+    // Create the session file with pi-coding-agent naming convention:
+    // {timestamp}_{session_id}.jsonl
+    let session_filename = format!("{}_{}.jsonl", timestamp_str, session_id);
+    let session_file = sessions_dir.join(&session_filename);
+    
+    // Create empty session file (pi-coding-agent will populate it when used)
+    fs::File::create(&session_file)
         .map_err(|e| SessionError::IoError {
             path: session_file.clone(),
             source: e,
@@ -518,7 +520,7 @@ pub fn create_session(
 
     Ok(CreateSessionResponse {
         session_id,
-        name,
+        name: session_filename.trim_end_matches(".jsonl").to_string(),
         project_path: project_path.to_path_buf(),
         created_at,
     })
@@ -543,6 +545,7 @@ mod tests {
             name: "Test Session".to_string(),
             created_at: "2025-01-13T00:00:00Z".to_string(),
             is_active: false,
+            last_message_time: None,
         };
 
         let json = serde_json::to_string(&info).unwrap();

@@ -18,6 +18,7 @@ mod websocket;
 mod pi;
 mod api;
 mod static_files;
+mod file_watcher;
 use auth::AuthCredentials;
 use config::ProjectConfig;
 use websocket::{WSState, WSEvent};
@@ -137,10 +138,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let listener = TcpListener::bind(addr).await?;
 
-    // Start event bridging task
+    // Start event bridging task (ProcessManager -> WebSocket)
     let app_state_for_bridge = app_state.clone();
     tokio::spawn(async move {
         event_bridge_task(app_state_for_bridge).await;
+    });
+
+    // Build encoded project map for lossless path resolution
+    let encoded_project_map = sessions::build_encoded_project_map(&config);
+
+    // Start file watcher task for real-time session updates
+    let app_state_for_watcher = app_state.clone();
+    tokio::spawn(async move {
+        file_watcher_task(app_state_for_watcher, encoded_project_map).await;
     });
 
     axum::serve(listener, app).await?;
@@ -148,9 +158,78 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Background task that watches session files for changes and broadcasts WebSocket events
+async fn file_watcher_task(app_state: AppState, encoded_project_map: std::collections::HashMap<String, std::path::PathBuf>) {
+    use file_watcher::{SessionFileWatcher, SessionFileEvent};
+    use tokio::sync::broadcast::error::RecvError;
+    
+    // Create file watcher with the encoded project map
+    let mut watcher = match SessionFileWatcher::new(encoded_project_map) {
+        Ok(w) => w,
+        Err(e) => {
+            println!("⚠️ Failed to create file watcher: {}", e);
+            return;
+        }
+    };
+    
+    // Start watching
+    if let Err(e) = watcher.start_watching() {
+        println!("⚠️ Failed to start file watcher: {}", e);
+        return;
+    }
+    
+    // Subscribe to file events
+    let mut rx = watcher.subscribe();
+    
+    println!("📂 File watcher task started");
+    
+    loop {
+        match rx.recv().await {
+            Ok(event) => {
+                match event {
+                    SessionFileEvent::SessionFileCreated { project_path, session_id, file_path } => {
+                        println!("📁 New session file created: {} in {:?}", session_id, project_path);
+                        // Notify frontend that sessions list should be refreshed
+                        // We use SessionStarted event to trigger UI update
+                        let ws_event = WSEvent::SessionStarted {
+                            session_id: session_id.clone(),
+                            project_path: project_path.to_string_lossy().to_string(),
+                        };
+                        app_state.ws_state.broadcast(ws_event);
+                        
+                        // Also log the file path for debugging
+                        println!("   File: {:?}", file_path);
+                    }
+                    SessionFileEvent::SessionFileModified { project_path, session_id, file_path } => {
+                        // Session file was modified - this means new messages were added
+                        // The frontend can poll for new messages or we could parse the diff
+                        // For now, we just invalidate the messages cache
+                        println!("📝 Session file modified: {} (in {})", session_id, project_path.display());
+                        println!("   File: {:?}", file_path);
+                        
+                        // Note: We don't send MessageAdded here because the pi process
+                        // already sends that event via JSON-RPC when it writes to the file.
+                        // This watcher is mainly for catching external changes.
+                    }
+                }
+            }
+            Err(RecvError::Lagged(count)) => {
+                eprintln!("⚠️ File watcher lagged, missed {} events", count);
+                continue;
+            }
+            Err(RecvError::Closed) => {
+                break;
+            }
+        }
+    }
+    
+    println!("📂 File watcher task ended");
+}
+
 /// Background task that bridges ProcessManager events to WebSocket events
 async fn event_bridge_task(app_state: AppState) {
     use pi::ProcessManagerEvent;
+    use tokio::sync::broadcast::error::RecvError;
 
     let mut rx = {
         let pm = app_state.process_manager.lock().await;
@@ -159,8 +238,9 @@ async fn event_bridge_task(app_state: AppState) {
 
     println!("📡 Event bridge task started");
 
-    while let Ok(event) = rx.recv().await {
-        match event {
+    loop {
+        match rx.recv().await {
+            Ok(event) => match event {
             ProcessManagerEvent::ProcessSpawned { id, project_path } => {
                 println!("🚀 Process spawned: {} in {}", id, project_path.display());
 
@@ -337,6 +417,14 @@ async fn event_bridge_task(app_state: AppState) {
                         }
                     }
                 }
+            }
+            },
+            Err(RecvError::Lagged(count)) => {
+                eprintln!("⚠️ Event bridge lagged, missed {} events", count);
+                continue;
+            }
+            Err(RecvError::Closed) => {
+                break;
             }
         }
     }

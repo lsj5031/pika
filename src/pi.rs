@@ -42,7 +42,8 @@ pub struct PiProcess {
 
 impl PiProcess {
     /// Spawn a new pi process in RPC mode
-    pub fn spawn(project_path: PathBuf) -> Result<Self, PiProcessError> {
+    /// If session_file is provided, the process will resume that session
+    pub fn spawn(project_path: PathBuf, session_file: Option<PathBuf>) -> Result<Self, PiProcessError> {
         // Validate project path exists
         if !project_path.exists() {
             return Err(PiProcessError::ProjectNotFound { path: project_path });
@@ -54,13 +55,22 @@ impl PiProcess {
         // Create broadcast channel for events
         let (tx, _rx) = broadcast::channel(1000);
 
+        // Build command arguments
+        let mut args = vec![
+            "@mariozechner/pi-coding-agent".to_string(),
+            "--mode".to_string(),
+            "rpc".to_string(),
+        ];
+
+        // If session file is provided, resume that session
+        if let Some(ref session_path) = session_file {
+            args.push("--session".to_string());
+            args.push(session_path.to_string_lossy().to_string());
+        }
+
         // Spawn pi process with environment variables inherited
         let mut process = Command::new("npx")
-            .args([
-                "@mariozechner/pi-coding-agent",
-                "--mode",
-                "rpc",
-            ])
+            .args(&args)
             .current_dir(
                 project_path.canonicalize().map_err(|_e| PiProcessError::InvalidPath {
                     path: project_path.clone(),
@@ -166,8 +176,12 @@ impl PiProcess {
     }
 
     /// Check if the process is still running
-    pub fn is_running(&self) -> bool {
-        self.process.id().is_some()
+    pub fn is_running(&mut self) -> bool {
+        match self.process.try_wait() {
+            Ok(None) => true,  // Process is still running
+            Ok(Some(_)) => false,  // Process has exited
+            Err(_) => false,  // Error checking status, assume not running
+        }
     }
 
     /// Read stdout and parse JSON-RPC events
@@ -263,7 +277,8 @@ impl ProcessManager {
     }
 
     /// Spawn a new pi process
-    pub fn spawn(&mut self, project_path: PathBuf) -> Result<String, PiProcessError> {
+    /// If session_file is provided, the process will resume that session
+    pub fn spawn(&mut self, project_path: PathBuf, session_file: Option<PathBuf>) -> Result<String, PiProcessError> {
         // Check concurrent limit
         if self.processes.len() >= MAX_CONCURRENT_PROCESSES {
             return Err(PiProcessError::TooManyProcesses {
@@ -272,7 +287,7 @@ impl ProcessManager {
         }
 
         // Create process
-        let process = PiProcess::spawn(project_path.clone())?;
+        let process = PiProcess::spawn(project_path.clone(), session_file)?;
         let id = process.id.clone();
 
         // Subscribe to this process's events
@@ -345,9 +360,9 @@ impl ProcessManager {
     }
 
     /// Check if a process is running
-    pub fn is_running(&self, id: &str) -> bool {
+    pub fn is_running(&mut self, id: &str) -> bool {
         self.processes
-            .get(id)
+            .get_mut(id)
             .map(|p| p.is_running())
             .unwrap_or(false)
     }
@@ -378,6 +393,7 @@ impl ProcessManager {
 
     /// Spawn a new pi process for a specific session
     /// Returns the process ID if spawned, or existing process ID if already running
+    /// The process will resume the existing session file if it exists
     pub fn spawn_for_session(
         &mut self,
         session_id: &str,
@@ -402,8 +418,18 @@ impl ProcessManager {
             });
         }
 
-        // Create process
-        let process = PiProcess::spawn(project_path.clone())?;
+        // Look up the session file to resume
+        // Import the helper function from sessions module
+        let session_file = crate::sessions::get_session_file_path(session_id, &project_path);
+        
+        if let Some(ref path) = session_file {
+            println!("📂 Resuming session {} from {:?}", session_id, path);
+        } else {
+            println!("📂 Starting new session {} (no existing session file found)", session_id);
+        }
+
+        // Create process with session file if available
+        let process = PiProcess::spawn(project_path.clone(), session_file)?;
         let process_id = process.id.clone();
 
         // Subscribe to this process's events
@@ -446,9 +472,9 @@ impl ProcessManager {
     }
 
     /// Check if a session has a running process
-    pub fn is_session_running(&self, session_id: &str) -> bool {
-        if let Some(process_id) = self.session_to_process.get(session_id) {
-            self.is_running(process_id)
+    pub fn is_session_running(&mut self, session_id: &str) -> bool {
+        if let Some(process_id) = self.session_to_process.get(session_id).cloned() {
+            self.is_running(&process_id)
         } else {
             false
         }
@@ -511,17 +537,18 @@ mod tests {
 
     #[test]
     fn test_json_rpc_event_parsing() {
-        let json = r#"{"method":"test","params":{"foo":"bar"}}"#;
+        let json = r#"{"type":"message_update","message":{"role":"assistant"}}"#;
         let event: JsonRpcEvent = serde_json::from_str(json).unwrap();
-        assert_eq!(event.method, Some("test".to_string()));
-        assert!(event.params.is_some());
+        assert_eq!(event.event_type, Some("message_update".to_string()));
+        assert!(event.extra.contains_key("message"));
     }
 
     #[test]
-    fn test_json_rpc_event_with_result() {
-        let json = r#"{"result":"success"}"#;
+    fn test_json_rpc_event_with_extra_fields() {
+        let json = r#"{"type":"notify","message":"test notification"}"#;
         let event: JsonRpcEvent = serde_json::from_str(json).unwrap();
-        assert_eq!(event.result, Some(serde_json::json!("success")));
+        assert_eq!(event.event_type, Some("notify".to_string()));
+        assert_eq!(event.extra.get("message").and_then(|v| v.as_str()), Some("test notification"));
     }
 
     #[test]
