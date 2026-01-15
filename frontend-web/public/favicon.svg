@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <filter id="wobbly">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" />
+    </filter>
+  </defs>
+  
+  <!-- Circle Background -->
+  <circle cx="50" cy="50" r="45" fill="#fdfbf7" stroke="#2d2d2d" stroke-width="4" filter="url(#wobbly)" />
+  
+  <!-- Pi Symbol -->
+  <g transform="translate(0, 5)" filter="url(#wobbly)">
+    <!-- Top Bar -->
+    <path d="M 28 35 Q 50 28 72 35" stroke="#2d2d2d" stroke-width="7" fill="none" stroke-linecap="round" />
+    
+    <!-- Left Leg -->
+    <path d="M 38 35 Q 35 60 38 75" stroke="#2d2d2d" stroke-width="7" fill="none" stroke-linecap="round" />
+    
+    <!-- Right Leg -->
+    <path d="M 62 35 Q 60 55 62 70 Q 68 75 72 70" stroke="#2d2d2d" stroke-width="7" fill="none" stroke-linecap="round" />
+  </g>
+  
+  <!-- Accent Scribble -->
+  <path d="M 70 25 Q 80 15 85 25" stroke="#ff4d4d" stroke-width="4" fill="none" stroke-linecap="round" filter="url(#wobbly)" opacity="0.9"/>
+</svg>
