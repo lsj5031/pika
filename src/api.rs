@@ -576,7 +576,7 @@ pub async fn get_session_status(
     }
 
     // Lock the process manager and check if the session is running
-    let process_manager = state.process_manager.lock().await;
+    let mut process_manager = state.process_manager.lock().await;
     let is_running = process_manager.is_session_running(&session_id);
 
     // Get the process ID if running
@@ -617,7 +617,7 @@ pub async fn stop_session(
     drop(config);
 
     // Lock the process manager and get the process ID before killing
-    let process_manager = state.process_manager.lock().await;
+    let mut process_manager = state.process_manager.lock().await;
     let is_running = process_manager.is_session_running(&session_id);
     let process_id = if is_running {
         process_manager.get_process_id_for_session(&session_id)
