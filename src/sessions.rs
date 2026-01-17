@@ -80,17 +80,14 @@ pub fn scan_sessions(config: &ProjectConfig) -> Vec<SessionInfo> {
 
 /// Encode a project path to match pi-coding-agent's directory naming convention
 pub fn encode_project_path(path: &Path) -> String {
-    // Convert path to string, remove leading /, replace / with -, wrap with --
     let path_str = path.to_string_lossy();
-    let normalized = path_str
-        .trim_start_matches('/')
-        .replace('/', "-")
-        .replace('\\', "-"); // Handle Windows paths too
+    let normalized = path_str.trim_start_matches('/').replace(['/', '\\'], "-");
     format!("--{}--", normalized)
 }
 
 /// Build a lookup map from encoded project names to their original paths
 /// This is needed because decoding is lossy (e.g., paths with '-' in them)
+#[allow(dead_code)]
 pub fn build_encoded_project_map(config: &ProjectConfig) -> HashMap<String, PathBuf> {
     let mut map = HashMap::new();
     for path in &config.project_root_paths {
@@ -108,7 +105,7 @@ pub fn get_pi_sessions_dir(project_path: &Path) -> PathBuf {
         .join(".pi")
         .join("agent")
         .join("sessions");
-    
+
     let encoded_path = encode_project_path(project_path);
     pi_sessions_base.join(encoded_path)
 }
@@ -116,33 +113,30 @@ pub fn get_pi_sessions_dir(project_path: &Path) -> PathBuf {
 /// Get the full path to a session file
 pub fn get_session_file_path(session_id: &str, project_path: &Path) -> Option<PathBuf> {
     let sessions_dir = get_pi_sessions_dir(project_path);
-    
+
     if !sessions_dir.exists() {
         return None;
     }
-    
+
     // Find the session file with the given ID
-    fs::read_dir(&sessions_dir)
-        .ok()?
-        .find_map(|entry| {
-            let entry = entry.ok()?;
-            let path = entry.path();
-            let file_name = path.file_stem()?.to_str()?;
-            if file_name.contains(session_id) {
-                Some(path)
-            } else {
-                None
-            }
-        })
+    fs::read_dir(&sessions_dir).ok()?.find_map(|entry| {
+        let entry = entry.ok()?;
+        let path = entry.path();
+        let file_name = path.file_stem()?.to_str()?;
+        if file_name.contains(session_id) {
+            Some(path)
+        } else {
+            None
+        }
+    })
 }
 
 /// Get the timestamp of the most recent message in a session file
 fn get_last_message_timestamp(session_file: &Path) -> Result<String, SessionError> {
-    let file = fs::File::open(session_file)
-        .map_err(|e| SessionError::IoError {
-            path: session_file.to_path_buf(),
-            source: e,
-        })?;
+    let file = fs::File::open(session_file).map_err(|e| SessionError::IoError {
+        path: session_file.to_path_buf(),
+        source: e,
+    })?;
 
     let reader = BufReader::new(file);
     let mut last_timestamp: Option<String> = None;
@@ -168,7 +162,10 @@ fn get_last_message_timestamp(session_file: &Path) -> Result<String, SessionErro
 }
 
 /// Scan a single project directory for sessions
-fn scan_project_sessions(project_path: &Path, sessions_dir: &Path) -> Result<Vec<SessionInfo>, SessionError> {
+fn scan_project_sessions(
+    project_path: &Path,
+    sessions_dir: &Path,
+) -> Result<Vec<SessionInfo>, SessionError> {
     let mut sessions = Vec::new();
 
     // If sessions directory doesn't exist, return empty list (not an error)
@@ -177,11 +174,10 @@ fn scan_project_sessions(project_path: &Path, sessions_dir: &Path) -> Result<Vec
     }
 
     // Read all session files (*.jsonl)
-    let entries = fs::read_dir(sessions_dir)
-        .map_err(|e| SessionError::IoError {
-            path: sessions_dir.to_path_buf(),
-            source: e,
-        })?;
+    let entries = fs::read_dir(sessions_dir).map_err(|e| SessionError::IoError {
+        path: sessions_dir.to_path_buf(),
+        source: e,
+    })?;
 
     for entry in entries {
         let entry = entry.map_err(|e| SessionError::IoError {
@@ -203,9 +199,7 @@ fn scan_project_sessions(project_path: &Path, sessions_dir: &Path) -> Result<Vec
 
         // Extract session ID from filename
         // Format: 2025-12-19T23-02-19-917Z_0e4ffe0f-899b-4730-a576-73ee542d84b4.jsonl
-        let file_name = path.file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("");
+        let file_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
 
         // Split by last underscore to get UUID
         let parts: Vec<&str> = file_name.rsplitn(2, '_').collect();
@@ -224,21 +218,22 @@ fn scan_project_sessions(project_path: &Path, sessions_dir: &Path) -> Result<Vec
         };
 
         // Get file modification time as created_at
-        let metadata = fs::metadata(&path)
-            .map_err(|e| SessionError::IoError {
-                path: path.clone(),
-                source: e,
-            })?;
-        let modified = metadata.modified()
+        let metadata = fs::metadata(&path).map_err(|e| SessionError::IoError {
+            path: path.clone(),
+            source: e,
+        })?;
+        let modified = metadata
+            .modified()
             .ok()
-            .and_then(|t| {
+            .map(|t| {
                 let datetime: chrono::DateTime<chrono::Utc> = t.into();
-                Some(datetime.format("%Y-%m-%d %H:%M:%S").to_string())
+                datetime.format("%Y-%m-%d %H:%M:%S").to_string()
             })
             .unwrap_or_else(|| timestamp.clone());
 
         // Try to get the last message timestamp by parsing the session file
-        let last_message_time = get_last_message_timestamp(&path).unwrap_or_else(|_| modified.clone());
+        let last_message_time =
+            get_last_message_timestamp(&path).unwrap_or_else(|_| modified.clone());
 
         sessions.push(SessionInfo {
             id: session_id,
@@ -254,7 +249,10 @@ fn scan_project_sessions(project_path: &Path, sessions_dir: &Path) -> Result<Vec
 }
 
 /// Get messages for a specific session
-pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec<SessionMessage>, SessionError> {
+pub fn get_session_messages(
+    session_id: &str,
+    project_path: &Path,
+) -> Result<Vec<SessionMessage>, SessionError> {
     // Get the pi sessions directory
     let pi_sessions_dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -295,11 +293,10 @@ pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec
     };
 
     // Parse the session.jsonl file
-    let file = fs::File::open(&session_file)
-        .map_err(|e| SessionError::IoError {
-            path: session_file.clone(),
-            source: e,
-        })?;
+    let file = fs::File::open(&session_file).map_err(|e| SessionError::IoError {
+        path: session_file.clone(),
+        source: e,
+    })?;
 
     let reader = BufReader::new(file);
     let mut messages = Vec::new();
@@ -332,14 +329,17 @@ pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec
             let message_obj = message_obj.unwrap();
 
             // Get role
-            let role = message_obj.get("role")
+            let role = message_obj
+                .get("role")
                 .and_then(|r| r.as_str())
                 .unwrap_or("unknown")
                 .to_string();
 
             // Get content from message.content array
             // Handle text content, thinking blocks, and tool call results
-            let content = if let Some(content_array) = message_obj.get("content").and_then(|c| c.as_array()) {
+            let content = if let Some(content_array) =
+                message_obj.get("content").and_then(|c| c.as_array())
+            {
                 // Extract thinking blocks first
                 let thinking_parts: Vec<String> = content_array
                     .iter()
@@ -378,11 +378,14 @@ pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec
                         .iter()
                         .filter_map(|part| {
                             // Handle tool_use type
-                            if let Some(tool_use) = part.get("tool_use").and_then(|t| t.as_object()) {
-                                let name = tool_use.get("name")
+                            if let Some(tool_use) = part.get("tool_use").and_then(|t| t.as_object())
+                            {
+                                let name = tool_use
+                                    .get("name")
                                     .and_then(|n| n.as_str())
                                     .unwrap_or("unknown_tool");
-                                let input = tool_use.get("input")
+                                let input = tool_use
+                                    .get("input")
                                     .map(|i| {
                                         if i.is_string() {
                                             i.as_str().unwrap_or("").to_string()
@@ -396,11 +399,15 @@ pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec
                                 Some(format!("Tool Call: {}({})", name, input))
                             }
                             // Handle tool_result type
-                            else if let Some(tool_result) = part.get("tool_result").and_then(|t| t.as_object()) {
-                                let is_error = tool_result.get("is_error")
+                            else if let Some(tool_result) =
+                                part.get("tool_result").and_then(|t| t.as_object())
+                            {
+                                let is_error = tool_result
+                                    .get("is_error")
                                     .and_then(|e| e.as_bool())
                                     .unwrap_or(false);
-                                let content = tool_result.get("content")
+                                let content = tool_result
+                                    .get("content")
                                     .map(|c| {
                                         if c.is_string() {
                                             c.as_str().unwrap_or("").to_string()
@@ -411,7 +418,8 @@ pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec
                                         }
                                     })
                                     .unwrap_or_default();
-                                Some(format!("Tool Result{}: {}",
+                                Some(format!(
+                                    "Tool Result{}: {}",
                                     if is_error { " (Error)" } else { "" },
                                     content
                                 ))
@@ -425,7 +433,10 @@ pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec
                         tool_parts.join("\n")
                     } else {
                         // Fallback: show entire content array as JSON for debugging
-                        format!("Tool call: {}", serde_json::to_string(content_array).unwrap_or_default())
+                        format!(
+                            "Tool call: {}",
+                            serde_json::to_string(content_array).unwrap_or_default()
+                        )
                     }
                 }
             } else if let Some(content_str) = message_obj.get("content").and_then(|c| c.as_str()) {
@@ -437,15 +448,18 @@ pub fn get_session_messages(session_id: &str, project_path: &Path) -> Result<Vec
             };
 
             // Get timestamp
-            let timestamp = value.get("timestamp")
+            let timestamp = value
+                .get("timestamp")
                 .and_then(|t| t.as_str())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| {
                     // Fallback to message timestamp if available
-                    message_obj.get("timestamp")
+                    message_obj
+                        .get("timestamp")
                         .and_then(|t| t.as_i64())
                         .map(|ts| {
-                            let datetime: chrono::DateTime<chrono::Utc> = chrono::DateTime::from_timestamp(ts, 0).unwrap();
+                            let datetime: chrono::DateTime<chrono::Utc> =
+                                chrono::DateTime::from_timestamp(ts, 0).unwrap();
                             datetime.format("%Y-%m-%d %H:%M:%S").to_string()
                         })
                         .unwrap_or_else(|| "Unknown".to_string())
@@ -520,23 +534,21 @@ pub fn create_session(
     let sessions_dir = get_pi_sessions_dir(project_path);
 
     // Create sessions directory if it doesn't exist
-    fs::create_dir_all(&sessions_dir)
-        .map_err(|e| SessionError::IoError {
-            path: sessions_dir.clone(),
-            source: e,
-        })?;
+    fs::create_dir_all(&sessions_dir).map_err(|e| SessionError::IoError {
+        path: sessions_dir.clone(),
+        source: e,
+    })?;
 
     // Create the session file with pi-coding-agent naming convention:
     // {timestamp}_{session_id}.jsonl
     let session_filename = format!("{}_{}.jsonl", timestamp_str, session_id);
     let session_file = sessions_dir.join(&session_filename);
-    
+
     // Create empty session file (pi-coding-agent will populate it when used)
-    fs::File::create(&session_file)
-        .map_err(|e| SessionError::IoError {
-            path: session_file.clone(),
-            source: e,
-        })?;
+    fs::File::create(&session_file).map_err(|e| SessionError::IoError {
+        path: session_file.clone(),
+        source: e,
+    })?;
 
     Ok(CreateSessionResponse {
         session_id,

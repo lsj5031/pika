@@ -5,10 +5,10 @@
 
 use axum::{
     body::Body,
-    http::{header, Request, Response, StatusCode},
+    http::{Request, Response, StatusCode, header},
     middleware::Next,
 };
-use base64::{engine::general_purpose::STANDARD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD};
 
 /// Credentials for HTTP Basic Auth
 #[derive(Debug, Clone)]
@@ -74,7 +74,9 @@ fn unauthorized_response() -> Response<Body> {
     Response::builder()
         .status(StatusCode::UNAUTHORIZED)
         .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(r#"{"error":"Unauthorized","message":"Authentication required"}"#))
+        .body(Body::from(
+            r#"{"error":"Unauthorized","message":"Authentication required"}"#,
+        ))
         .unwrap()
 }
 

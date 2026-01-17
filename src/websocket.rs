@@ -6,14 +6,14 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use base64::{engine::general_purpose::STANDARD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD};
 use futures::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
-use crate::auth::AuthCredentials;
 use crate::AppState;
+use crate::auth::AuthCredentials;
 
 /// Query parameters for WebSocket connection (auth is passed via query param)
 #[derive(Debug, Deserialize)]
@@ -27,13 +27,16 @@ pub struct WsQueryParams {
 #[serde(tag = "type", content = "data")]
 pub enum WSEvent {
     /// A new session has started
-    SessionStarted { session_id: String, project_path: String },
+    SessionStarted {
+        session_id: String,
+        project_path: String,
+    },
     /// A session has stopped
     SessionStopped { session_id: String },
     /// Thinking update (delta for streaming)
     ThinkingDelta { session_id: String, content: String },
     /// A new message was added to the conversation
-    MessageAdded { 
+    MessageAdded {
         session_id: String,
         role: String,
         content: String,
@@ -103,29 +106,21 @@ pub async fn ws_handler(
         match params.auth {
             Some(encoded) => {
                 // Decode base64 and validate
-                if let Ok(decoded) = STANDARD.decode(&encoded) {
-                    if let Ok(decoded_str) = String::from_utf8(decoded) {
-                        if let Some((username, password)) = decoded_str.split_once(':') {
-                            if auth_creds.validate(username, password) {
-                                // Auth passed - proceed with WebSocket
-                                let ws_state = state.ws_state.clone();
-                                return ws.on_upgrade(|socket| handle_socket(socket, ws_state));
-                            }
-                        }
-                    }
+                if let Ok(decoded) = STANDARD.decode(&encoded)
+                    && let Ok(decoded_str) = String::from_utf8(decoded)
+                    && let Some((username, password)) = decoded_str.split_once(':')
+                    && auth_creds.validate(username, password)
+                {
+                    // Auth passed - proceed with WebSocket
+                    let ws_state = state.ws_state.clone();
+                    return ws.on_upgrade(|socket| handle_socket(socket, ws_state));
                 }
                 // Invalid credentials
-                return (
-                    StatusCode::UNAUTHORIZED,
-                    "Invalid credentials",
-                ).into_response();
+                return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response();
             }
             None => {
                 // No auth provided
-                return (
-                    StatusCode::UNAUTHORIZED,
-                    "Authentication required",
-                ).into_response();
+                return (StatusCode::UNAUTHORIZED, "Authentication required").into_response();
             }
         }
     }
@@ -146,8 +141,9 @@ async fn handle_socket(socket: WebSocket, state: WSState) {
         clients.insert(client_id.clone());
     }
 
-    println!("📡 WebSocket client connected: {} (total: {})", 
-        client_id, 
+    println!(
+        "📡 WebSocket client connected: {} (total: {})",
+        client_id,
         state.client_count().await
     );
 
@@ -187,11 +183,11 @@ async fn handle_socket(socket: WebSocket, state: WSState) {
     let client_id_for_send = client_id.clone();
     let send_task = tokio::spawn(async move {
         while let Ok(event) = rx.recv().await {
-            if let Ok(json) = event.to_json() {
-                if sender.send(Message::Text(json.into())).await.is_err() {
-                    println!("📡 Failed to send to client: {}", client_id_for_send);
-                    break;
-                }
+            if let Ok(json) = event.to_json()
+                && sender.send(Message::Text(json.into())).await.is_err()
+            {
+                println!("📡 Failed to send to client: {}", client_id_for_send);
+                break;
             }
         }
     });
@@ -212,8 +208,9 @@ async fn handle_socket(socket: WebSocket, state: WSState) {
         clients.remove(&client_id);
     }
 
-    println!("📡 WebSocket client disconnected: {} (total: {})", 
-        client_id, 
+    println!(
+        "📡 WebSocket client disconnected: {} (total: {})",
+        client_id,
         state.client_count().await
     );
 }
