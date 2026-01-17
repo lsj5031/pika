@@ -2,6 +2,7 @@ import { Menu, Square, Wifi, WifiOff, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { SettingsDialog } from "./SettingsDialog";
+import { ThemeToggle } from "./ThemeToggle";
 import { cn } from "../lib/utils";
 
 interface AppHeaderProps {
@@ -40,6 +41,9 @@ export function AppHeader({
 
       {/* Right: Connection status + Settings + Stop button */}
       <div className="flex items-center gap-1.5 md:gap-4">
+        {/* Theme toggle */}
+        <ThemeToggle />
+
         {/* Settings dialog */}
         <SettingsDialog />
 

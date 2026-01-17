@@ -1,19 +1,22 @@
 use axum::{
+    Router,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{delete, get, post},
-    Router,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::sessions::{scan_sessions, get_session_messages as fetch_session_messages, create_session, CreateSessionRequest};
 use crate::AppState;
+use crate::config::ProjectConfig;
+use crate::sessions::{
+    CreateSessionRequest, create_session, get_session_messages as fetch_session_messages,
+    scan_sessions,
+};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::config::ProjectConfig;
 
 /// API state shared across all handlers
 #[derive(Clone)]
@@ -133,14 +136,14 @@ fn project_id_from_path(path: &PathBuf) -> String {
     // Use a simple hash of the path string as ID
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let mut hasher = DefaultHasher::new();
     path.hash(&mut hasher);
     format!("{:x}", hasher.finish())
 }
 
 /// Extract project name from path
-fn project_name_from_path(path: &PathBuf) -> String {
+fn project_name_from_path(path: &std::path::Path) -> String {
     path.file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("Unknown")
@@ -152,16 +155,16 @@ pub async fn get_projects(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<ProjectResponse>>, ErrorResponse> {
     let config = state.api_state.config.read().await;
-    
+
     // Scan all sessions to get counts per project
     let sessions = scan_sessions(&config);
     let mut session_counts: HashMap<String, usize> = HashMap::new();
-    
+
     for session in &sessions {
         let project_id = project_id_from_path(&session.project_path);
         *session_counts.entry(project_id).or_insert(0) += 1;
     }
-    
+
     // Build project responses
     let projects: Vec<ProjectResponse> = config
         .project_root_paths
@@ -176,7 +179,7 @@ pub async fn get_projects(
             }
         })
         .collect();
-    
+
     Ok(Json(projects))
 }
 
@@ -203,8 +206,6 @@ pub async fn add_project(
     State(state): State<AppState>,
     Json(request): Json<AddProjectRequest>,
 ) -> Result<Json<AddProjectResponse>, ErrorResponse> {
-    
-    
     // Expand ~ to home directory
     let expanded_path = if request.path.starts_with("~/") {
         if let Some(home) = dirs::home_dir() {
@@ -215,7 +216,7 @@ pub async fn add_project(
     } else {
         PathBuf::from(&request.path)
     };
-    
+
     // Convert to absolute path
     let absolute_path = if expanded_path.is_absolute() {
         expanded_path
@@ -224,7 +225,7 @@ pub async fn add_project(
             .unwrap_or_else(|_| PathBuf::from("."))
             .join(&expanded_path)
     };
-    
+
     // Validate path exists
     if !absolute_path.exists() {
         return Err(ErrorResponse {
@@ -232,13 +233,13 @@ pub async fn add_project(
             message: format!("Path does not exist: {}", absolute_path.display()),
         });
     }
-    
+
     let project_id = project_id_from_path(&absolute_path);
-    
+
     // Update config
     {
         let mut config = state.api_state.config.write().await;
-        
+
         // Check if project already exists
         if config.project_root_paths.contains(&absolute_path) {
             return Err(ErrorResponse {
@@ -246,10 +247,10 @@ pub async fn add_project(
                 message: format!("Project already exists: {}", absolute_path.display()),
             });
         }
-        
+
         // Add project
         config.project_root_paths.push(absolute_path.clone());
-        
+
         // Save to config file
         if let Err(e) = config.to_file("config.toml") {
             return Err(ErrorResponse {
@@ -258,7 +259,7 @@ pub async fn add_project(
             });
         }
     }
-    
+
     Ok(Json(AddProjectResponse {
         id: project_id,
         name: project_name_from_path(&absolute_path),
@@ -271,25 +272,23 @@ pub async fn remove_project(
     State(state): State<AppState>,
     Path(project_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    
-    
     // Update config
     {
         let mut config = state.api_state.config.write().await;
-        
+
         // Find and remove the project
         let original_len = config.project_root_paths.len();
-        config.project_root_paths.retain(|path| {
-            project_id_from_path(path) != project_id
-        });
-        
+        config
+            .project_root_paths
+            .retain(|path| project_id_from_path(path) != project_id);
+
         if config.project_root_paths.len() == original_len {
             return Err(ErrorResponse {
                 error: "PROJECT_NOT_FOUND".to_string(),
                 message: format!("Project not found: {}", project_id),
             });
         }
-        
+
         // Save to config file
         if let Err(e) = config.to_file("config.toml") {
             return Err(ErrorResponse {
@@ -298,7 +297,7 @@ pub async fn remove_project(
             });
         }
     }
-    
+
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
@@ -308,13 +307,13 @@ pub async fn get_project_sessions(
     Path(project_id): Path<String>,
 ) -> Result<Json<Vec<SessionResponse>>, ErrorResponse> {
     let config = state.api_state.config.read().await;
-    
+
     // Find the project path by ID
     let project_path = config
         .project_root_paths
         .iter()
         .find(|path| project_id_from_path(path) == project_id);
-    
+
     let project_path = match project_path {
         Some(path) => path,
         None => {
@@ -324,7 +323,7 @@ pub async fn get_project_sessions(
             });
         }
     };
-    
+
     // Scan all sessions and filter by project
     let sessions = scan_sessions(&config);
     let project_sessions: Vec<SessionResponse> = sessions
@@ -339,7 +338,7 @@ pub async fn get_project_sessions(
             is_active: s.is_active,
         })
         .collect();
-    
+
     Ok(Json(project_sessions))
 }
 
@@ -348,16 +347,16 @@ pub async fn get_sessions(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<SessionResponse>>, ErrorResponse> {
     let config = state.api_state.config.read().await;
-    
+
     let mut sessions = scan_sessions(&config);
-    
+
     // Sort by last_message_time (most recent first), fall back to created_at
     sessions.sort_by(|a, b| {
         let time_a = a.last_message_time.as_ref().unwrap_or(&a.created_at);
         let time_b = b.last_message_time.as_ref().unwrap_or(&b.created_at);
         time_b.cmp(time_a) // Reverse order for most recent first
     });
-    
+
     let session_responses: Vec<SessionResponse> = sessions
         .into_iter()
         .map(|s| {
@@ -372,7 +371,7 @@ pub async fn get_sessions(
             }
         })
         .collect();
-    
+
     Ok(Json(session_responses))
 }
 
@@ -385,9 +384,7 @@ pub async fn get_session(
 
     // Scan all sessions and find the matching one
     let sessions = scan_sessions(&config);
-    let session = sessions
-        .into_iter()
-        .find(|s| s.id == session_id);
+    let session = sessions.into_iter().find(|s| s.id == session_id);
 
     let session = match session {
         Some(s) => s,
@@ -420,9 +417,7 @@ pub async fn get_session_messages(
 
     // Scan all sessions and find the matching one
     let sessions = scan_sessions(&config);
-    let session = sessions
-        .into_iter()
-        .find(|s| s.id == session_id);
+    let session = sessions.into_iter().find(|s| s.id == session_id);
 
     let session = match session {
         Some(s) => s,
@@ -435,8 +430,8 @@ pub async fn get_session_messages(
     };
 
     // Get messages for this session
-    let messages = fetch_session_messages(&session.id, &session.project_path)
-        .map_err(|e| ErrorResponse {
+    let messages =
+        fetch_session_messages(&session.id, &session.project_path).map_err(|e| ErrorResponse {
             error: "INTERNAL_ERROR".to_string(),
             message: format!("Failed to read messages: {}", e),
         })?;
@@ -464,9 +459,7 @@ pub async fn send_prompt_to_session(
     let config = state.api_state.config.read().await;
     let sessions = scan_sessions(&config);
 
-    let session = sessions
-        .into_iter()
-        .find(|s| s.id == session_id);
+    let session = sessions.into_iter().find(|s| s.id == session_id);
 
     let session = match session {
         Some(s) => s,
@@ -484,7 +477,9 @@ pub async fn send_prompt_to_session(
     // Check if the session is already running
     let process_id = if process_manager.is_session_running(&session_id) {
         // Get the existing process ID
-        process_manager.get_process_id_for_session(&session_id).unwrap()
+        process_manager
+            .get_process_id_for_session(&session_id)
+            .unwrap()
     } else {
         // Start the session (spawn a new process)
         process_manager
@@ -521,9 +516,7 @@ pub async fn start_session(
     let config = state.api_state.config.read().await;
     let sessions = scan_sessions(&config);
 
-    let session = sessions
-        .into_iter()
-        .find(|s| s.id == session_id);
+    let session = sessions.into_iter().find(|s| s.id == session_id);
 
     let session = match session {
         Some(s) => s,
@@ -564,9 +557,7 @@ pub async fn get_session_status(
     let config = state.api_state.config.read().await;
     let sessions = scan_sessions(&config);
 
-    let session = sessions
-        .into_iter()
-        .find(|s| s.id == session_id);
+    let session = sessions.into_iter().find(|s| s.id == session_id);
 
     if session.is_none() {
         return Err(ErrorResponse {
@@ -602,9 +593,7 @@ pub async fn stop_session(
     let config = state.api_state.config.read().await;
     let sessions = scan_sessions(&config);
 
-    let session = sessions
-        .into_iter()
-        .find(|s| s.id == session_id);
+    let session = sessions.into_iter().find(|s| s.id == session_id);
 
     if session.is_none() {
         return Err(ErrorResponse {
@@ -631,13 +620,13 @@ pub async fn stop_session(
     // Kill the process if it was running
     let mut process_manager = state.process_manager.lock().await;
 
-    if is_running {
-        if let Some(pid) = &process_id {
-            process_manager.kill(pid).await.map_err(|e| ErrorResponse {
-                error: "INTERNAL_ERROR".to_string(),
-                message: format!("Failed to stop session: {}", e),
-            })?;
-        }
+    if let Some(pid) = &process_id
+        && is_running
+    {
+        process_manager.kill(pid).await.map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to stop session: {}", e),
+        })?;
     }
 
     Ok(Json(StopSessionResponse {
@@ -703,7 +692,7 @@ pub async fn create_standalone_session(
     State(state): State<AppState>,
     Json(request): Json<CreateStandaloneSessionRequest>,
 ) -> Result<Json<CreateStandaloneSessionResponse>, ErrorResponse> {
-    use crate::sessions::{create_session, CreateSessionRequest};
+    use crate::sessions::{CreateSessionRequest, create_session};
 
     // Expand ~ to home directory
     let expanded_path = if request.path.starts_with("~/") {
@@ -726,12 +715,10 @@ pub async fn create_standalone_session(
     };
 
     // Canonicalize the path
-    let canonical_path = absolute_path
-        .canonicalize()
-        .map_err(|_| ErrorResponse {
-            error: "INVALID_PATH".to_string(),
-            message: format!("Cannot canonicalize path: {}", absolute_path.display()),
-        })?;
+    let canonical_path = absolute_path.canonicalize().map_err(|_| ErrorResponse {
+        error: "INVALID_PATH".to_string(),
+        message: format!("Cannot canonicalize path: {}", absolute_path.display()),
+    })?;
 
     // Validate path exists
     if !canonical_path.exists() {
@@ -742,15 +729,12 @@ pub async fn create_standalone_session(
     }
 
     // Create the session
-    let create_request = CreateSessionRequest {
-        name: request.name,
-    };
+    let create_request = CreateSessionRequest { name: request.name };
 
-    let result = create_session(&canonical_path, create_request)
-        .map_err(|e| ErrorResponse {
-            error: "SESSION_CREATE_FAILED".to_string(),
-            message: format!("Failed to create session: {}", e),
-        })?;
+    let result = create_session(&canonical_path, create_request).map_err(|e| ErrorResponse {
+        error: "SESSION_CREATE_FAILED".to_string(),
+        message: format!("Failed to create session: {}", e),
+    })?;
 
     // Register the folder path in project_root_paths for discoverability
     // This ensures the session shows up in the session list
@@ -800,12 +784,10 @@ pub async fn create_session_in_project(
     drop(config);
 
     // Create the session
-    let create_request = CreateSessionRequest {
-        name: req.name,
-    };
+    let create_request = CreateSessionRequest { name: req.name };
 
-    let session_response = create_session(&project_path, create_request)
-        .map_err(|e| ErrorResponse {
+    let session_response =
+        create_session(&project_path, create_request).map_err(|e| ErrorResponse {
             error: "INTERNAL_ERROR".to_string(),
             message: format!("Failed to create session: {}", e),
         })?;
@@ -839,7 +821,10 @@ pub fn create_api_router() -> Router<AppState> {
         .route("/api/projects", get(get_projects).post(add_project))
         .route("/api/projects/{id}", delete(remove_project))
         .route("/api/projects/{id}/sessions", get(get_project_sessions))
-        .route("/api/projects/{id}/sessions", post(create_session_in_project))
+        .route(
+            "/api/projects/{id}/sessions",
+            post(create_session_in_project),
+        )
         .route("/api/sessions", get(get_sessions))
         .route("/api/sessions/create", post(create_standalone_session))
         .route("/api/sessions/{id}", get(get_session))
@@ -848,7 +833,10 @@ pub fn create_api_router() -> Router<AppState> {
         .route("/api/sessions/{id}/status", get(get_session_status))
         .route("/api/sessions/{id}/start", post(start_session))
         .route("/api/sessions/{id}/stop", post(stop_session))
-        .route("/api/settings", get(get_pi_settings).post(update_pi_settings))
+        .route(
+            "/api/settings",
+            get(get_pi_settings).post(update_pi_settings),
+        )
 }
 
 /// PI settings response
@@ -939,39 +927,64 @@ pub async fn get_pi_settings(
             .ok()
             .and_then(|content| serde_json::from_str(&content).ok())
             .and_then(|value: serde_json::Value| {
-                value.get("providers")
+                value
+                    .get("providers")
                     .and_then(|p| p.as_object())
                     .map(|providers| {
-                        providers.iter().flat_map(|(provider_name, provider_data)| {
-                            provider_data.get("models")
-                                .and_then(|m| m.as_array())
-                                .unwrap_or(&vec![])
-                                .iter()
-                                .filter_map(|model| {
-                                    Some(ModelInfo {
-                                        id: model.get("id")?.as_str()?.to_string(),
-                                        name: model.get("name")?.as_str()?.to_string(),
-                                        provider: provider_name.clone(),
-                                        context_window: model.get("contextWindow").and_then(|c| c.as_u64()).map(|c| c as usize),
-                                        max_tokens: model.get("maxTokens").and_then(|m| m.as_u64()).map(|m| m as usize),
-                                        reasoning: model.get("reasoning").and_then(|r| r.as_bool()).unwrap_or(false),
+                        providers
+                            .iter()
+                            .flat_map(|(provider_name, provider_data)| {
+                                provider_data
+                                    .get("models")
+                                    .and_then(|m| m.as_array())
+                                    .unwrap_or(&vec![])
+                                    .iter()
+                                    .filter_map(|model| {
+                                        Some(ModelInfo {
+                                            id: model.get("id")?.as_str()?.to_string(),
+                                            name: model.get("name")?.as_str()?.to_string(),
+                                            provider: provider_name.clone(),
+                                            context_window: model
+                                                .get("contextWindow")
+                                                .and_then(|c| c.as_u64())
+                                                .map(|c| c as usize),
+                                            max_tokens: model
+                                                .get("maxTokens")
+                                                .and_then(|m| m.as_u64())
+                                                .map(|m| m as usize),
+                                            reasoning: model
+                                                .get("reasoning")
+                                                .and_then(|r| r.as_bool())
+                                                .unwrap_or(false),
+                                        })
                                     })
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .collect::<Vec<_>>()
+                                    .collect::<Vec<_>>()
+                            })
+                            .collect::<Vec<_>>()
                     })
             })
-            .unwrap_or(vec![])
+            .unwrap_or_default()
     } else {
         vec![]
     };
 
     let response = PiSettingsResponse {
-        default_provider: settings.get("defaultProvider").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        default_model: settings.get("defaultModel").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        default_thinking_level: settings.get("defaultThinkingLevel").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        theme: settings.get("theme").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        default_provider: settings
+            .get("defaultProvider")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        default_model: settings
+            .get("defaultModel")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        default_thinking_level: settings
+            .get("defaultThinkingLevel")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        theme: settings
+            .get("theme")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
         hide_thinking_block: settings.get("hideThinkingBlock").and_then(|v| v.as_bool()),
         available_models: models,
     };
@@ -1020,19 +1033,21 @@ pub async fn update_pi_settings(
 
     // Ensure directory exists
     if let Some(parent) = settings_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| ErrorResponse {
-                error: "INTERNAL_ERROR".to_string(),
-                message: format!("Failed to create settings directory: {}", e),
-            })?;
+        fs::create_dir_all(parent).map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to create settings directory: {}", e),
+        })?;
     }
 
     // Write settings
-    fs::write(&settings_path, serde_json::to_string_pretty(&settings).unwrap())
-        .map_err(|e| ErrorResponse {
-            error: "INTERNAL_ERROR".to_string(),
-            message: format!("Failed to write settings: {}", e),
-        })?;
+    fs::write(
+        &settings_path,
+        serde_json::to_string_pretty(&settings).unwrap(),
+    )
+    .map_err(|e| ErrorResponse {
+        error: "INTERNAL_ERROR".to_string(),
+        message: format!("Failed to write settings: {}", e),
+    })?;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
@@ -1040,37 +1055,37 @@ pub async fn update_pi_settings(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_project_id_from_path() {
         let path1 = PathBuf::from("/test/project");
         let path2 = PathBuf::from("/test/project");
         let path3 = PathBuf::from("/other/project");
-        
+
         // Same path should generate same ID
         assert_eq!(project_id_from_path(&path1), project_id_from_path(&path2));
         // Different path should generate different ID
         assert_ne!(project_id_from_path(&path1), project_id_from_path(&path3));
     }
-    
+
     #[test]
     fn test_project_name_from_path() {
         let path = PathBuf::from("/home/user/my-project");
         assert_eq!(project_name_from_path(&path), "my-project");
     }
-    
+
     #[test]
     fn test_error_response_serialization() {
         let error = ErrorResponse {
             error: "NOT_FOUND".to_string(),
             message: "Test not found".to_string(),
         };
-        
+
         let json = serde_json::to_string(&error).unwrap();
         assert!(json.contains("NOT_FOUND"));
         assert!(json.contains("Test not found"));
     }
-    
+
     #[test]
     fn test_project_response_serialization() {
         let project = ProjectResponse {
@@ -1079,13 +1094,13 @@ mod tests {
             name: "test-project".to_string(),
             session_count: 5,
         };
-        
+
         let json = serde_json::to_string(&project).unwrap();
         assert!(json.contains("test-id"));
         assert!(json.contains("test-project"));
         assert!(json.contains("5"));
     }
-    
+
     #[test]
     fn test_session_response_serialization() {
         let session = SessionResponse {
@@ -1096,7 +1111,7 @@ mod tests {
             created_at: "2025-01-13T00:00:00Z".to_string(),
             is_active: false,
         };
-        
+
         let json = serde_json::to_string(&session).unwrap();
         assert!(json.contains("session-123"));
         assert!(json.contains("Test Session"));
