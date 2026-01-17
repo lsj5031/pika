@@ -5,9 +5,10 @@ import { Card } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import { DiffViewer } from "./DiffViewer";
+import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import type { Message } from "../types";
-import { Bot, User, Wrench, ChevronDown, ChevronUp } from "lucide-react";
+import { Bot, User, Wrench, ChevronDown, ChevronUp, Download } from "lucide-react";
 
 interface SessionHistoryProps {
   sessionId: string | null;
@@ -160,7 +161,7 @@ function MessageBubble({ message }: { message: Message }) {
       const indices = [firstBrace, firstBracket].filter(i => i !== -1);
       const firstJsonIdx = indices.length > 0 ? Math.min(...indices) : -1;
       if (firstJsonIdx === -1) return false;
-      let jsonPart = response.slice(firstJsonIdx).trim().replace(/\)\s*$/, "");
+      const jsonPart = response.slice(firstJsonIdx).trim().replace(/\)\s*$/, "");
       const parsed = JSON.parse(jsonPart);
       const formatted = JSON.stringify(parsed, null, 2);
       return formatted.split("\n").length > COLLAPSE_THRESHOLD;
@@ -335,6 +336,24 @@ function MessageBubble({ message }: { message: Message }) {
 // Empty thinking state as a constant to avoid infinite loops
 const EMPTY_THINKING_STATE = { content: "", isThinking: false } as const;
 
+function exportSessionToMarkdown(messages: Message[], sessionId: string): string {
+  const date = new Date().toISOString();
+  let markdown = `# Session Export\n\n`;
+  markdown += `**Session ID:** ${sessionId}\n`;
+  markdown += `**Exported:** ${date}\n\n`;
+  markdown += `---\n\n`;
+
+  messages.forEach((message) => {
+    const role = message.role === "user" ? "👤 User" : "🤖 Assistant";
+    markdown += `## ${role}\n\n`;
+    markdown += `**Time:** ${message.timestamp || "N/A"}\n\n`;
+    markdown += `${message.content}\n\n`;
+    markdown += `---\n\n`;
+  });
+
+  return markdown;
+}
+
 export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   const { data: messages, isLoading } = useSessionHistory({ sessionId });
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -347,6 +366,21 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
 
   // Track previous message count to detect new messages
   const prevMessageCountRef = useRef<number>(0);
+
+  const handleExport = () => {
+    if (!messages || messages.length === 0) return;
+
+    const markdown = exportSessionToMarkdown(messages, sessionId || "unknown");
+    const blob = new Blob([markdown], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `session-${sessionId?.substring(0, 8)}-${new Date().toISOString().split("T")[0]}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // Auto-scroll to bottom when new messages arrive or thinking updates
   useEffect(() => {
@@ -421,6 +455,19 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
+      {messages && messages.length > 0 && (
+        <div className="p-2 border-b flex justify-end bg-card">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            className="gap-2 rounded-wobblyMd border-2 shadow-hard-sm"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+        </div>
+      )}
       <ScrollArea className="flex-1">
         <div ref={scrollRef} className="p-4 space-y-6">
           {messages.map((message, index) => (

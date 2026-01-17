@@ -6,7 +6,8 @@ import { ScrollArea } from "./ui/scroll-area";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Loader2, ChevronDown, ChevronRight, MessageSquare, Calendar, Plus } from "lucide-react";
+import { Input } from "./ui/input";
+import { Loader2, ChevronDown, ChevronRight, MessageSquare, Calendar, Plus, Search, X } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { Session } from "../types";
 
@@ -48,11 +49,24 @@ export function SessionList({ className, onSelect }: SessionListProps) {
   // Track which projects are expanded
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
 
+  // Search/filter state
+  const [searchQuery, setSearchQuery] = useState("");
+
   const isLoading = sessionsLoading || projectsLoading;
+
+  // Filter sessions based on search query
+  const filteredSessions = sessions?.filter((session) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      session.name.toLowerCase().includes(query) ||
+      session.id.toLowerCase().includes(query)
+    );
+  }) ?? [];
 
   // Group sessions by project and limit to DEFAULT_SESSION_LIMIT
   const sessionsByProject = projects?.map((project) => {
-    const projectSessions = sessions?.filter((session) => session.project_id === project.id) ?? [];
+    const projectSessions = filteredSessions.filter((session) => session.project_id === project.id);
     // Sort sessions by creation date desc (assuming newer is more relevant)
     projectSessions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
@@ -108,21 +122,43 @@ export function SessionList({ className, onSelect }: SessionListProps) {
   return (
     <div className={cn("flex flex-col h-full bg-background", className)} data-testid="session-list">
       {/* Header - added pl-16 on mobile to avoid sheet close button which is on the left */}
-      <div className="p-4 border-b-2 flex items-center justify-between gap-2 bg-card text-card-foreground shadow-sm z-10 pl-16 pr-4 md:pl-4" data-testid="session-list-header">
-        <h2 className="text-2xl font-heading font-bold tracking-tight">Sessions</h2>
-        <div className="flex items-center gap-2">
-          <NewSessionDialog trigger={
-            <Button
-              variant="outline"
-              size="icon"
-              id="new-session-button"
-              data-testid="new-session-button"
-              className="h-9 w-9 rounded-wobblyMd border-2 shadow-hard-sm bg-white hover:bg-accent hover:text-accent-foreground transition-all group"
-              title="New Session"
+      <div className="p-4 border-b-2 flex flex-col gap-3 bg-card text-card-foreground shadow-sm z-10 pl-16 pr-4 md:pl-4" data-testid="session-list-header">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-2xl font-heading font-bold tracking-tight">Sessions</h2>
+          <div className="flex items-center gap-2">
+            <NewSessionDialog trigger={
+              <Button
+                variant="outline"
+                size="icon"
+                id="new-session-button"
+                data-testid="new-session-button"
+                className="h-9 w-9 rounded-wobblyMd border-2 shadow-hard-sm bg-white hover:bg-accent hover:text-accent-foreground transition-all group"
+                title="New Session"
+              >
+                <Plus className="h-5 w-5 text-accent md:text-primary group-hover:text-accent-foreground transition-colors" />
+              </Button>
+            } />
+          </div>
+        </div>
+
+        {/* Search input */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search sessions..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 pr-9 h-9 rounded-wobblyMd border-2 shadow-hard-sm bg-white"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
             >
-              <Plus className="h-5 w-5 text-accent md:text-primary group-hover:text-accent-foreground transition-colors" />
-            </Button>
-          } />
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -136,6 +172,13 @@ export function SessionList({ className, onSelect }: SessionListProps) {
       {!isLoading && (
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-6">
+            {filteredSessions.length === 0 && searchQuery.trim() && (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Search className="h-12 w-12 mb-3 opacity-50" />
+                <p className="text-lg font-medium">No sessions found</p>
+                <p className="text-sm">Try adjusting your search query</p>
+              </div>
+            )}
             {sessionsByProject?.map((project) => (
               <div key={project.id} className="space-y-2">
                 {/* Project header */}

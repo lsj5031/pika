@@ -2,7 +2,7 @@
 
 use axum::{
     extract::Request,
-    http::{header, HeaderMap, StatusCode, Uri},
+    http::{HeaderMap, StatusCode, Uri, header},
     response::{IntoResponse, Response},
 };
 use std::path::PathBuf;
@@ -37,7 +37,10 @@ pub async fn serve_static_files(uri: Uri, _request: Request) -> Response {
             Ok(contents) => {
                 let mut headers = HeaderMap::new();
                 headers.insert(header::CONTENT_TYPE, mime.parse().unwrap());
-                headers.insert(header::CACHE_CONTROL, "public, max-age=3600".parse().unwrap());
+                headers.insert(
+                    header::CACHE_CONTROL,
+                    "public, max-age=3600".parse().unwrap(),
+                );
 
                 (headers, contents).into_response()
             }

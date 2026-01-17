@@ -3,6 +3,14 @@ name = "pika"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "pi_agent_manager"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pika"
+path = "src/main.rs"
+
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1.41", features = ["full"] }
@@ -21,3 +29,7 @@ dirs = "5.0"
 chrono = "0.4"
 base64 = "0.22"
 notify = { version = "7.0", default-features = false, features = ["macos_fsevent"] }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tower = "0.5"

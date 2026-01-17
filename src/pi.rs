@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 use thiserror::Error;
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
-use tokio::io::AsyncWriteExt;
 
 /// Maximum number of concurrent pi processes allowed
 const MAX_CONCURRENT_PROCESSES: usize = 50;
@@ -43,7 +43,10 @@ pub struct PiProcess {
 impl PiProcess {
     /// Spawn a new pi process in RPC mode
     /// If session_file is provided, the process will resume that session
-    pub fn spawn(project_path: PathBuf, session_file: Option<PathBuf>) -> Result<Self, PiProcessError> {
+    pub fn spawn(
+        project_path: PathBuf,
+        session_file: Option<PathBuf>,
+    ) -> Result<Self, PiProcessError> {
         // Validate project path exists
         if !project_path.exists() {
             return Err(PiProcessError::ProjectNotFound { path: project_path });
@@ -69,37 +72,29 @@ impl PiProcess {
         }
 
         // Spawn pi process with environment variables inherited
-        let mut process = Command::new("npx")
-            .args(&args)
-            .current_dir(
-                project_path.canonicalize().map_err(|_e| PiProcessError::InvalidPath {
+        let mut process =
+            Command::new("npx")
+                .args(&args)
+                .current_dir(project_path.canonicalize().map_err(|_e| {
+                    PiProcessError::InvalidPath {
+                        path: project_path.clone(),
+                    }
+                })?)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .env_clear()
+                .envs(std::env::vars())
+                .spawn()
+                .map_err(|e| PiProcessError::SpawnFailed {
                     path: project_path.clone(),
-                })?
-            )
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .env_clear()
-            .envs(std::env::vars())
-            .spawn()
-            .map_err(|e| PiProcessError::SpawnFailed {
-                path: project_path.clone(),
-                source: e,
-            })?;
+                    source: e,
+                })?;
 
         // Get stdin, stdout and stderr handles
-        let stdin = process
-            .stdin
-            .take()
-            .ok_or(PiProcessError::PipeFailed)?;
-        let stdout = process
-            .stdout
-            .take()
-            .ok_or(PiProcessError::PipeFailed)?;
-        let stderr = process
-            .stderr
-            .take()
-            .ok_or(PiProcessError::PipeFailed)?;
+        let stdin = process.stdin.take().ok_or(PiProcessError::PipeFailed)?;
+        let stdout = process.stdout.take().ok_or(PiProcessError::PipeFailed)?;
+        let stderr = process.stderr.take().ok_or(PiProcessError::PipeFailed)?;
 
         // Spawn task to read JSON-RPC events from stdout
         let tx_clone = tx.clone();
@@ -178,9 +173,9 @@ impl PiProcess {
     /// Check if the process is still running
     pub fn is_running(&mut self) -> bool {
         match self.process.try_wait() {
-            Ok(None) => true,  // Process is still running
-            Ok(Some(_)) => false,  // Process has exited
-            Err(_) => false,  // Error checking status, assume not running
+            Ok(None) => true,     // Process is still running
+            Ok(Some(_)) => false, // Process has exited
+            Err(_) => false,      // Error checking status, assume not running
         }
     }
 
@@ -250,7 +245,10 @@ pub enum ProcessManagerEvent {
     /// A JSON-RPC event from a process
     JsonRpc { id: String, event: JsonRpcEvent },
     /// A session was started
-    SessionStarted { session_id: String, process_id: String },
+    SessionStarted {
+        session_id: String,
+        process_id: String,
+    },
 }
 
 impl Default for ProcessManager {
@@ -278,7 +276,11 @@ impl ProcessManager {
 
     /// Spawn a new pi process
     /// If session_file is provided, the process will resume that session
-    pub fn spawn(&mut self, project_path: PathBuf, session_file: Option<PathBuf>) -> Result<String, PiProcessError> {
+    pub fn spawn(
+        &mut self,
+        project_path: PathBuf,
+        session_file: Option<PathBuf>,
+    ) -> Result<String, PiProcessError> {
         // Check concurrent limit
         if self.processes.len() >= MAX_CONCURRENT_PROCESSES {
             return Err(PiProcessError::TooManyProcesses {
@@ -322,22 +324,21 @@ impl ProcessManager {
         let process = self
             .processes
             .remove(id)
-            .ok_or(PiProcessError::ProcessNotFound {
-                id: id.to_string(),
-            })?;
+            .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
 
         process.kill().await?;
 
         // Remove session-to-process mapping for this process
-        self.session_to_process.retain(|_session, process_id| process_id != id);
+        self.session_to_process
+            .retain(|_session, process_id| process_id != id);
 
         // Remove process-to-session mapping for this process
         self.process_to_session.remove(id);
 
         // Emit ProcessKilled event
-        let _ = self.event_tx.send(ProcessManagerEvent::ProcessKilled {
-            id: id.to_string(),
-        });
+        let _ = self
+            .event_tx
+            .send(ProcessManagerEvent::ProcessKilled { id: id.to_string() });
 
         Ok(())
     }
@@ -347,9 +348,7 @@ impl ProcessManager {
         let process = self
             .processes
             .get(id)
-            .ok_or(PiProcessError::ProcessNotFound {
-                id: id.to_string(),
-            })?;
+            .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
 
         Ok(process.subscribe())
     }
@@ -378,9 +377,7 @@ impl ProcessManager {
         let mut process = self
             .processes
             .remove(id)
-            .ok_or(PiProcessError::ProcessNotFound {
-                id: id.to_string(),
-            })?;
+            .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
 
         // Send the prompt
         process.send_prompt(prompt).await?;
@@ -421,11 +418,14 @@ impl ProcessManager {
         // Look up the session file to resume
         // Import the helper function from sessions module
         let session_file = crate::sessions::get_session_file_path(session_id, &project_path);
-        
+
         if let Some(ref path) = session_file {
             println!("📂 Resuming session {} from {:?}", session_id, path);
         } else {
-            println!("📂 Starting new session {} (no existing session file found)", session_id);
+            println!(
+                "📂 Starting new session {} (no existing session file found)",
+                session_id
+            );
         }
 
         // Create process with session file if available
@@ -451,10 +451,12 @@ impl ProcessManager {
         self.processes.insert(process_id.clone(), process);
 
         // Track session-to-process mapping
-        self.session_to_process.insert(session_id.to_string(), process_id.clone());
+        self.session_to_process
+            .insert(session_id.to_string(), process_id.clone());
 
         // Track process-to-session mapping (reverse lookup)
-        self.process_to_session.insert(process_id.clone(), session_id.to_string());
+        self.process_to_session
+            .insert(process_id.clone(), session_id.to_string());
 
         // Emit ProcessSpawned event
         let _ = self.event_tx.send(ProcessManagerEvent::ProcessSpawned {
@@ -548,7 +550,10 @@ mod tests {
         let json = r#"{"type":"notify","message":"test notification"}"#;
         let event: JsonRpcEvent = serde_json::from_str(json).unwrap();
         assert_eq!(event.event_type, Some("notify".to_string()));
-        assert_eq!(event.extra.get("message").and_then(|v| v.as_str()), Some("test notification"));
+        assert_eq!(
+            event.extra.get("message").and_then(|v| v.as_str()),
+            Some("test notification")
+        );
     }
 
     #[test]
