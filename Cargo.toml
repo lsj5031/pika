@@ -11,6 +11,10 @@ path = "src/lib.rs"
 name = "pi-agent-manager"
 path = "src/main.rs"
 
+[features]
+default = []
+test-utils = []
+
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1.41", features = ["full"] }
@@ -33,3 +37,4 @@ notify = { version = "7.0", default-features = false, features = ["macos_fsevent
 [dev-dependencies]
 http-body-util = "0.1"
 tower = "0.5"
+pi-agent-manager = { path = ".", features = ["test-utils"] }
