@@ -1034,6 +1034,7 @@ dependencies = [
  "jsonrpc-http-server",
  "mime_guess",
  "notify",
+ "pika",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
