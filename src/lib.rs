@@ -1,6 +1,7 @@
 mod api;
 mod auth;
 mod config;
+pub mod metrics;
 mod pi;
 mod sessions;
 mod static_files;
@@ -8,7 +9,6 @@ mod websocket;
 
 use axum::{Router, middleware, response::Json, routing::get};
 use serde_json::Value;
-use tower_http::cors::{Any, CorsLayer};
 
 pub use api::create_api_router;
 pub use auth::{AuthCredentials, basic_auth_middleware};
@@ -47,33 +47,43 @@ async fn health_check() -> Json<Value> {
     }))
 }
 
-pub fn create_test_router() -> Router {
-    let config = ProjectConfig::default();
-    let app_state = AppState::new(config);
-    let auth_credentials = AuthCredentials::new(String::new(), String::new());
+/// Test utilities - only available in test builds
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils {
+    use super::*;
+    use tower_http::cors::{Any, CorsLayer};
 
-    let protected_routes = Router::new()
-        .merge(create_api_router())
-        .with_state(app_state.clone())
-        .layer(middleware::from_fn(move |req, next| {
-            let creds = auth_credentials.clone();
-            basic_auth_middleware(req, next, creds)
-        }));
+    pub fn create_test_router() -> Router {
+        let config = ProjectConfig::default();
+        let app_state = AppState::new(config);
+        let auth_credentials = AuthCredentials::new(String::new(), String::new());
 
-    Router::new()
-        .route("/health", get(health_check))
-        .route("/ws", get(ws_handler))
-        .fallback(serve_static_files)
-        .with_state(app_state)
-        .merge(protected_routes)
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
+        let protected_routes = Router::new()
+            .merge(create_api_router())
+            .with_state(app_state.clone())
+            .layer(middleware::from_fn(move |req, next| {
+                let creds = auth_credentials.clone();
+                basic_auth_middleware(req, next, creds)
+            }));
+
+        Router::new()
+            .route("/health", get(health_check))
+            .route("/ws", get(ws_handler))
+            .fallback(serve_static_files)
+            .with_state(app_state)
+            .merge(protected_routes)
+            .layer(
+                CorsLayer::new()
+                    .allow_origin(Any)
+                    .allow_methods(Any)
+                    .allow_headers(Any),
+            )
+    }
+
+    pub async fn create_test_app() -> Router {
+        create_test_router()
+    }
 }
 
-pub async fn create_test_app() -> Router {
-    create_test_router()
-}
+#[cfg(any(test, feature = "test-utils"))]
+pub use test_utils::{create_test_app, create_test_router};
