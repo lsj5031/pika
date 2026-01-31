@@ -35,10 +35,10 @@ sudo cp "$SCRIPT_DIR/cloudflared-pi.service" /etc/systemd/system/
 sudo systemctl daemon-reload
 echo -e "${GREEN}✓ Cloudflared service installed${NC}"
 
-echo -e "${YELLOW}Step 4: Installing pika systemd service...${NC}"
+echo -e "${YELLOW}Step 4: Installing Pika systemd service...${NC}"
 sudo cp "$SCRIPT_DIR/pika.service" /etc/systemd/system/
 sudo systemctl daemon-reload
-echo -e "${GREEN}✓ Pi-agent-manager service installed${NC}"
+echo -e "${GREEN}✓ Pika service installed${NC}"
 
 echo -e "${YELLOW}Step 5: Starting services...${NC}"
 sudo systemctl enable cloudflared-pi.service

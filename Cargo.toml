@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "pi_agent_manager"
+name = "pika"
 path = "src/lib.rs"
 
 [[bin]]

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { Send } from "lucide-react";
+import { Send, Cpu } from "lucide-react";
 import { cn } from "../lib/utils";
+import { usePiSettings, type PiModel } from "../hooks/usePiSettings";
 
 interface ChatInputProps {
   sessionId: string | null;
@@ -19,6 +20,7 @@ export function ChatInput({
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { data: settings, isLoading: settingsLoading } = usePiSettings();
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -55,6 +57,12 @@ export function ChatInput({
     }
   };
 
+  const currentModel = settings?.availableModels?.find(
+    (model: PiModel) => model.id === settings?.defaultModel
+  );
+  const modelDisplay = currentModel?.name || settings?.defaultModel || "Not configured";
+  const providerDisplay = currentModel?.provider;
+
   return (
     <div className={cn("border-t bg-background p-3", className)}>
       <div className="flex items-end gap-2 max-w-4xl mx-auto">
@@ -86,6 +94,22 @@ export function ChatInput({
           <Send className="h-4 w-4" />
         </Button>
       </div>
+      {sessionId && (
+        <div className="flex items-center gap-1.5 max-w-4xl mx-auto mt-2 px-1">
+          <Cpu className="h-3 w-3 text-muted-foreground shrink-0" />
+          <span className="text-xs text-muted-foreground hidden sm:inline">
+            Model:
+          </span>
+          <span className="text-xs text-muted-foreground font-medium truncate max-w-[200px] sm:max-w-[300px]">
+            {settingsLoading ? "Loading..." : modelDisplay}
+          </span>
+          {providerDisplay && (
+            <span className="text-xs text-muted-foreground/70 hidden md:inline">
+              ({providerDisplay})
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

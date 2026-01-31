@@ -5,7 +5,7 @@ use tower::util::ServiceExt;
 
 #[tokio::test]
 async fn health_check_returns_200() {
-    let app = pi_agent_manager::create_test_app().await;
+    let app = pika::create_test_app().await;
 
     let response = app
         .oneshot(
@@ -28,7 +28,7 @@ async fn health_check_returns_200() {
 
 #[tokio::test]
 async fn health_check_returns_valid_json() {
-    let app = pi_agent_manager::create_test_app().await;
+    let app = pika::create_test_app().await;
 
     let response = app
         .oneshot(
@@ -52,7 +52,7 @@ async fn health_check_returns_valid_json() {
 
 #[tokio::test]
 async fn static_files_route_works() {
-    let app = pi_agent_manager::create_test_app().await;
+    let app = pika::create_test_app().await;
 
     let response = app
         .oneshot(

@@ -1,6 +1,6 @@
 [Unit]
-Description=Pika
-After=network.target cloudflared-pi-api.service
+Description=Pika - AI Coding Companion
+After=network.target cloudflared-pi.service
 
 [Service]
 Type=simple

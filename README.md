@@ -1,16 +1,20 @@
 # Pika
 
+<div align="center">
+  <img src="frontend-web/public/logo.png" alt="Pika Logo" width="200" />
+</div>
+
 [![Status: Production Ready](https://img.shields.io/badge/status-production%20ready-brightgreen)](https://your-domain.example)
 [![Deployment](https://img.shields.io/badge/deployment-your-domain.example-blue)](https://your-domain.example)
 
-A web application for managing multiple pi-coding-agent sessions across projects. Built with Rust (Axum) backend and React + TypeScript + Vite frontend.
+Pika is your cute AI Coding Companion. A web application for managing multiple pi-coding-agent sessions across projects. Built with Rust (Axum) backend and React + TypeScript + Vite frontend.
 
 **Status**: ✅ **Production Ready** - Deployed at https://your-domain.example
 
 ## Features
 
 ### Core Functionality
-- **Web-based UI**: Modern responsive interface accessible from browser or mobile
+- **Pika Companion**: Your friendly rodent manager for AI sessions
 - **Session Management**: View, create, start, and stop pi-coding-agent sessions
 - **Project Organization**: Sessions grouped by project folder
 - **Real-time Updates**: WebSocket integration for live status updates
