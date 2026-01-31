@@ -359,17 +359,17 @@ async fn event_bridge_task(app_state: AppState) {
                                             // Use from_timestamp for conversion (returns Option, handles both secs and ms)
                                             chrono::DateTime::from_timestamp(ts_seconds, 0)
                                                 .map(|dt| {
-                                                    dt.format("%Y-%m-%d %H:%M:%S").to_string()
+                                                    dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()
                                                 })
                                                 .unwrap_or_else(|| {
                                                     chrono::Utc::now()
-                                                        .format("%Y-%m-%d %H:%M:%S")
+                                                        .format("%Y-%m-%dT%H:%M:%SZ")
                                                         .to_string()
                                                 })
                                         })
                                         .unwrap_or_else(|| {
                                             chrono::Utc::now()
-                                                .format("%Y-%m-%d %H:%M:%S")
+                                                .format("%Y-%m-%dT%H:%M:%SZ")
                                                 .to_string()
                                         });
 

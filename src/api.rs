@@ -13,7 +13,7 @@ use crate::AppState;
 use crate::config::ProjectConfig;
 use crate::sessions::{
     CreateSessionRequest, create_session, get_session_messages as fetch_session_messages,
-    scan_sessions,
+    load_user_prompts, scan_sessions, store_user_prompt,
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -429,24 +429,60 @@ pub async fn get_session_messages(
         }
     };
 
-    // Get messages for this session
-    let messages =
+    // Get messages from pi-agent's session file
+    let pi_messages =
         fetch_session_messages(&session.id, &session.project_path).map_err(|e| ErrorResponse {
             error: "INTERNAL_ERROR".to_string(),
             message: format!("Failed to read messages: {}", e),
         })?;
 
-    // Convert to response format
-    let message_responses: Vec<MessageResponse> = messages
-        .into_iter()
-        .map(|m| MessageResponse {
-            role: m.role,
-            content: m.content,
-            timestamp: m.timestamp,
-        })
-        .collect();
+    // Load stored user prompts that we sent via our API
+    let stored_prompts = load_user_prompts(&session.id, &session.project_path);
 
-    Ok(Json(message_responses))
+    // Merge stored prompts with pi-agent messages
+    // Strategy: interleave based on timestamps
+    let mut all_messages: Vec<MessageResponse> = Vec::new();
+
+    // Convert stored prompts to MessageResponse
+    let mut prompt_iter = stored_prompts.into_iter().peekable();
+    let mut pi_iter = pi_messages.into_iter().peekable();
+
+    // Merge by timestamp (stored prompts should come before their corresponding assistant responses)
+    while prompt_iter.peek().is_some() || pi_iter.peek().is_some() {
+        // Compare timestamps to determine order
+        let take_prompt = match (prompt_iter.peek(), pi_iter.peek()) {
+            (Some(prompt), Some(pi_msg)) => {
+                // Compare timestamps - prompt should come before pi message if its timestamp is earlier
+                match (&prompt.timestamp, &pi_msg.timestamp) {
+                    (Some(p_ts), Some(m_ts)) => p_ts <= m_ts,
+                    (Some(_), None) => true,
+                    (None, Some(_)) => false,
+                    (None, None) => true, // Default to taking prompt first
+                }
+            }
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => break,
+        };
+
+        if take_prompt {
+            if let Some(prompt) = prompt_iter.next() {
+                all_messages.push(MessageResponse {
+                    role: prompt.role,
+                    content: prompt.content,
+                    timestamp: prompt.timestamp,
+                });
+            }
+        } else if let Some(pi_msg) = pi_iter.next() {
+            all_messages.push(MessageResponse {
+                role: pi_msg.role,
+                content: pi_msg.content,
+                timestamp: pi_msg.timestamp,
+            });
+        }
+    }
+
+    Ok(Json(all_messages))
 }
 
 /// POST /api/sessions/:id/prompt - send a prompt to a session
@@ -498,6 +534,11 @@ pub async fn send_prompt_to_session(
             error: "INTERNAL_ERROR".to_string(),
             message: format!("Failed to send prompt: {}", e),
         })?;
+
+    // Store the user prompt for later retrieval (pi-agent doesn't persist initial prompts)
+    if let Err(e) = store_user_prompt(&session_id, &session.project_path, &req.prompt) {
+        eprintln!("Failed to store user prompt: {}", e);
+    }
 
     Ok(Json(serde_json::json!({
         "status": "ok",
