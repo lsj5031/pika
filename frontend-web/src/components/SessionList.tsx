@@ -132,7 +132,7 @@ export function SessionList({ className, onSelect }: SessionListProps) {
                 size="icon"
                 id="new-session-button"
                 data-testid="new-session-button"
-                className="h-9 w-9 rounded-wobblyMd border-2 shadow-hard-sm bg-white hover:bg-accent hover:text-accent-foreground transition-all group"
+                className="h-9 w-9 rounded-wobblyMd border-2 shadow-hard-sm bg-background hover:bg-accent hover:text-accent-foreground transition-all group"
                 title="New Session"
               >
                 <Plus className="h-5 w-5 text-accent md:text-primary group-hover:text-accent-foreground transition-colors" />
@@ -149,7 +149,7 @@ export function SessionList({ className, onSelect }: SessionListProps) {
             placeholder="Search sessions..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-9 h-9 rounded-wobblyMd border-2 shadow-hard-sm bg-white"
+            className="pl-9 pr-9 h-9 rounded-wobblyMd border-2 shadow-hard-sm bg-background"
           />
           {searchQuery && (
             <button
