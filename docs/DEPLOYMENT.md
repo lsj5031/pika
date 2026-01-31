@@ -14,7 +14,7 @@ This will:
 1. Build the frontend (production)
 2. Build the backend (Rust release binary)
 3. Install and start the Cloudflare tunnel service
-4. Install and start the pi-agent-manager service
+4. Install and start the pika service
 
 After setup, your app will be available at: **https://pi.liu.nz**
 
@@ -36,7 +36,7 @@ After setup, your app will be available at: **https://pi.liu.nz**
 - **Backend Port**: 7847 (configurable via `config.toml`)
 - **Frontend**: Static files served by Rust backend from `frontend-web/dist/`
 - **Tunnel**: Cloudflare Tunnel ID `3f997687-540b-436a-b2cb-250984b6b0cf`
-- **Services**: `pi-agent-manager` and `cloudflared-pi` systemd services
+- **Services**: `pika` and `cloudflared-pi` systemd services
 
 ### 📱 Known Issues
 - **Mobile Overflow**: Horizontal scroll on devices <390px viewport
@@ -88,12 +88,12 @@ This will:
 ### 4. Start the Backend Server
 
 ```bash
-./target/release/pi-agent-manager
+./target/release/pika
 ```
 
 Or use systemd service (if created):
 ```bash
-sudo systemctl start pi-agent-manager
+sudo systemctl start pika
 ```
 
 ### 5. Build Frontend (Static Files)
@@ -156,7 +156,7 @@ npm run build
 ### Update Backend
 ```bash
 cargo build --release
-sudo systemctl restart pi-agent-manager
+sudo systemctl restart pika
 ```
 
 ## Environment Variables
@@ -193,7 +193,7 @@ npm run build
 ls -la dist/
 
 # Restart backend to pick up new static files
-sudo systemctl restart pi-agent-manager
+sudo systemctl restart pika
 ```
 
 ### Frontend not connecting to API

@@ -35,16 +35,16 @@ sudo cp "$SCRIPT_DIR/cloudflared-pi.service" /etc/systemd/system/
 sudo systemctl daemon-reload
 echo -e "${GREEN}✓ Cloudflared service installed${NC}"
 
-echo -e "${YELLOW}Step 4: Installing pi-agent-manager systemd service...${NC}"
-sudo cp "$SCRIPT_DIR/pi-agent-manager.service" /etc/systemd/system/
+echo -e "${YELLOW}Step 4: Installing Pika systemd service...${NC}"
+sudo cp "$SCRIPT_DIR/pika.service" /etc/systemd/system/
 sudo systemctl daemon-reload
-echo -e "${GREEN}✓ Pi-agent-manager service installed${NC}"
+echo -e "${GREEN}✓ Pika service installed${NC}"
 
 echo -e "${YELLOW}Step 5: Starting services...${NC}"
 sudo systemctl enable cloudflared-pi.service
 sudo systemctl start cloudflared-pi.service
-sudo systemctl enable pi-agent-manager.service
-sudo systemctl start pi-agent-manager.service
+sudo systemctl enable pika.service
+sudo systemctl start pika.service
 echo -e "${GREEN}✓ Services started${NC}"
 
 echo ""
@@ -53,12 +53,12 @@ echo ""
 echo "Services status:"
 sudo systemctl status cloudflared-pi.service --no-pager -l
 echo ""
-sudo systemctl status pi-agent-manager.service --no-pager -l
+sudo systemctl status pika.service --no-pager -l
 echo ""
 echo "Your app should now be available at: https://pi.liu.nz"
 echo ""
 echo "Useful commands:"
-echo "  - View logs: sudo journalctl -u pi-agent-manager -f"
-echo "  - Restart: sudo systemctl restart pi-agent-manager"
-echo "  - Update frontend: cd frontend-web && npm run build && sudo systemctl restart pi-agent-manager"
-echo "  - Update backend: cargo build --release && sudo systemctl restart pi-agent-manager"
+echo "  - View logs: sudo journalctl -u pika -f"
+echo "  - Restart: sudo systemctl restart pika"
+echo "  - Update frontend: cd frontend-web && npm run build && sudo systemctl restart pika"
+echo "  - Update backend: cargo build --release && sudo systemctl restart pika"

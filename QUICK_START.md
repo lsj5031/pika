@@ -71,7 +71,7 @@ make status
 sudo journalctl -u cloudflared-pi -f
 
 # Backend logs
-sudo journalctl -u pi-agent-manager -f
+sudo journalctl -u pika -f
 ```
 
 ### Update after code changes
@@ -104,7 +104,7 @@ localhost:7847 (Rust Backend)
 - `frontend-web/.env` - Frontend environment (points to https://pi.liu.nz)
 - `config.toml` - Backend configuration
 - `/etc/systemd/system/cloudflared-pi.service` - Tunnel service
-- `/etc/systemd/system/pi-agent-manager.service` - Backend service
+- `/etc/systemd/system/pika.service` - Backend service
 
 ---
 
@@ -116,7 +116,7 @@ localhost:7847 (Rust Backend)
 make status
 
 # Check logs
-sudo journalctl -u pi-agent-manager -n 50
+sudo journalctl -u pika -n 50
 sudo journalctl -u cloudflared-pi -n 50
 
 # Restart services

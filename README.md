@@ -1,16 +1,20 @@
-# PI Agent Manager
+# Pika
+
+<div align="center">
+  <img src="frontend-web/public/logo.png" alt="Pika Logo" width="200" />
+</div>
 
 [![Status: Production Ready](https://img.shields.io/badge/status-production%20ready-brightgreen)](https://pi.liu.nz)
 [![Deployment](https://img.shields.io/badge/deployment-pi.liu.nz-blue)](https://pi.liu.nz)
 
-A web application for managing multiple pi-coding-agent sessions across projects. Built with Rust (Axum) backend and React + TypeScript + Vite frontend.
+Pika is your cute AI Coding Companion. A web application for managing multiple pi-coding-agent sessions across projects. Built with Rust (Axum) backend and React + TypeScript + Vite frontend.
 
 **Status**: ✅ **Production Ready** - Deployed at https://pi.liu.nz
 
 ## Features
 
 ### Core Functionality
-- **Web-based UI**: Modern responsive interface accessible from browser or mobile
+- **Pika Companion**: Your friendly rodent manager for AI sessions
 - **Session Management**: View, create, start, and stop pi-coding-agent sessions
 - **Project Organization**: Sessions grouped by project folder
 - **Real-time Updates**: WebSocket integration for live status updates
@@ -100,7 +104,7 @@ make run        # Build and run production server
 
 The production build:
 1. Builds the frontend to `frontend-web/dist/`
-2. Builds the Rust backend to `target/release/pi-agent-manager`
+2. Builds the Rust backend to `target/release/pika`
 3. Backend serves static files from `frontend-web/dist/`
 
 ### Makefile Targets
@@ -122,7 +126,7 @@ make help           # Show all available targets
 After building, run the production server:
 
 ```bash
-./target/release/pi-agent-manager
+./target/release/pika
 ```
 
 Or use the Makefile:
@@ -140,7 +144,7 @@ The server will start on port 7847 (configurable via `config.toml`) and serve th
 make status
 
 # View logs
-sudo journalctl -u pi-agent-manager -f
+sudo journalctl -u pika -f
 sudo journalctl -u cloudflared-pi -f
 
 # Restart services
@@ -150,7 +154,7 @@ make restart-service
 ## Project Structure
 
 ```
-pi-agent-manager/
+pika/
 ├── src/                    # Rust backend source
 │   ├── main.rs            # Server entry point
 │   ├── static_files.rs    # Static file serving

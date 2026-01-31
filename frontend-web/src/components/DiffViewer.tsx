@@ -69,9 +69,9 @@ export function DiffViewer({ diff, className }: DiffViewerProps) {
         {viewMode === "split" ? (
           <>
             {/* Old content */}
-            <div className="border-b md:border-b-0 md:border-r bg-red-50 dark:bg-red-950/20 p-2">
-              <div className="font-semibold mb-2 text-red-700 dark:text-red-400 flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+            <div className="border-b md:border-b-0 md:border-r p-2 bg-diff-removed text-diff-removed-text">
+              <div className="font-semibold mb-2 flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-error"></span>
                 Before
               </div>
               <pre className="whitespace-pre-wrap break-all opacity-80">
@@ -79,9 +79,9 @@ export function DiffViewer({ diff, className }: DiffViewerProps) {
               </pre>
             </div>
             {/* New content */}
-            <div className="bg-green-50 dark:bg-green-950/20 p-2">
-              <div className="font-semibold mb-2 text-green-700 dark:text-green-400 flex items-center gap-2">
-                <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+            <div className="p-2 bg-diff-added text-diff-added-text">
+              <div className="font-semibold mb-2 flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-success"></span>
                 After
               </div>
               <pre className="whitespace-pre-wrap break-all">
@@ -99,13 +99,13 @@ export function DiffViewer({ diff, className }: DiffViewerProps) {
             <pre className="whitespace-pre-wrap break-all leading-relaxed">
               {diff.oldContent && diff.newContent ? (
                 <>
-                  <div className="bg-red-100/50 dark:bg-red-900/20 px-1 py-0.5 rounded -mx-1 mb-2">
-                    <span className="text-red-600 dark:text-red-400 line-through">
+                  <div className="bg-error/20 px-1 py-0.5 rounded -mx-1 mb-2">
+                    <span className="text-error line-through">
                       {diff.oldContent}
                     </span>
                   </div>
-                  <div className="bg-green-100/50 dark:bg-green-900/20 px-1 py-0.5 rounded -mx-1">
-                    <span className="text-green-600 dark:text-green-400">
+                  <div className="bg-success/20 px-1 py-0.5 rounded -mx-1">
+                    <span className="text-success">
                       {diff.newContent}
                     </span>
                   </div>
@@ -113,9 +113,11 @@ export function DiffViewer({ diff, className }: DiffViewerProps) {
               ) : (
                 <div className={cn(
                   "p-2 rounded",
-                  diff.newContent ? "bg-green-50 dark:bg-green-900/20 text-green-700" : "bg-red-50 dark:bg-red-900/20 text-red-700"
+                  diff.newContent ? "bg-success/20" : "bg-error/20"
                 )}>
-                  {diff.newContent || diff.oldContent || "// No content"}
+                  <span className={diff.newContent ? "text-success-foreground" : "text-error-foreground"}>
+                    {diff.newContent || diff.oldContent || "// No content"}
+                  </span>
                 </div>
               )}
             </pre>

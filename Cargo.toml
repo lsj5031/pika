@@ -1,14 +1,14 @@
 [package]
-name = "pi-agent-manager"
+name = "pika"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "pi_agent_manager"
+name = "pika"
 path = "src/lib.rs"
 
 [[bin]]
-name = "pi-agent-manager"
+name = "pika"
 path = "src/main.rs"
 
 [features]
@@ -37,4 +37,4 @@ notify = { version = "7.0", default-features = false, features = ["macos_fsevent
 [dev-dependencies]
 http-body-util = "0.1"
 tower = "0.5"
-pi-agent-manager = { path = ".", features = ["test-utils"] }
+pika = { path = ".", features = ["test-utils"] }

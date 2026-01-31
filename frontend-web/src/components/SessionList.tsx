@@ -232,7 +232,7 @@ export function SessionList({ className, onSelect }: SessionListProps) {
                             <div className="relative mt-1 shrink-0">
                               <div className={cn(
                                 "h-3 w-3 rounded-full border border-black/10",
-                                isActive ? "bg-green-500 shadow-[0_0_8px_theme(colors.green.400)]" : "bg-muted-foreground/20"
+                                isActive ? "bg-success shadow-[0_0_8px_var(--success)]" : "bg-muted-foreground/20"
                               )} />
 
                               {isThinking && (

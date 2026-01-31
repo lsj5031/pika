@@ -45,70 +45,45 @@ clean:
 # Run the production build
 run: build
 	@echo "Starting production server..."
-	./target/release/pi-agent-manager
+	./target/release/pika
 
 # Install test dependencies
 test-install:
 	@echo "Installing test dependencies..."
-	cd /tmp/pi-agent-manager-test && npm install
-	cd /tmp/pi-agent-manager-test && npx playwright install chromium
+	cd /tmp/pika-test && npm install
+	cd /tmp/pika-test && npx playwright install chromium
 	@echo "Test dependencies installed"
 
 # Run all E2E tests (requires server to be running)
 test:
 	@echo "Running E2E tests..."
 	@echo "Make sure the server is running on port 7847"
-	cd /tmp/pi-agent-manager-test && npx playwright test
+	cd /tmp/pika-test && npx playwright test
 
 # Run mobile E2E tests with visible browser (requires server to be running)
 test-mobile:
 	@echo "Running mobile E2E tests with visible browser..."
 	@echo "Make sure the server is running on port 7847"
-	cd /tmp/pi-agent-manager-test && npx playwright test --project=mobile --headed
+	cd /tmp/pika-test && npx playwright test --project=mobile --headed
 
 # Deploy: Build everything and install systemd services
 deploy: build
 	@echo "🚀 Deploying pi.liu.nz..."
 	@echo "Installing systemd services (requires sudo)..."
 	sudo cp cloudflared-pi.service /etc/systemd/system/
-	sudo cp pi-agent-manager.service /etc/systemd/system/
+	sudo cp pika.service /etc/systemd/system/
 	sudo systemctl daemon-reload
-	@echo "Stopping any existing pi-agent-manager process on port 7847..."
-	-pkill -f pi-agent-manager || true
+	@echo "Stopping any existing pika process on port 7847..."
+	-pkill -f pika || true
 	@echo "Waiting for port to be released..."
 	@sleep 1
 	@echo "Enabling and starting services..."
 	sudo systemctl enable cloudflared-pi.service
 	sudo systemctl start cloudflared-pi.service
-	sudo systemctl enable pi-agent-manager.service
-	sudo systemctl restart pi-agent-manager.service
-	@echo "✅ Deployment complete!"
-	@echo "🌐 Your app is available at: https://pi.liu.nz"
-	@echo ""
-	@echo "Service status:"
-	sudo systemctl status cloudflared-pi.service --no-pager -l
-	@echo ""
-	sudo systemctl status pi-agent-manager.service --no-pager -l
-
-# Install systemd services only (without building)
-install-service:
-	@echo "Installing systemd services..."
-	sudo cp cloudflared-pi.service /etc/systemd/system/
-	sudo cp pi-agent-manager.service /etc/systemd/system/
-	sudo systemctl daemon-reload
-	sudo systemctl enable cloudflared-pi.service
-	sudo systemctl enable pi-agent-manager.service
-	@echo "✅ Services installed (not started)"
-	@echo "Use 'make restart-service' to start them"
-
-# Restart systemd services
-restart-service:
-	@echo "Restarting services..."
-	@echo "Stopping any existing pi-agent-manager process..."
-	-pkill -f pi-agent-manager || true
-	@sleep 1
-	sudo systemctl restart cloudflared-pi.service
-	sudo systemctl restart pi-agent-manager.service
+	sudo systemctl enable pika.service
+	sudo systemctl start pika.service
+	sudo systemctl enable pika.service
+	sudo systemctl restart pika.service
 	@echo "✅ Services restarted"
 
 # Check service status
@@ -116,8 +91,8 @@ status:
 	@echo "=== Cloudflare Tunnel ==="
 	sudo systemctl status cloudflared-pi.service --no-pager -l
 	@echo ""
-	@echo "=== Pi Agent Manager ==="
-	sudo systemctl status pi-agent-manager.service --no-pager -l
+	@echo "=== Pika ==="
+	sudo systemctl status pika.service --no-pager -l
 
 # Help target
 help:

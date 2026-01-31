@@ -100,7 +100,7 @@ export const useAppStore = create<AppState>()(
       setLastProject: (projectId) => set({ lastProjectId: projectId }),
     }),
     {
-      name: "pi-agent-manager-storage",
+      name: "pika-storage",
       // Don't persist Sets (they'll be re-synced from WebSocket)
       partialize: (state) => ({
         currentSessionId: state.currentSessionId,

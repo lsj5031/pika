@@ -27,9 +27,9 @@ export default {
         wobblyMd: "25px 55px 20px 45px / 45px 20px 55px 25px",
       },
       boxShadow: {
-        hard: "4px 4px 0px 0px #2d2d2d",
-        "hard-hover": "2px 2px 0px 0px #2d2d2d",
-        "hard-sm": "2px 2px 0px 0px #2d2d2d",
+        hard: "4px 4px 0px 0px var(--shadow-hard-color, #2d2d2d)",
+        "hard-hover": "2px 2px 0px 0px var(--shadow-hard-color, #2d2d2d)",
+        "hard-sm": "2px 2px 0px 0px var(--shadow-hard-color, #2d2d2d)",
       },
       colors: {
         background: "var(--background)",
@@ -65,12 +65,43 @@ export default {
         border: "var(--border)",
         input: "var(--input)",
         ring: "var(--ring)",
+        "ring-focus": "var(--ring-focus)",
         chart: {
           "1": "var(--chart-1)",
           "2": "var(--chart-2)",
           "3": "var(--chart-3)",
           "4": "var(--chart-4)",
           "5": "var(--chart-5)",
+        },
+        success: {
+          DEFAULT: "var(--success)",
+          foreground: "var(--success-foreground)",
+        },
+        warning: {
+          DEFAULT: "var(--warning)",
+          foreground: "var(--warning-foreground)",
+        },
+        error: {
+          DEFAULT: "var(--error)",
+          foreground: "var(--error-foreground)",
+        },
+        info: {
+          DEFAULT: "var(--info)",
+          foreground: "var(--info-foreground)",
+        },
+        thinking: {
+          DEFAULT: "var(--thinking)",
+          foreground: "var(--thinking-foreground)",
+        },
+        overlay: "var(--overlay)",
+        "shadow-hard-color": "var(--shadow-hard-color)",
+        "diff-added": {
+          DEFAULT: "var(--diff-added-bg)",
+          text: "var(--diff-added-text)",
+        },
+        "diff-removed": {
+          DEFAULT: "var(--diff-removed-bg)",
+          text: "var(--diff-removed-text)",
         },
       },
     },

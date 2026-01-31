@@ -42,7 +42,7 @@ impl AppState {
 async fn health_check() -> Json<Value> {
     Json(serde_json::json!({
         "status": "ok",
-        "service": "pi-agent-manager",
+        "service": "pika",
         "version": "0.1.0"
     }))
 }

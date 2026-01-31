@@ -1,6 +1,6 @@
 // PWA Service Worker for offline capability
 
-const CACHE_NAME = 'pi-agent-manager-v1';
+const CACHE_NAME = 'pika-v1';
 const urlsToCache = [
   '/',
   '/index.html',

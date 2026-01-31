@@ -14,8 +14,8 @@ The PI Agent Manager is fully deployed and operational at **https://pi.liu.nz**.
 - **URL**: https://pi.liu.nz
 - **Tunnel**: Cloudflare Tunnel (ID: 3f997687-540b-436a-b2cb-250984b6b0cf)
 - **Backend Port**: 7847
-- **Services**: 
-  - `pi-agent-manager` (systemd)
+- **Services**:
+  - `pika` (systemd)
   - `cloudflared-pi` (systemd)
 
 ---
@@ -72,7 +72,7 @@ The PI Agent Manager is fully deployed and operational at **https://pi.liu.nz**.
 - `config.toml` - Backend configuration
 - `frontend-web/.env` - Frontend environment variables
 - `~/.cloudflared/config-pi.yml` - Tunnel configuration
-- `/etc/systemd/system/pi-agent-manager.service` - Backend service
+- `/etc/systemd/system/pika.service` - Backend service
 - `/etc/systemd/system/cloudflared-pi.service` - Tunnel service
 
 ---
@@ -117,7 +117,7 @@ make restart-service  # Restart services
 
 ### Monitoring
 ```bash
-sudo journalctl -u pi-agent-manager -f    # Backend logs
+sudo journalctl -u pika -f    # Backend logs
 sudo journalctl -u cloudflared-pi -f      # Tunnel logs
 ```
 
