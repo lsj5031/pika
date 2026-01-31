@@ -39,10 +39,39 @@
     --chart-3: #e5e0d8;
     --chart-4: #2d2d2d;
     --chart-5: #fff9c4;
+
+    /* Semantic status colors - Light mode (RGB channels for opacity modifiers) */
+    --success: 34 197 94;
+    --success-foreground: 255 255 255;
+    --warning: 245 158 11;
+    --warning-foreground: 255 255 255;
+    --error: 239 68 68;
+    --error-foreground: 255 255 255;
+    --info: 59 130 246;
+    --info-foreground: 255 255 255;
+
+    /* Thinking/WIP state (pale yellow sticky note) - RGB channels */
+    --thinking: 255 249 196;
+    --thinking-foreground: 45 45 45;
+
+    /* Focus ring (same as --ring but explicit for focus states) */
+    --ring-focus: 45 93 161;
+
+    /* Overlay for modals/sheets */
+    --overlay: rgba(0, 0, 0, 0.5);
+
+    /* Hard shadow color */
+    --shadow-hard-color: #2d2d2d;
+
+    /* Diff viewer colors - these are used directly as backgrounds, not with opacity */
+    --diff-added-bg: #dcfce7;
+    --diff-added-text: #166534;
+    --diff-removed-bg: #fee2e2;
+    --diff-removed-text: #991b1b;
   }
 
   .dark {
-    /* Dark mode isn't explicitly defined in spec, but lets do a blackboard style or just invert broadly for safety */
+    /* Dark mode - Blackboard style */
     --background: #1a1a1a;
     --foreground: #fdfbf7;
     --card: #2d2d2d;
@@ -62,6 +91,35 @@
     --border: #fdfbf7;
     --input: #2d2d2d;
     --ring: #4dabf7;
+
+    /* Semantic status colors - Dark mode (RGB channels for opacity modifiers) */
+    --success: 74 222 128;
+    --success-foreground: 26 26 26;
+    --warning: 251 191 36;
+    --warning-foreground: 26 26 26;
+    --error: 248 113 113;
+    --error-foreground: 26 26 26;
+    --info: 96 165 250;
+    --info-foreground: 26 26 26;
+
+    /* Thinking/WIP state - Dark mode (chalk on blackboard) - RGB channels */
+    --thinking: 254 240 138;
+    --thinking-foreground: 26 26 26;
+
+    /* Focus ring - Dark mode */
+    --ring-focus: 77 171 247;
+
+    /* Overlay for modals/sheets - Dark mode */
+    --overlay: rgba(0, 0, 0, 0.7);
+
+    /* Hard shadow color - Dark mode */
+    --shadow-hard-color: #fdfbf7;
+
+    /* Diff viewer colors - Dark mode */
+    --diff-added-bg: #166534;
+    --diff-added-text: #86efac;
+    --diff-removed-bg: #991b1b;
+    --diff-removed-text: #fca5a5;
   }
 }
 

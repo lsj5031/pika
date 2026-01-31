@@ -35,7 +35,7 @@ export function AppHeader({
           <span className="sr-only">Toggle menu</span>
         </Button>
         <h1 className="text-xl md:text-2xl font-heading font-bold tracking-tight whitespace-nowrap">
-          PI Agent <span className="hidden xs:inline">Manager</span>
+          Pika
         </h1>
       </div>
 
@@ -53,10 +53,10 @@ export function AppHeader({
           className={cn(
             "border-2 font-heading font-bold px-2 py-1 md:px-3 rounded-wobblyMd shadow-sm transition-all text-xs md:text-sm",
             connectionStatus === "connected"
-              ? "border-green-500/50 text-green-700 bg-green-50 shadow-green-100"
+              ? "border-success/50 text-success-foreground bg-success/20"
               : connectionStatus === "connecting"
-                ? "border-yellow-500/50 text-yellow-700 bg-yellow-50 shadow-yellow-100"
-                : "border-red-500/50 text-red-700 bg-red-50 shadow-red-100"
+                ? "border-warning/50 text-warning-foreground bg-warning/20"
+                : "border-error/50 text-error-foreground bg-error/20"
           )}
         >
           {connectionStatus === "connected" ? (

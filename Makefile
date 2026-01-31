@@ -81,33 +81,8 @@ deploy: build
 	sudo systemctl enable cloudflared-pi.service
 	sudo systemctl start cloudflared-pi.service
 	sudo systemctl enable pika.service
-	sudo systemctl restart pika.service
-	@echo "✅ Deployment complete!"
-	@echo "🌐 Your app is available at: https://your-domain.example"
-	@echo ""
-	@echo "Service status:"
-	sudo systemctl status cloudflared-pi.service --no-pager -l
-	@echo ""
-	sudo systemctl status pika.service --no-pager -l
-
-# Install systemd services only (without building)
-install-service:
-	@echo "Installing systemd services..."
-	sudo cp cloudflared-pi.service /etc/systemd/system/
-	sudo cp pika.service /etc/systemd/system/
-	sudo systemctl daemon-reload
-	sudo systemctl enable cloudflared-pi.service
+	sudo systemctl start pika.service
 	sudo systemctl enable pika.service
-	@echo "✅ Services installed (not started)"
-	@echo "Use 'make restart-service' to start them"
-
-# Restart systemd services
-restart-service:
-	@echo "Restarting services..."
-	@echo "Stopping any existing pika process..."
-	-pkill -f pika || true
-	@sleep 1
-	sudo systemctl restart cloudflared-pi.service
 	sudo systemctl restart pika.service
 	@echo "✅ Services restarted"
 

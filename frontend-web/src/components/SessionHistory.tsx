@@ -118,27 +118,27 @@ function parseThinkingBlocks(content: string): { thinking: string; response: str
 function getMessageColors(role: string, hasToolUse: boolean) {
   if (role === "user") {
     return {
-      bg: "bg-gradient-to-br from-blue-500 to-blue-600",
-      text: "text-white",
-      icon: "text-blue-100",
-      border: "border-blue-400"
+      bg: "bg-info",
+      text: "text-info-foreground",
+      icon: "text-info-foreground",
+      border: "border-info"
     };
   }
 
   if (hasToolUse) {
     return {
-      bg: "bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30",
-      text: "text-amber-900 dark:text-amber-100",
-      icon: "text-amber-600 dark:text-amber-400",
-      border: "border-amber-300 dark:border-amber-700"
+      bg: "bg-warning/10 dark:bg-warning/20",
+      text: "text-warning-foreground",
+      icon: "text-warning",
+      border: "border-warning/50"
     };
   }
 
   return {
-    bg: "bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30",
-    text: "text-emerald-900 dark:text-emerald-100",
-    icon: "text-emerald-600 dark:text-emerald-400",
-    border: "border-emerald-300 dark:border-emerald-700"
+    bg: "bg-success/10 dark:bg-success/20",
+    text: "text-success-foreground",
+    icon: "text-success",
+    border: "border-success/50"
   };
 }
 

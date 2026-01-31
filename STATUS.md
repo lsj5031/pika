@@ -14,7 +14,7 @@ The Pika is fully deployed and operational at **https://your-domain.example**.
 - **URL**: https://your-domain.example
 - **Tunnel**: Cloudflare Tunnel (ID: TUNNEL_ID_REDACTED)
 - **Backend Port**: 7847
-- **Services**: 
+- **Services**:
   - `pika` (systemd)
   - `cloudflared-pi` (systemd)
 
