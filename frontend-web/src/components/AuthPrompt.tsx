@@ -71,7 +71,7 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
     return (
         <Dialog open={open} onOpenChange={() => { }}>
             <DialogContent
-                className="sm:max-w-md bg-white shadow-2xl"
+                className="sm:max-w-md shadow-2xl"
                 onInteractOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
             >
@@ -97,7 +97,7 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
                             onKeyDown={handleKeyDown}
                             autoComplete="username"
                             autoFocus
-                            className="bg-white border-input"
+                            className="bg-background border-input"
                         />
                     </div>
 
@@ -111,7 +111,7 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
                             onChange={(e) => setPassword(e.target.value)}
                             onKeyDown={handleKeyDown}
                             autoComplete="current-password"
-                            className="bg-white border-input"
+                            className="bg-background border-input"
                         />
                     </div>
 

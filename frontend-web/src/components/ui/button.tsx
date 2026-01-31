@@ -10,15 +10,17 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-white text-primary border-[3px] border-primary shadow-hard hover:bg-accent hover:text-accent-foreground hover:shadow-hard-hover hover:-translate-y-0.5 hover:translate-x-0.5 active:shadow-none active:translate-x-1 active:translate-y-1 hover:rotate-1 disabled:bg-muted disabled:text-muted-foreground disabled:border-muted-foreground disabled:shadow-none",
+          "bg-primary text-primary-foreground border-[3px] border-primary shadow-hard hover:bg-primary/90 hover:shadow-hard-hover hover:-translate-y-0.5 hover:translate-x-0.5 active:shadow-none active:translate-x-1 active:translate-y-1 hover:rotate-1 disabled:bg-muted disabled:text-muted-foreground disabled:border-muted-foreground disabled:shadow-none",
         destructive:
-          "bg-white text-destructive border-[3px] border-destructive shadow-hard hover:bg-destructive hover:text-destructive-foreground hover:shadow-hard-hover active:shadow-none disabled:bg-muted disabled:text-muted-foreground disabled:border-muted-foreground disabled:shadow-none",
+          "bg-background text-destructive border-[3px] border-destructive shadow-hard hover:bg-destructive hover:text-destructive-foreground hover:shadow-hard-hover active:shadow-none disabled:bg-muted disabled:text-muted-foreground disabled:border-muted-foreground disabled:shadow-none",
         outline:
           "border-[3px] border-primary bg-background hover:bg-muted hover:text-accent-foreground disabled:border-muted-foreground disabled:text-muted-foreground disabled:opacity-50",
         secondary:
           "bg-muted text-secondary-foreground border-[3px] border-muted-foreground/20 hover:bg-secondary/80 shadow-sm disabled:opacity-50",
         ghost: "hover:bg-accent hover:text-accent-foreground hover:shadow-hard-hover hover:border-[3px] border-transparent disabled:opacity-50",
         link: "text-primary underline-offset-4 hover:underline disabled:text-muted-foreground disabled:opacity-50",
+        accent:
+          "bg-accent text-accent-foreground border-[3px] border-accent shadow-hard hover:bg-accent/90 hover:shadow-hard-hover hover:-translate-y-0.5 hover:translate-x-0.5 active:shadow-none active:translate-x-1 active:translate-y-1 hover:rotate-1 disabled:bg-muted disabled:text-muted-foreground disabled:border-muted-foreground disabled:shadow-none",
       },
       size: {
         default: "h-12 px-6 py-2",
