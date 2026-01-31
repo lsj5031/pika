@@ -1,8 +1,8 @@
 use crate::config::ProjectConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
-use std::io::{BufRead, BufReader};
+use std::fs::{self, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use uuid::Uuid;
@@ -474,6 +474,116 @@ pub fn get_session_messages(
     }
 
     Ok(messages)
+}
+
+/// Stored user prompt (for prompts sent via our API that pi-agent doesn't persist)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredUserPrompt {
+    /// The prompt text
+    pub prompt: String,
+    /// Timestamp when the prompt was sent
+    pub timestamp: String,
+}
+
+/// Get the path to the user prompts file for a session
+fn get_user_prompts_path(session_id: &str, project_path: &Path) -> Option<PathBuf> {
+    let pi_sessions_dir = dirs::home_dir()?
+        .join(".pi")
+        .join("agent")
+        .join("sessions");
+    
+    let encoded_path = encode_project_path(project_path);
+    let project_sessions_dir = pi_sessions_dir.join(&encoded_path);
+    
+    Some(project_sessions_dir.join(format!(".user-prompts-{}.jsonl", session_id)))
+}
+
+/// Store a user prompt for later retrieval
+/// This is needed because pi-agent doesn't persist the initial prompt as a message
+pub fn store_user_prompt(
+    session_id: &str,
+    project_path: &Path,
+    prompt: &str,
+) -> Result<(), SessionError> {
+    let prompts_path = match get_user_prompts_path(session_id, project_path) {
+        Some(p) => p,
+        None => return Ok(()), // Silently fail if we can't determine the path
+    };
+    
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = prompts_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| SessionError::IoError {
+            path: parent.to_path_buf(),
+            source: e,
+        })?;
+    }
+    
+    let stored_prompt = StoredUserPrompt {
+        prompt: prompt.to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+    };
+    
+    let line = serde_json::to_string(&stored_prompt).unwrap_or_default();
+    
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&prompts_path)
+        .map_err(|e| SessionError::IoError {
+            path: prompts_path.clone(),
+            source: e,
+        })?;
+    
+    writeln!(file, "{}", line).map_err(|e| SessionError::IoError {
+        path: prompts_path,
+        source: e,
+    })?;
+    
+    Ok(())
+}
+
+/// Load stored user prompts for a session
+pub fn load_user_prompts(
+    session_id: &str,
+    project_path: &Path,
+) -> Vec<SessionMessage> {
+    let prompts_path = match get_user_prompts_path(session_id, project_path) {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+    
+    if !prompts_path.exists() {
+        return Vec::new();
+    }
+    
+    let file = match fs::File::open(&prompts_path) {
+        Ok(f) => f,
+        Err(_) => return Vec::new(),
+    };
+    
+    let reader = BufReader::new(file);
+    let mut prompts = Vec::new();
+    
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        
+        if line.trim().is_empty() {
+            continue;
+        }
+        
+        if let Ok(stored) = serde_json::from_str::<StoredUserPrompt>(&line) {
+            prompts.push(SessionMessage {
+                role: "user".to_string(),
+                content: stored.prompt,
+                timestamp: Some(stored.timestamp),
+            });
+        }
+    }
+    
+    prompts
 }
 
 /// Request to create a new session

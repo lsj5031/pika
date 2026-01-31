@@ -9,6 +9,7 @@ interface AppState {
   thinkingSessionIds: Set<string>; // NEW: Track sessions with thinking in progress
   unreadSessions: Set<string>; // NEW: Track sessions with unread messages
   lastSeenMessageCounts: Record<string, number>; // NEW: Track last seen message count per session
+  lastProjectId: string | null; // Track most recently used project
 
   // Actions
   setCurrentSession: (sessionId: string | null) => void;
@@ -19,6 +20,7 @@ interface AppState {
   markSessionAsRead: (sessionId: string, messageCount: number) => void; // NEW
   incrementUnreadCount: (sessionId: string) => void; // NEW
   clearInvalidSession: (sessionId: string) => void; // NEW: Clear session that doesn't exist
+  setLastProject: (projectId: string) => void; // Track last used project
 }
 
 export const useAppStore = create<AppState>()(
@@ -31,6 +33,7 @@ export const useAppStore = create<AppState>()(
       thinkingSessionIds: new Set<string>(),
       unreadSessions: new Set<string>(),
       lastSeenMessageCounts: {},
+      lastProjectId: null,
 
       // Actions
       setCurrentSession: (sessionId) => set({ currentSessionId: sessionId }),
@@ -93,6 +96,8 @@ export const useAppStore = create<AppState>()(
           }
           return state;
         }),
+
+      setLastProject: (projectId) => set({ lastProjectId: projectId }),
     }),
     {
       name: "pika-storage",
@@ -101,6 +106,7 @@ export const useAppStore = create<AppState>()(
         currentSessionId: state.currentSessionId,
         sidebarCollapsed: state.sidebarCollapsed,
         lastSeenMessageCounts: state.lastSeenMessageCounts,
+        lastProjectId: state.lastProjectId,
       }),
     }
   )

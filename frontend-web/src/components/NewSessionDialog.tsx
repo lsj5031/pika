@@ -18,11 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { Plus, FolderOpen, Home } from "lucide-react";
+import { Plus, FolderOpen, Home, Clock } from "lucide-react";
 import { useProjects } from "../hooks/useProjects";
 import { useCreateSession } from "../hooks/useCreateSession";
 import { useCreateStandaloneSession } from "../hooks/useCreateStandaloneSession";
 import { useAppStore } from "../store/appStore";
+import { useMemo } from "react";
 
 interface NewSessionDialogProps {
   trigger?: React.ReactNode;
@@ -39,6 +40,13 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
   const createSessionMutation = useCreateSession();
   const createStandaloneMutation = useCreateStandaloneSession();
   const setCurrentSession = useAppStore((state) => state.setCurrentSession);
+  const lastProjectId = useAppStore((state) => state.lastProjectId);
+  const setLastProject = useAppStore((state) => state.setLastProject);
+
+  const lastProject = useMemo(() => {
+    if (!lastProjectId || !projects) return null;
+    return projects.find((p) => p.id === lastProjectId) || null;
+  }, [lastProjectId, projects]);
 
   const isProjectCreateDisabled =
     !selectedProjectId ||
@@ -49,22 +57,29 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
     !customPath.trim() ||
     createStandaloneMutation.isPending;
 
-  const handleCreateFromProject = () => {
-    if (!selectedProjectId) return;
+  const handleCreateFromProject = (projectIdOverride?: string) => {
+    const projectId = projectIdOverride || selectedProjectId;
+    if (!projectId) return;
 
     createSessionMutation.mutate(
       {
-        projectId: selectedProjectId,
+        projectId: projectId,
         request: sessionName.trim() ? { name: sessionName.trim() } : {},
       },
       {
         onSuccess: (result) => {
           setOpen(false);
           setCurrentSession(result.session_id);
+          setLastProject(projectId);
           resetForm();
         },
       }
     );
+  };
+
+  const handleQuickStartRecent = () => {
+    if (!lastProject) return;
+    handleCreateFromProject(lastProject.id);
   };
 
   const handleCreateFromPath = () => {
@@ -129,6 +144,20 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-2 sm:py-4">
+          {/* Quick start with recent project */}
+          {lastProject && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleQuickStartRecent}
+              disabled={createSessionMutation.isPending}
+              className="w-full text-sm sm:text-base"
+            >
+              <Clock className="mr-2 h-4 w-4 shrink-0" />
+              <span className="truncate">Quick Start: {lastProject.name}</span>
+            </Button>
+          )}
+
           {/* Toggle between project and custom path */}
           <div className="grid grid-cols-2 gap-2">
             <Button
@@ -215,7 +244,7 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                   Cancel
                 </Button>
                 <Button
-                  onClick={handleCreateFromProject}
+                  onClick={() => handleCreateFromProject()}
                   disabled={isProjectCreateDisabled}
                   id="create-session-button"
                   data-testid="create-session-button"

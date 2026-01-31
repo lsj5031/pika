@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { useSessionHistory } from "../hooks/useSessionHistory";
 import { useThinkingStore } from "../store/thinkingStore";
 import { Card } from "./ui/card";
@@ -265,7 +266,32 @@ function MessageBubble({ message }: { message: Message }) {
                 })()}
               </pre>
             ) : (
-              displayResponse
+              <ReactMarkdown
+                components={{
+                  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                  strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                  ul: ({ children }) => <ul className="list-disc list-inside mb-2">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal list-inside mb-2">{children}</ol>,
+                  li: ({ children }) => <li className="mb-1">{children}</li>,
+                  code: ({ children }) => (
+                    <code className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded text-xs font-mono">
+                      {children}
+                    </code>
+                  ),
+                  pre: ({ children }) => (
+                    <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-xs font-mono my-2">
+                      {children}
+                    </pre>
+                  ),
+                  h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                  h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                  h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                  hr: () => <hr className="my-3 border-current/20" />,
+                }}
+              >
+                {displayResponse}
+              </ReactMarkdown>
             )}
 
             {/* Expand/Collapse button */}
