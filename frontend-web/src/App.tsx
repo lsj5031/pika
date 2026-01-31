@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef, useEffect, lazy, Suspense } from "react";
 import { ChatInput, AppHeader, AuthPrompt } from "./components";
-import { Loader2 } from "lucide-react";
+import { Loader2, PanelLeftClose, PanelLeft } from "lucide-react";
 import { useAppStore } from "./store/appStore";
 import { useThinkingStore } from "./store/thinkingStore";
 import { useSessions } from "./hooks/useSessions";
@@ -22,6 +22,8 @@ function App() {
   const currentSessionId = useAppStore((state) => state.currentSessionId);
   const markSessionAsRead = useAppStore((state) => state.markSessionAsRead);
   const clearInvalidSession = useAppStore((state) => state.clearInvalidSession);
+  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
+  const toggleSidebar = useAppStore((state) => state.toggleSidebar);
 
   // Auth state
   const [needsAuth, setNeedsAuth] = useState(() => !hasCredentials());
@@ -222,11 +224,24 @@ function App() {
         {/* Main layout: Sidebar + Content */}
         <div className="flex flex-1 overflow-hidden">
           {/* Desktop Sidebar */}
-          <aside className="hidden w-64 border-r-2 border-dashed border-primary bg-background md:block">
+          <aside className={`hidden border-r-2 border-dashed border-primary bg-background md:flex flex-col transition-all duration-200 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-64'}`}>
             <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
               <SessionList />
             </Suspense>
           </aside>
+          
+          {/* Sidebar Toggle Button */}
+          <button
+            onClick={toggleSidebar}
+            className="hidden md:flex items-center justify-center w-6 h-12 my-auto -ml-3 bg-background border-2 border-dashed border-primary rounded-r-md hover:bg-muted transition-colors z-10"
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? (
+              <PanelLeft className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
 
           {/* Mobile Drawer Sidebar */}
           <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
