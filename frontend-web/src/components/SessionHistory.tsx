@@ -482,7 +482,7 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   return (
     <div className={cn("flex flex-col h-full", className)}>
       {messages && messages.length > 0 && (
-        <div className="p-2 border-b flex justify-end bg-card">
+        <div className="p-2 border-b hidden md:flex justify-end bg-card">
           <Button
             variant="outline"
             size="sm"

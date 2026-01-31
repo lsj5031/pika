@@ -234,21 +234,22 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                 />
               </div>
 
-              <DialogFooter className="flex-row justify-start gap-2 pt-2">
+              <DialogFooter className="flex-row justify-start gap-3 pt-4">
                 <Button
                   variant="outline"
                   onClick={() => setOpen(false)}
                   disabled={createSessionMutation.isPending}
-                  className="text-sm sm:text-base"
+                  className="flex-1 sm:flex-none"
                 >
                   Cancel
                 </Button>
                 <Button
+                  variant="accent"
                   onClick={() => handleCreateFromProject()}
                   disabled={isProjectCreateDisabled}
                   id="create-session-button"
                   data-testid="create-session-button"
-                  className="min-h-[44px] text-sm sm:text-base"
+                  className="flex-1 sm:flex-none"
                 >
                   {createSessionMutation.isPending ? "Creating..." : "Create"}
                 </Button>
@@ -306,21 +307,22 @@ export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
                 </Button>
               </div>
 
-              <DialogFooter className="flex-row justify-start gap-2 pt-2">
+              <DialogFooter className="flex-row justify-start gap-3 pt-4">
                 <Button
                   variant="outline"
                   onClick={() => setOpen(false)}
                   disabled={createStandaloneMutation.isPending}
-                  className="text-sm sm:text-base"
+                  className="flex-1 sm:flex-none"
                 >
                   Cancel
                 </Button>
                 <Button
+                  variant="accent"
                   onClick={handleCreateFromPath}
                   disabled={isCustomCreateDisabled}
                   id="create-custom-session-button"
                   data-testid="create-custom-session-button"
-                  className="min-h-[44px] text-sm sm:text-base"
+                  className="flex-1 sm:flex-none"
                 >
                   {createStandaloneMutation.isPending ? "Creating..." : "Create"}
                 </Button>

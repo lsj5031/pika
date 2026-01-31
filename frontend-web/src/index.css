@@ -178,16 +178,21 @@
   /* Input visibility in dialogs */
   [role="dialog"] input,
   [role="dialog"] textarea {
-    background-color: white !important;
+    background-color: var(--input) !important;
     color: var(--foreground) !important;
     border-color: var(--border) !important;
   }
 
-  /* Dark mode support for dialogs */
+  /* Dark mode support for dialogs - ensure readable text on dark inputs */
   .dark [role="dialog"] input,
   .dark [role="dialog"] textarea {
-    background-color: var(--background) !important;
+    background-color: var(--input) !important;
     color: var(--foreground) !important;
+  }
+
+  /* Ensure dialog buttons have proper contrast in dark mode */
+  .dark [role="dialog"] button {
+    color: inherit;
   }
 
   /* Dialog overlay should darken but not too much */
