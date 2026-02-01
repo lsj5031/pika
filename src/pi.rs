@@ -12,7 +12,7 @@ use tokio::task::JoinHandle;
 const MAX_CONCURRENT_PROCESSES: usize = 50;
 
 /// JSON-RPC event emitted by pi process
-/// pi-coding-agent uses events with "type" field, not standard JSON-RPC
+/// Pika uses events with "type" field, not standard JSON-RPC
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcEvent {
     /// Event type (e.g., "message_update", "agent_start", "notify", etc.)
@@ -125,7 +125,7 @@ impl PiProcess {
 
     /// Send a prompt to the pi process via stdin
     pub async fn send_prompt(&mut self, prompt: &str) -> Result<(), PiProcessError> {
-        // Create RPC command (pi-coding-agent uses "type" not "method")
+        // Create RPC command (Pika uses "type" not "method")
         let request = serde_json::json!({
             "type": "prompt",
             "message": prompt
@@ -373,19 +373,12 @@ impl ProcessManager {
 
     /// Send a prompt to a specific process by ID
     pub async fn send_prompt(&mut self, id: &str, prompt: &str) -> Result<(), PiProcessError> {
-        // Remove the process temporarily to get mutable access
-        let mut process = self
+        let process = self
             .processes
-            .remove(id)
+            .get_mut(id)
             .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
 
-        // Send the prompt
-        process.send_prompt(prompt).await?;
-
-        // Put the process back
-        self.processes.insert(id.to_string(), process);
-
-        Ok(())
+        process.send_prompt(prompt).await
     }
 
     /// Spawn a new pi process for a specific session
