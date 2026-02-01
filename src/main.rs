@@ -301,7 +301,7 @@ async fn event_bridge_task(app_state: AppState) {
                     let ws_id = session_id.unwrap_or_else(|| id.clone());
 
                     // Convert pi event to WSEvent
-                    // pi-coding-agent sends events with "type" field
+                    // Pika sends events with "type" field
                     if let Some(event_type) = &event.event_type {
                         match event_type.as_str() {
                             "message_update" => {
