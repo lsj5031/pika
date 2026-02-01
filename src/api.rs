@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    extract::{Path, State},
+    extract::{Path, State, Query},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{delete, get, post},
@@ -12,8 +12,8 @@ use std::path::PathBuf;
 use crate::AppState;
 use crate::config::ProjectConfig;
 use crate::sessions::{
-    CreateSessionRequest, create_session, get_session_messages as fetch_session_messages,
-    load_user_prompts, scan_sessions, store_user_prompt,
+    CreateSessionRequest, create_session, get_session_messages_limited, load_user_prompts,
+    scan_sessions, store_user_prompt,
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -72,6 +72,12 @@ pub struct MessageResponse {
     /// Message timestamp (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SessionMessagesQuery {
+    pub limit: Option<usize>,
+    pub direction: Option<String>,
 }
 
 /// Request to send a prompt to a session
@@ -157,7 +163,7 @@ pub async fn get_projects(
     let config = state.api_state.config.read().await;
 
     // Scan all sessions to get counts per project
-    let sessions = scan_sessions(&config);
+    let sessions = scan_sessions(&config).await;
     let mut session_counts: HashMap<String, usize> = HashMap::new();
 
     for session in &sessions {
@@ -325,7 +331,7 @@ pub async fn get_project_sessions(
     };
 
     // Scan all sessions and filter by project
-    let sessions = scan_sessions(&config);
+    let sessions = scan_sessions(&config).await;
     let project_sessions: Vec<SessionResponse> = sessions
         .into_iter()
         .filter(|s| s.project_path == *project_path)
@@ -348,7 +354,7 @@ pub async fn get_sessions(
 ) -> Result<Json<Vec<SessionResponse>>, ErrorResponse> {
     let config = state.api_state.config.read().await;
 
-    let mut sessions = scan_sessions(&config);
+    let mut sessions = scan_sessions(&config).await;
 
     // Sort by last_message_time (most recent first), fall back to created_at
     sessions.sort_by(|a, b| {
@@ -383,7 +389,7 @@ pub async fn get_session(
     let config = state.api_state.config.read().await;
 
     // Scan all sessions and find the matching one
-    let sessions = scan_sessions(&config);
+    let sessions = scan_sessions(&config).await;
     let session = sessions.into_iter().find(|s| s.id == session_id);
 
     let session = match session {
@@ -412,11 +418,12 @@ pub async fn get_session(
 pub async fn get_session_messages(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
+    Query(query): Query<SessionMessagesQuery>,
 ) -> Result<Json<Vec<MessageResponse>>, ErrorResponse> {
     let config = state.api_state.config.read().await;
 
     // Scan all sessions and find the matching one
-    let sessions = scan_sessions(&config);
+    let sessions = scan_sessions(&config).await;
     let session = sessions.into_iter().find(|s| s.id == session_id);
 
     let session = match session {
@@ -429,15 +436,31 @@ pub async fn get_session_messages(
         }
     };
 
-    // Get messages from pi-agent's session file
-    let pi_messages =
-        fetch_session_messages(&session.id, &session.project_path).map_err(|e| ErrorResponse {
-            error: "INTERNAL_ERROR".to_string(),
-            message: format!("Failed to read messages: {}", e),
-        })?;
-
     // Load stored user prompts that we sent via our API
     let stored_prompts = load_user_prompts(&session.id, &session.project_path);
+
+    let requested_limit = query.limit;
+    if let Some(0) = requested_limit {
+        return Ok(Json(Vec::new()));
+    }
+
+    let direction = query.direction.as_deref().unwrap_or("tail");
+    let from_start = direction == "head";
+
+    let pi_messages = if requested_limit.is_some() {
+        get_session_messages_limited(
+            &session.id,
+            &session.project_path,
+            requested_limit,
+            from_start,
+        )
+    } else {
+        get_session_messages_limited(&session.id, &session.project_path, None, false)
+    }
+    .map_err(|e| ErrorResponse {
+        error: "INTERNAL_ERROR".to_string(),
+        message: format!("Failed to read messages: {}", e),
+    })?;
 
     // Merge stored prompts with pi-agent messages
     // Strategy: interleave based on timestamps
@@ -493,7 +516,7 @@ pub async fn send_prompt_to_session(
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
     // First, find the session to get its project path
     let config = state.api_state.config.read().await;
-    let sessions = scan_sessions(&config);
+    let sessions = scan_sessions(&config).await;
 
     let session = sessions.into_iter().find(|s| s.id == session_id);
 
@@ -555,7 +578,7 @@ pub async fn start_session(
 ) -> Result<Json<StartSessionResponse>, ErrorResponse> {
     // First, find the session to get its project path
     let config = state.api_state.config.read().await;
-    let sessions = scan_sessions(&config);
+    let sessions = scan_sessions(&config).await;
 
     let session = sessions.into_iter().find(|s| s.id == session_id);
 
@@ -596,7 +619,7 @@ pub async fn get_session_status(
 ) -> Result<Json<SessionStatusResponse>, ErrorResponse> {
     // First, verify the session exists
     let config = state.api_state.config.read().await;
-    let sessions = scan_sessions(&config);
+    let sessions = scan_sessions(&config).await;
 
     let session = sessions.into_iter().find(|s| s.id == session_id);
 
@@ -632,7 +655,7 @@ pub async fn stop_session(
 ) -> Result<Json<StopSessionResponse>, ErrorResponse> {
     // First, verify the session exists
     let config = state.api_state.config.read().await;
-    let sessions = scan_sessions(&config);
+    let sessions = scan_sessions(&config).await;
 
     let session = sessions.into_iter().find(|s| s.id == session_id);
 
@@ -924,16 +947,16 @@ pub struct ModelInfo {
 #[derive(Debug, Deserialize)]
 pub struct UpdatePiSettingsRequest {
     /// Default model
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "defaultModel", skip_serializing_if = "Option::is_none")]
     pub default_model: Option<String>,
     /// Default thinking level
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "defaultThinkingLevel", skip_serializing_if = "Option::is_none")]
     pub default_thinking_level: Option<String>,
     /// Default provider
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "defaultProvider", skip_serializing_if = "Option::is_none")]
     pub default_provider: Option<String>,
     /// Hide thinking block
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "hideThinkingBlock", skip_serializing_if = "Option::is_none")]
     pub hide_thinking_block: Option<bool>,
 }
 
