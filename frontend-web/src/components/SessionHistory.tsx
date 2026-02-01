@@ -251,7 +251,7 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
       {/* Main message card */}
       <Card
         className={cn(
-          "max-w-[92%] md:max-w-[80%] px-4 py-3 border-2 shadow-sm transition-all hover:shadow-md",
+          "max-w-[85%] md:max-w-[80%] px-4 py-3 border-2 shadow-sm transition-all hover:shadow-md",
           colors.bg,
           colors.border,
           "overflow-hidden min-w-0" // Ensure nothing leaks out
@@ -260,7 +260,7 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
         {/* Response content */}
         {response && (
           <div className={cn(
-            "text-sm whitespace-pre-wrap break-all md:break-words leading-relaxed",
+            "text-sm whitespace-pre-wrap break-words leading-relaxed",
             colors.text
           )}>
             {formattedJson ? (
