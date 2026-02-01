@@ -5,42 +5,64 @@ interface AppState {
   // State
   currentSessionId: string | null;
   sidebarCollapsed: boolean;
-  activeSessionIds: Set<string>; // NEW: Track active sessions
-  thinkingSessionIds: Set<string>; // NEW: Track sessions with thinking in progress
-  unreadSessions: Set<string>; // NEW: Track sessions with unread messages
-  lastSeenMessageCounts: Record<string, number>; // NEW: Track last seen message count per session
+  sidebarCompactMode: boolean; // NEW: Compact icon-only mode
+  activeSessionIds: Set<string>; // Track active sessions
+  thinkingSessionIds: Set<string>; // Track sessions with thinking in progress
+  unreadSessions: Set<string>; // Track sessions with unread messages
+  lastSeenMessageCounts: Record<string, number>; // Track last seen message count per session
   lastProjectId: string | null; // Track most recently used project
+  recentSessionIds: string[]; // NEW: Recently accessed sessions (max 5)
+  favoriteSessionIds: string[]; // NEW: Favorite/pinned sessions
 
   // Actions
   setCurrentSession: (sessionId: string | null) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
-  setActiveSession: (sessionId: string, isActive: boolean) => void; // NEW
-  setThinkingSession: (sessionId: string, isThinking: boolean) => void; // NEW
-  markSessionAsRead: (sessionId: string, messageCount: number) => void; // NEW
-  incrementUnreadCount: (sessionId: string) => void; // NEW
-  clearInvalidSession: (sessionId: string) => void; // NEW: Clear session that doesn't exist
+  toggleSidebarCompactMode: () => void; // NEW
+  setSidebarCompactMode: (compact: boolean) => void; // NEW
+  setActiveSession: (sessionId: string, isActive: boolean) => void;
+  setThinkingSession: (sessionId: string, isThinking: boolean) => void;
+  markSessionAsRead: (sessionId: string, messageCount: number) => void;
+  incrementUnreadCount: (sessionId: string) => void;
+  clearInvalidSession: (sessionId: string) => void; // Clear session that doesn't exist
   setLastProject: (projectId: string) => void; // Track last used project
+  addRecentSession: (sessionId: string) => void; // NEW: Add to recent sessions
+  removeRecentSession: (sessionId: string) => void; // NEW: Remove from recent sessions
+  toggleFavoriteSession: (sessionId: string) => void; // NEW: Toggle favorite status
+  isFavoriteSession: (sessionId: string) => boolean; // NEW: Check if favorite
 }
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Initial state
       currentSessionId: null,
       sidebarCollapsed: false,
+      sidebarCompactMode: false,
       activeSessionIds: new Set<string>(),
       thinkingSessionIds: new Set<string>(),
       unreadSessions: new Set<string>(),
       lastSeenMessageCounts: {},
       lastProjectId: null,
+      recentSessionIds: [],
+      favoriteSessionIds: [],
 
       // Actions
-      setCurrentSession: (sessionId) => set({ currentSessionId: sessionId }),
+      setCurrentSession: (sessionId) => {
+        // Add to recent sessions when switching
+        if (sessionId) {
+          get().addRecentSession(sessionId);
+        }
+        set({ currentSessionId: sessionId });
+      },
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+
+      toggleSidebarCompactMode: () => set((state) => ({ sidebarCompactMode: !state.sidebarCompactMode })),
+
+      setSidebarCompactMode: (compact) => set({ sidebarCompactMode: compact }),
 
       setActiveSession: (sessionId, isActive) =>
         set((state) => {
@@ -98,6 +120,37 @@ export const useAppStore = create<AppState>()(
         }),
 
       setLastProject: (projectId) => set({ lastProjectId: projectId }),
+
+      addRecentSession: (sessionId) =>
+        set((state) => {
+          // Remove if already exists, add to front, keep max 5
+          const filtered = state.recentSessionIds.filter((id) => id !== sessionId);
+          const newRecent = [sessionId, ...filtered].slice(0, 5);
+          return { recentSessionIds: newRecent };
+        }),
+
+      removeRecentSession: (sessionId) =>
+        set((state) => ({
+          recentSessionIds: state.recentSessionIds.filter((id) => id !== sessionId),
+        })),
+
+      toggleFavoriteSession: (sessionId) =>
+        set((state) => {
+          const isFav = state.favoriteSessionIds.includes(sessionId);
+          if (isFav) {
+            return {
+              favoriteSessionIds: state.favoriteSessionIds.filter((id) => id !== sessionId),
+            };
+          } else {
+            return {
+              favoriteSessionIds: [...state.favoriteSessionIds, sessionId],
+            };
+          }
+        }),
+
+      isFavoriteSession: (sessionId) => {
+        return get().favoriteSessionIds.includes(sessionId);
+      },
     }),
     {
       name: "pika-storage",
@@ -105,8 +158,11 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         currentSessionId: state.currentSessionId,
         sidebarCollapsed: state.sidebarCollapsed,
+        sidebarCompactMode: state.sidebarCompactMode,
         lastSeenMessageCounts: state.lastSeenMessageCounts,
         lastProjectId: state.lastProjectId,
+        recentSessionIds: state.recentSessionIds,
+        favoriteSessionIds: state.favoriteSessionIds,
       }),
     }
   )

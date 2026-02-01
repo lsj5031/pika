@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,6 +7,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "./ui/sheet";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
@@ -14,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Settings, Loader2 } from "lucide-react";
 import { usePiSettings } from "../hooks/usePiSettings";
 import { useUpdatePiSettings } from "../hooks/useUpdatePiSettings";
+import { useSwipeToClose } from "../hooks/useSwipe";
 import { ProjectManager } from "./ProjectManager";
 
 const THINKING_LEVELS = [
@@ -25,7 +34,20 @@ const THINKING_LEVELS = [
   { value: "xhigh", label: "Extra High" },
 ];
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return isMobile;
+}
 
 interface SettingsDialogProps {
   trigger?: React.ReactNode;
@@ -33,6 +55,7 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ trigger }: SettingsDialogProps) {
   const [open, setOpen] = useState(false);
+  const isMobile = useIsMobile();
   const { data: settings, isLoading } = usePiSettings();
   const updateSettingsMutation = useUpdatePiSettings();
 
@@ -41,7 +64,21 @@ export function SettingsDialog({ trigger }: SettingsDialogProps) {
     settings?.defaultThinkingLevel || "off"
   );
 
+  // Sync local state when settings load while dialog is open
+  useEffect(() => {
+    if (open && settings) {
+      setLocalModel(settings.defaultModel || "");
+      setLocalThinkingLevel(settings.defaultThinkingLevel || "off");
+    }
+  }, [open, settings]);
+
+  const { swipeProps: sheetSwipeProps } = useSwipeToClose(
+    () => setOpen(false),
+    { direction: "down", threshold: 80 }
+  );
+
   const handleSave = () => {
+    if (!settings) return; // Guard against saving before settings load
     updateSettingsMutation.mutate(
       {
         defaultModel: localModel,
@@ -71,6 +108,129 @@ export function SettingsDialog({ trigger }: SettingsDialogProps) {
     </Button>
   );
 
+  const SettingsContent = (
+    <Tabs defaultValue="ai" className="w-full">
+      <TabsList className={isMobile ? "grid w-full grid-cols-2 h-12" : "grid w-full grid-cols-2"}>
+        <TabsTrigger value="ai" className={isMobile ? "text-base py-3" : ""}>AI Settings</TabsTrigger>
+        <TabsTrigger value="projects" className={isMobile ? "text-base py-3" : ""}>Projects</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="ai" className="space-y-4">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="model" className="font-heading font-bold text-base">Default Model</Label>
+              <Select value={localModel} onValueChange={setLocalModel}>
+                <SelectTrigger id="model" className="min-h-[44px]">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {settings?.availableModels?.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {localModel && (
+                <p className="text-xs text-muted-foreground">
+                  {settings?.availableModels?.find(m => m.id === localModel)?.provider} • {settings?.availableModels?.find(m => m.id === localModel)?.contextWindow?.toLocaleString()} tokens
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                This model will be used for all new sessions by default.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="thinking-level" className="font-heading font-bold text-base">Thinking Level</Label>
+              <Select
+                value={localThinkingLevel}
+                onValueChange={setLocalThinkingLevel}
+              >
+                <SelectTrigger id="thinking-level" className="min-h-[44px]">
+                  <SelectValue placeholder="Select thinking level" />
+                </SelectTrigger>
+                <SelectContent>
+                  {THINKING_LEVELS.map((level) => (
+                    <SelectItem key={level.value} value={level.value}>
+                      {level.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Higher thinking levels produce more detailed reasoning but use
+                more tokens and take longer.
+              </p>
+            </div>
+
+            {settings && (
+              <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
+                <div className="font-medium">Current Settings:</div>
+                <div className="text-muted-foreground">
+                  Provider: {settings.defaultProvider || "Not set"}
+                </div>
+                <div className="text-muted-foreground">
+                  Model: {settings.defaultModel || "Not set"}
+                </div>
+                <div className="text-muted-foreground">
+                  Thinking: {settings.defaultThinkingLevel || "off"}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 justify-end pt-4">
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={updateSettingsMutation.isPending}
+              >
+                {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </TabsContent>
+
+      <TabsContent value="projects" className="space-y-4">
+        <ProjectManager />
+      </TabsContent>
+    </Tabs>
+  );
+
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={handleOpenChange}>
+        <SheetTrigger asChild>
+          {trigger || defaultTrigger}
+        </SheetTrigger>
+        <SheetContent
+          side="bottom"
+          className="h-[85vh] rounded-t-2xl p-0"
+          {...sheetSwipeProps}
+        >
+          <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full mx-auto mt-3 mb-2" />
+          <div className="px-6 pb-6 h-[calc(85vh-2rem)] overflow-y-auto">
+            <SheetHeader className="text-left pb-4">
+              <SheetTitle className="text-xl">Settings</SheetTitle>
+              <SheetDescription>
+                Configure AI agent settings and manage projects.
+              </SheetDescription>
+            </SheetHeader>
+            {SettingsContent}
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
@@ -83,104 +243,7 @@ export function SettingsDialog({ trigger }: SettingsDialogProps) {
             Configure AI agent settings and manage projects.
           </DialogDescription>
         </DialogHeader>
-
-        <Tabs defaultValue="ai" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="ai">AI Settings</TabsTrigger>
-            <TabsTrigger value="projects">Projects</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="ai" className="space-y-4">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="space-y-6 py-4">
-                {/* Model Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="model" className="font-heading font-bold text-base">Default Model</Label>
-                  <Select value={localModel} onValueChange={setLocalModel}>
-                    <SelectTrigger id="model" className="min-h-[44px]">
-                      <SelectValue placeholder="Select a model" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {settings?.availableModels?.map((model) => (
-                        <SelectItem key={model.id} value={model.id}>
-                          {model.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {localModel && (
-                    <p className="text-xs text-muted-foreground">
-                      {settings?.availableModels?.find(m => m.id === localModel)?.provider} • {settings?.availableModels?.find(m => m.id === localModel)?.contextWindow?.toLocaleString()} tokens
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    This model will be used for all new sessions by default.
-                  </p>
-                </div>
-
-                {/* Thinking Level */}
-                <div className="space-y-2">
-                  <Label htmlFor="thinking-level" className="font-heading font-bold text-base">Thinking Level</Label>
-                  <Select
-                    value={localThinkingLevel}
-                    onValueChange={setLocalThinkingLevel}
-                  >
-                    <SelectTrigger id="thinking-level" className="min-h-[44px]">
-                      <SelectValue placeholder="Select thinking level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {THINKING_LEVELS.map((level) => (
-                        <SelectItem key={level.value} value={level.value}>
-                          {level.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Higher thinking levels produce more detailed reasoning but use
-                    more tokens and take longer.
-                  </p>
-                </div>
-
-                {/* Current Settings Display */}
-                {settings && (
-                  <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
-                    <div className="font-medium">Current Settings:</div>
-                    <div className="text-muted-foreground">
-                      Provider: {settings.defaultProvider || "Not set"}
-                    </div>
-                    <div className="text-muted-foreground">
-                      Model: {settings.defaultModel || "Not set"}
-                    </div>
-                    <div className="text-muted-foreground">
-                      Thinking: {settings.defaultThinkingLevel || "off"}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex gap-2 justify-end pt-4">
-                  <Button variant="outline" onClick={() => setOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSave}
-                    disabled={updateSettingsMutation.isPending}
-                  >
-                    {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="projects" className="space-y-4">
-            <ProjectManager />
-          </TabsContent>
-        </Tabs>
+        {SettingsContent}
       </DialogContent>
     </Dialog>
   );
