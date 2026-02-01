@@ -81,7 +81,7 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
                         <span>Authentication Required</span>
                     </DialogTitle>
                     <DialogDescription className="text-muted-foreground">
-                        Please enter your credentials to access PI Agent Manager.
+                        Please enter your credentials to access Pika.
                     </DialogDescription>
                 </DialogHeader>
 

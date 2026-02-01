@@ -1,4 +1,4 @@
-import { Menu, Square, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { Menu, Square, Wifi, WifiOff, Loader2, Command, PanelLeft } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { SettingsDialog } from "./SettingsDialog";
@@ -10,6 +10,8 @@ interface AppHeaderProps {
   isSessionActive: boolean;
   onMenuToggle: () => void;
   onStopSession?: () => void;
+  onOpenCommandPalette?: () => void;
+  onToggleSidebar?: () => void;
 }
 
 export function AppHeader({
@@ -17,11 +19,14 @@ export function AppHeader({
   isSessionActive,
   onMenuToggle,
   onStopSession,
+  onOpenCommandPalette,
+  onToggleSidebar,
 }: AppHeaderProps) {
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-4 sm:px-6">
       {/* Left: Hamburger menu + App name */}
       <div className="flex items-center gap-3">
+        {/* Mobile menu toggle */}
         <Button
           variant="ghost"
           size="icon"
@@ -34,15 +39,45 @@ export function AppHeader({
           <Menu className="h-5 w-5 pointer-events-none" />
           <span className="sr-only">Toggle menu</span>
         </Button>
-        <h1 className="text-xl md:text-2xl font-heading font-bold tracking-tight whitespace-nowrap">
-          Pika
-        </h1>
+
+        {/* Desktop sidebar toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hidden md:flex text-muted-foreground hover:text-foreground"
+          onClick={onToggleSidebar}
+          title="Toggle Sidebar (⌘B)"
+        >
+          <PanelLeft className="h-5 w-5" />
+          <span className="sr-only">Toggle Sidebar</span>
+        </Button>
+
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Pika Logo" className="h-8 w-8 object-contain" />
+          <h1 className="text-xl md:text-2xl font-heading font-bold tracking-tight whitespace-nowrap">
+            Pika
+          </h1>
+        </div>
       </div>
 
       {/* Right: Connection status + Settings + Stop button */}
-      <div className="flex items-center gap-1.5 md:gap-4">
+      <div className="flex items-center gap-1.5 md:gap-3">
         {/* Theme toggle */}
         <ThemeToggle />
+
+        {/* Command palette trigger - desktop only */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onOpenCommandPalette}
+          className="hidden md:flex items-center gap-2 h-9 px-3 text-muted-foreground hover:text-foreground"
+        >
+          <Command className="h-4 w-4" />
+          <span className="text-sm">Switch Session</span>
+          <kbd className="hidden lg:inline-flex h-5 items-center rounded border bg-muted px-1.5 font-mono text-xs text-muted-foreground">
+            ⌘K
+          </kbd>
+        </Button>
 
         {/* Settings dialog */}
         <SettingsDialog />

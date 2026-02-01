@@ -57,8 +57,8 @@
     /* Focus ring (same as --ring but explicit for focus states) */
     --ring-focus: 45 93 161;
 
-    /* Overlay for modals/sheets */
-    --overlay: rgba(0, 0, 0, 0.5);
+    /* Overlay for modals/sheets - increased opacity for better visibility */
+    --overlay: rgba(0, 0, 0, 0.65);
 
     /* Hard shadow color */
     --shadow-hard-color: #2d2d2d;
@@ -109,8 +109,8 @@
     /* Focus ring - Dark mode */
     --ring-focus: 77 171 247;
 
-    /* Overlay for modals/sheets - Dark mode */
-    --overlay: rgba(0, 0, 0, 0.7);
+    /* Overlay for modals/sheets - Dark mode - increased for consistency */
+    --overlay: rgba(0, 0, 0, 0.75);
 
     /* Hard shadow color - Dark mode */
     --shadow-hard-color: #fdfbf7;
@@ -220,6 +220,17 @@
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   }
 
+  /* Sheet overlay - ensure it's visible on mobile */
+  [data-radix-sheet-overlay] {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  /* Ensure sheet content is fully opaque */
+  [data-radix-sheet-content] {
+    background-color: var(--popover) !important;
+  }
+
   /* Ensure text is visible in dialogs */
   [role="dialog"],
   [data-radix-dialog-content] {
@@ -256,5 +267,21 @@
   /* Dialog overlay should darken but not too much */
   [data-radix-dialog-overlay] {
     backdrop-filter: blur(2px);
+  }
+
+  /* Select dropdown visibility fixes */
+  [data-radix-select-content] {
+    background-color: var(--background) !important;
+    border-width: 3px !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35), 0 0 0 2px rgba(0, 0, 0, 0.05) !important;
+  }
+
+  .dark [data-radix-select-content] {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(255, 255, 255, 0.1) !important;
+  }
+
+  /* Ensure select items are readable */
+  [data-radix-select-item] {
+    color: var(--foreground);
   }
 }
