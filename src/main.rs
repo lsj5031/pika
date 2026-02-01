@@ -40,7 +40,7 @@ impl AppState {
     }
 }
 
-/// Pi Agent Manager - Manages multiple agent sessions and their execution contexts
+/// Pika - Manages multiple agent sessions and their execution contexts
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
@@ -127,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .allow_headers(Any),
         );
 
-    println!("🚀 Pi Agent Manager server listening on http://{}", addr);
+    println!("🚀 Pika server listening on http://{}", addr);
     println!("📡 WebSocket endpoint available at ws://{}", addr);
     if auth_enabled {
         println!("🔐 HTTP Basic Auth enabled");
@@ -301,7 +301,7 @@ async fn event_bridge_task(app_state: AppState) {
                     let ws_id = session_id.unwrap_or_else(|| id.clone());
 
                     // Convert pi event to WSEvent
-                    // pi-coding-agent sends events with "type" field
+                    // Pika sends events with "type" field
                     if let Some(event_type) = &event.event_type {
                         match event_type.as_str() {
                             "message_update" => {
