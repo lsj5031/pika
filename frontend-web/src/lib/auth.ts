@@ -1,6 +1,6 @@
 // Authentication utilities for localStorage and credential management
 
-const AUTH_KEY = "pi-agent-auth";
+const AUTH_KEY = "pika-auth";
 
 export interface AuthCredentials {
   username: string;

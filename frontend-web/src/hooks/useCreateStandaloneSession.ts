@@ -28,6 +28,7 @@ export function useCreateStandaloneSession() {
     onSuccess: () => {
       // Invalidate sessions query to refetch
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
   });
 }
