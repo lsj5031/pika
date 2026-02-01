@@ -23,7 +23,7 @@ After setup, your app will be available at: **https://pi.liu.nz**
 ## Application Status
 
 ### ✅ Production Features
-- **Session Management**: Full CRUD operations for pi-coding-agent sessions
+- **Session Management**: Full CRUD operations for Pika sessions
 - **Real-time Updates**: WebSocket connection for live status
 - **Authentication**: API key configuration via Settings dialog
 - **Project Management**: Add/remove project folders
