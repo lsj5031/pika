@@ -1,0 +1,12 @@
+[Unit]
+Description=Cloudflare Tunnel - pi (User Service)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/leo/.local/bin/cloudflared tunnel --config /home/leo/.cloudflared/config-pi.yml run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
