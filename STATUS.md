@@ -8,7 +8,7 @@
 
 ## 🎉 Application Status: **PRODUCTION READY**
 
-The Pika is fully deployed and operational at **https://your-domain.example**.
+Pika is fully deployed and operational at **https://your-domain.example**.
 
 ### Deployment Details
 - **URL**: https://your-domain.example
@@ -132,7 +132,7 @@ sudo journalctl -u cloudflared-pi -f      # Tunnel logs
 
 ### Developer Documentation
 - `docs/DEPLOYMENT.md` - Detailed deployment instructions
-- `docs/MOBILE_TEST_REPORT.md` - Mobile usability test results and fix verification
+- `PERFORMANCE_FIXES.md` - Performance optimizations applied
 
 ### Technical Documentation
 - Cloudflare Tunnel configuration (see `docs/DEPLOYMENT.md`)
