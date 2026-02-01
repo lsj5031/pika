@@ -328,7 +328,7 @@ function App() {
           </Sheet>
 
           {/* Main content area */}
-          <main className="flex-1 flex flex-col overflow-hidden">
+          <main className="flex-1 flex flex-col overflow-hidden min-w-0">
             <div className="flex-1 overflow-hidden">
               <Suspense
                 fallback={
@@ -343,7 +343,7 @@ function App() {
             <ChatInput sessionId={currentSessionId} onSendMessage={handleSendMessage} />
             <NewSessionDialog
               trigger={
-                <button className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom)+7rem)] right-4 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50 active:scale-95 transition-transform touch-manipulation">
+                <button className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom)+7rem)] right-[calc(env(safe-area-inset-right)+1rem)] h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50 active:scale-95 transition-transform touch-manipulation">
                   <Plus className="h-6 w-6" />
                   <span className="sr-only">New Session</span>
                 </button>
