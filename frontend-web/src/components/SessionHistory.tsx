@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo, useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { useSessionHistory } from "../hooks/useSessionHistory";
 import { useThinkingStore } from "../store/thinkingStore";
@@ -27,7 +27,7 @@ function parseDiffFromMessage(content: string) {
   let cleanContent = content.replace(/^Tool Result(\s+\(Error\))?:\s*/, "");
 
   // Strip "Tool Call: name(...)" wrapper to get inner JSON
-  const toolCallMatch = cleanContent.match(/^Tool Call:\s*\w+\(([\s\S]*)\)\s*$/);
+  const toolCallMatch = cleanContent.match(/^Tool Call:\s*\w+(([\s\S]*))\s*$/);
   if (toolCallMatch) {
     cleanContent = toolCallMatch[1];
   } else {
@@ -142,36 +142,84 @@ function getMessageColors(role: string, hasToolUse: boolean) {
   };
 }
 
-function MessageBubble({ message }: { message: Message }) {
+// Memoized message bubble to prevent re-renders when other messages update
+const MessageBubble = memo(function MessageBubble({ message }: { message: Message }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isUser = message.role === "user";
-  const diff = !isUser ? parseDiffFromMessage(message.content) : null;
-  const { thinking, response } = !isUser ? parseThinkingBlocks(message.content) : { thinking: "", response: message.content };
-  const hasToolUse = message.content.includes("tool_use") || /\bTool (Call|Result|call)\b/.test(message.content);
-  const colors = getMessageColors(message.role, hasToolUse);
+
+  // Memoize expensive parsing operations
+  const { diff, thinking, response, hasToolUse, colors, isTruncated, displayResponse } = useMemo(() => {
+    const diffResult = !isUser ? parseDiffFromMessage(message.content) : null;
+    const { thinking: thinkingContent, response: responseContent } = !isUser
+      ? parseThinkingBlocks(message.content)
+      : { thinking: "", response: message.content };
+    const hasToolUseContent = message.content.includes("tool_use") || /\bTool (Call|Result|call)\b/i.test(message.content);
+    const colorSet = getMessageColors(message.role, hasToolUseContent);
+
+    const { truncated: truncatedResponse, isTruncated: textIsTruncated } = truncateContent(responseContent);
+    const displayResp = isExpanded ? responseContent : truncatedResponse;
+
+    // Check if JSON content would be truncated
+    let jsonIsTruncated = false;
+    if (hasToolUseContent) {
+      try {
+        const firstBrace = responseContent.indexOf("{");
+        const firstBracket = responseContent.indexOf("[");
+        const indices = [firstBrace, firstBracket].filter(i => i !== -1);
+        const firstJsonIdx = indices.length > 0 ? Math.min(...indices) : -1;
+        if (firstJsonIdx !== -1) {
+          const jsonPart = responseContent.slice(firstJsonIdx).trim().replace(/\)\s*$/, "");
+          const parsed = JSON.parse(jsonPart);
+          const formatted = JSON.stringify(parsed, null, 2);
+          jsonIsTruncated = formatted.split("\n").length > COLLAPSE_THRESHOLD;
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    return {
+      diff: diffResult,
+      thinking: thinkingContent,
+      response: responseContent,
+      hasToolUse: hasToolUseContent,
+      colors: colorSet,
+      isTruncated: textIsTruncated || jsonIsTruncated,
+      displayResponse: displayResp
+    };
+  }, [message.content, message.role, isExpanded, isUser]);
+
   const showThinking = thinking && thinking.length > 0;
-  const { truncated: truncatedResponse, isTruncated: textIsTruncated } = truncateContent(response);
-  const displayResponse = isExpanded ? response : truncatedResponse;
-  
-  // Check if JSON content would be truncated (for tool use messages)
-  const jsonIsTruncated = (() => {
-    if (!hasToolUse) return false;
+
+  // Memoize JSON formatting to prevent re-parsing on re-renders
+  const formattedJson = useMemo(() => {
+    if (!(/^Tool (Result|Call|Tool call)/i.test(displayResponse)) &&
+        !(displayResponse.trim().startsWith("{") || displayResponse.trim().startsWith("["))) {
+      return null;
+    }
+
+    const firstBrace = displayResponse.indexOf("{");
+    const firstBracket = displayResponse.indexOf("[");
+    const indices = [firstBrace, firstBracket].filter(i => i !== -1);
+    const firstJsonIdx = indices.length > 0 ? Math.min(...indices) : -1;
+
+    if (firstJsonIdx === -1) return null;
+
+    let jsonPart = displayResponse.slice(firstJsonIdx).trim();
+    jsonPart = jsonPart.replace(/\)\s*$/, "");
+
     try {
-      const firstBrace = response.indexOf("{");
-      const firstBracket = response.indexOf("[");
-      const indices = [firstBrace, firstBracket].filter(i => i !== -1);
-      const firstJsonIdx = indices.length > 0 ? Math.min(...indices) : -1;
-      if (firstJsonIdx === -1) return false;
-      const jsonPart = response.slice(firstJsonIdx).trim().replace(/\)\s*$/, "");
       const parsed = JSON.parse(jsonPart);
       const formatted = JSON.stringify(parsed, null, 2);
-      return formatted.split("\n").length > COLLAPSE_THRESHOLD;
+      if (!isExpanded) {
+        const { truncated, isTruncated: jsonTruncated } = truncateContent(formatted);
+        return jsonTruncated ? truncated : formatted;
+      }
+      return formatted;
     } catch {
-      return false;
+      return jsonPart;
     }
-  })();
-  
-  const isTruncated = textIsTruncated || jsonIsTruncated;
+  }, [displayResponse, isExpanded]);
 
   return (
     <div
@@ -215,55 +263,18 @@ function MessageBubble({ message }: { message: Message }) {
             "text-sm whitespace-pre-wrap break-all md:break-words leading-relaxed",
             colors.text
           )}>
-            {(/^Tool (Result|Call|call)/i.test(displayResponse)) && (displayResponse.includes("{") || displayResponse.includes("[")) ? (
+            {formattedJson ? (
               <div className="space-y-2">
                 <span className="font-bold opacity-70 block mb-1">
                   {displayResponse.split(":")[0]}:
                 </span>
                 <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-[10px] font-mono whitespace-pre">
-                  {(() => {
-                    // Find first JSON delimiter (either { or [)
-                    const firstBrace = displayResponse.indexOf("{");
-                    const firstBracket = displayResponse.indexOf("[");
-                    const indices = [firstBrace, firstBracket].filter(i => i !== -1);
-                    const firstJsonIdx = indices.length > 0 ? Math.min(...indices) : -1;
-
-                    if (firstJsonIdx === -1) return displayResponse;
-
-                    let jsonPart = displayResponse.slice(firstJsonIdx).trim();
-                    // Strip trailing ) from "Tool Call: name({...})" format
-                    jsonPart = jsonPart.replace(/\)\s*$/, "");
-
-                    try {
-                      const parsed = JSON.parse(jsonPart);
-                      const formatted = JSON.stringify(parsed, null, 2);
-                      // Apply truncation to formatted JSON if collapsed
-                      if (!isExpanded) {
-                        const { truncated, isTruncated: jsonTruncated } = truncateContent(formatted);
-                        return jsonTruncated ? truncated : formatted;
-                      }
-                      return formatted;
-                    } catch {
-                      return jsonPart;
-                    }
-                  })()}
+                  {formattedJson}
                 </pre>
               </div>
             ) : displayResponse.trim().startsWith("{") || displayResponse.trim().startsWith("[") ? (
               <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-[10px] font-mono whitespace-pre">
-                {(() => {
-                  try {
-                    const parsed = JSON.parse(displayResponse);
-                    const formatted = JSON.stringify(parsed, null, 2);
-                    if (!isExpanded) {
-                      const { truncated, isTruncated: jsonTruncated } = truncateContent(formatted);
-                      return jsonTruncated ? truncated : formatted;
-                    }
-                    return formatted;
-                  } catch {
-                    return displayResponse;
-                  }
-                })()}
+                {formattedJson || displayResponse}
               </pre>
             ) : (
               <ReactMarkdown
@@ -357,7 +368,7 @@ function MessageBubble({ message }: { message: Message }) {
       )}
     </div>
   );
-}
+});
 
 // Empty thinking state as a constant to avoid infinite loops
 const EMPTY_THINKING_STATE = { content: "", isThinking: false } as const;
@@ -393,7 +404,11 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   // Track previous message count to detect new messages
   const prevMessageCountRef = useRef<number>(0);
 
-  const handleExport = () => {
+  // Throttled scroll ref to prevent excessive scroll calls
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isScrollingRef = useRef<boolean>(false);
+
+  const handleExport = useCallback(() => {
     if (!messages || messages.length === 0) return;
 
     const markdown = exportSessionToMarkdown(messages, sessionId || "unknown");
@@ -406,9 +421,9 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
+  }, [messages, sessionId]);
 
-  // Auto-scroll to bottom when new messages arrive or thinking updates
+  // Throttled auto-scroll to bottom when new messages arrive or thinking updates
   useEffect(() => {
     // If session ID changed, reset scroll flag
     if (sessionId !== prevSessionIdRef.current) {
@@ -421,24 +436,50 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
 
     const messageCount = messages.length;
     const hasNewMessages = messageCount > prevMessageCountRef.current;
-    const shouldScroll = !initialScrollDoneRef.current || thinkingState.isThinking || hasNewMessages;
 
-    if (shouldScroll) {
-      // Use requestAnimationFrame to ensure DOM is updated
-      const scroll = () => {
-        messagesEndRef.current?.scrollIntoView({
-          behavior: initialScrollDoneRef.current ? "smooth" : "auto"
+    // Only scroll if:
+    // 1. Initial load (first time seeing messages)
+    // 2. New messages added
+    // 3. Thinking started (not on every delta)
+    const shouldScroll = !initialScrollDoneRef.current ||
+                         hasNewMessages ||
+                         (thinkingState.isThinking && prevMessageCountRef.current === messageCount);
+
+    if (shouldScroll && !isScrollingRef.current) {
+      isScrollingRef.current = true;
+
+      // Clear any pending scroll
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+
+      // Use requestAnimationFrame + throttle to ensure DOM is updated
+      scrollTimeoutRef.current = setTimeout(() => {
+        requestAnimationFrame(() => {
+          messagesEndRef.current?.scrollIntoView({
+            behavior: initialScrollDoneRef.current ? "smooth" : "auto"
+          });
+
+          if (!initialScrollDoneRef.current && messages.length > 0) {
+            initialScrollDoneRef.current = true;
+          }
+
+          // Allow next scroll after a delay
+          setTimeout(() => {
+            isScrollingRef.current = false;
+          }, 100); // Throttle: max 10 scrolls/second
         });
-        if (!initialScrollDoneRef.current && messages.length > 0) {
-          initialScrollDoneRef.current = true;
-        }
-      };
-
-      requestAnimationFrame(scroll);
+      }, 16); // One frame delay
     }
 
     prevMessageCountRef.current = messageCount;
-  }, [messages, thinkingState, sessionId]);
+
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [messages, thinkingState.isThinking, sessionId]); // Note: using thinkingState.isThinking, not full object
 
   if (!sessionId) {
     return (
@@ -479,19 +520,29 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
     );
   }
 
+  // Warn about truncated sessions
+  const isTruncated = messages.length >= 50; // Matches MAX_INITIAL_MESSAGES
+
   return (
     <div className={cn("flex flex-col h-full", className)}>
       {messages && messages.length > 0 && (
-        <div className="p-2 border-b hidden md:flex justify-end bg-card">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            className="gap-2 rounded-wobblyMd border-2 shadow-hard-sm"
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
+        <div className="p-2 border-b hidden md:flex justify-between items-center bg-card">
+          {isTruncated && (
+            <div className="text-xs text-muted-foreground">
+              Showing last {messages.length} messages
+            </div>
+          )}
+          <div className={isTruncated ? "" : "ml-auto"}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              className="gap-2 rounded-wobblyMd border-2 shadow-hard-sm"
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+          </div>
         </div>
       )}
       <ScrollArea className="flex-1">
