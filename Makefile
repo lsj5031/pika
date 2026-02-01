@@ -1,4 +1,4 @@
-.PHONY: all build frontend-backend frontend backend clean dev-frontend dev-backend run test test-mobile test-install deploy install-service restart-service status help
+.PHONY: all build frontend-backend frontend backend clean dev-frontend dev-backend run test test-mobile test-install deploy deploy-user install-service install-service-user restart-service restart-service-user status status-user help
 
 # Default target
 all: build
@@ -86,6 +86,42 @@ deploy: build
 	sudo systemctl restart pika.service
 	@echo "✅ Services restarted"
 
+# Deploy without sudo using user-level systemd services
+deploy-user: build
+	@echo "🚀 Deploying with user systemd services (no sudo)..."
+	@echo "Installing user systemd services..."
+	@mkdir -p $(HOME)/.config/systemd/user
+	cp cloudflared-pi.user.service $(HOME)/.config/systemd/user/cloudflared-pi.service
+	cp pika.user.service $(HOME)/.config/systemd/user/pika.service
+	systemctl --user daemon-reload
+	@echo "Stopping any existing pika process on port 7847..."
+	-pkill -f pika || true
+	@echo "Waiting for port to be released..."
+	@sleep 1
+	@echo "Enabling and starting user services..."
+	systemctl --user enable cloudflared-pi.service
+	systemctl --user start cloudflared-pi.service
+	systemctl --user enable pika.service
+	systemctl --user start pika.service
+	systemctl --user restart pika.service
+	@echo "✅ User services restarted"
+
+# Install user systemd services without starting
+install-service-user:
+	@echo "Installing user systemd services (no sudo)..."
+	@mkdir -p $(HOME)/.config/systemd/user
+	cp cloudflared-pi.user.service $(HOME)/.config/systemd/user/cloudflared-pi.service
+	cp pika.user.service $(HOME)/.config/systemd/user/pika.service
+	systemctl --user daemon-reload
+	@echo "✅ User services installed"
+
+# Restart user services
+restart-service-user:
+	@echo "Restarting user systemd services (no sudo)..."
+	systemctl --user restart cloudflared-pi.service
+	systemctl --user restart pika.service
+	@echo "✅ User services restarted"
+
 # Check service status
 status:
 	@echo "=== Cloudflare Tunnel ==="
@@ -93,6 +129,14 @@ status:
 	@echo ""
 	@echo "=== Pika ==="
 	sudo systemctl status pika.service --no-pager -l
+
+# Check user service status
+status-user:
+	@echo "=== Cloudflare Tunnel (user) ==="
+	systemctl --user status cloudflared-pi.service --no-pager -l
+	@echo ""
+	@echo "=== Pika (user) ==="
+	systemctl --user status pika.service --no-pager -l
 
 # Help target
 help:
@@ -109,7 +153,11 @@ help:
 	@echo "  make test            - Run all E2E tests (server must be running)"
 	@echo "  make test-mobile     - Run mobile E2E tests with visible browser"
 	@echo "  make deploy          - Build and deploy to production (your-domain.example)"
+	@echo "  make deploy-user     - Build and deploy using user systemd services (no sudo)"
 	@echo "  make install-service - Install systemd services only"
+	@echo "  make install-service-user - Install user systemd services only"
 	@echo "  make restart-service - Restart systemd services"
+	@echo "  make restart-service-user - Restart user systemd services"
 	@echo "  make status          - Check service status"
+	@echo "  make status-user     - Check user service status"
 	@echo "  make help            - Show this help message"

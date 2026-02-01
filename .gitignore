@@ -25,5 +25,5 @@ frontend-web/.env.local
 config.toml
 deploy/cloudflared-tunnel.yml
 
-# Pi Agent local data
+# Pika local data
 .pi/
