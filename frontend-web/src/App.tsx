@@ -13,7 +13,7 @@ import { useSwipeToClose } from "./hooks/useSwipe";
 import { useCommandPalette, useSessionSwitchingShortcuts } from "./hooks/useCommandPalette";
 import { usePerformanceMonitor } from "./hooks/usePerformanceMonitor";
 import { useQueryClient } from "@tanstack/react-query";
-import { Sheet, SheetContent } from "./components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "./components/ui/sheet";
 import { toast } from "sonner";
 import { hasCredentials } from "./lib/auth";
 import { AUTH_ERROR_EVENT } from "./lib/api";
@@ -315,6 +315,8 @@ function App() {
               id="mobile-drawer-content"
               {...drawerSwipeProps}
             >
+              <SheetTitle className="sr-only">Session List</SheetTitle>
+              <SheetDescription className="sr-only">Browse and select sessions</SheetDescription>
               <Suspense
                 fallback={
                   <div className="flex items-center justify-center h-full text-muted-foreground">

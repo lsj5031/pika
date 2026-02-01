@@ -243,7 +243,7 @@ export function SessionList({ className, onSelect }: SessionListProps) {
         className="p-4 md:pr-4 border-b flex flex-col gap-3 bg-card text-card-foreground shadow-sm z-10"
         data-testid="session-list-header"
       >
-        <div className="flex items-center justify-between gap-2 pr-12 md:pr-0">
+        <div className="flex items-center justify-between gap-2 pr-4 md:pr-0 min-w-0">
           <div className="flex items-center gap-2">
             <img
               src="/logo.png"
