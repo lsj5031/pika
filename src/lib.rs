@@ -7,7 +7,7 @@ mod sessions;
 mod static_files;
 mod websocket;
 
-use axum::{Router, middleware, response::Json, routing::get};
+use axum::response::Json;
 use serde_json::Value;
 
 pub use api::create_api_router;
@@ -39,6 +39,7 @@ impl AppState {
     }
 }
 
+#[allow(dead_code)]
 async fn health_check() -> Json<Value> {
     Json(serde_json::json!({
         "status": "ok",
