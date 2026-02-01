@@ -31,7 +31,7 @@ describe('AppHeader', () => {
       />,
       { wrapper: createWrapper() }
     )
-    expect(screen.getByText('PI Agent')).toBeInTheDocument()
+    expect(screen.getByText('Pika')).toBeInTheDocument()
   })
 
   it('renders menu button on mobile', () => {

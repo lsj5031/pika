@@ -1,12 +1,17 @@
 import { useCallback, useState, useRef, useEffect, lazy, Suspense } from "react";
 import { ChatInput, AppHeader, AuthPrompt } from "./components";
-import { Loader2, PanelLeftClose, PanelLeft } from "lucide-react";
+import { NewSessionDialog } from "./components/NewSessionDialog";
+import { CommandPalette } from "./components/CommandPalette";
+import { Loader2, Plus } from "lucide-react";
 import { useAppStore } from "./store/appStore";
 import { useThinkingStore } from "./store/thinkingStore";
 import { useSessions } from "./hooks/useSessions";
 import { useSendPrompt } from "./hooks/useSendPrompt";
 import { useStopSession } from "./hooks/useStopSession";
 import { useWebSocket } from "./hooks/useWebSocket";
+import { useSwipeToClose } from "./hooks/useSwipe";
+import { useCommandPalette, useSessionSwitchingShortcuts } from "./hooks/useCommandPalette";
+import { usePerformanceMonitor } from "./hooks/usePerformanceMonitor";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent } from "./components/ui/sheet";
 import { toast } from "sonner";
@@ -20,14 +25,29 @@ const SessionHistory = lazy(() => import("./components/SessionHistory").then(mod
 
 function App() {
   const currentSessionId = useAppStore((state) => state.currentSessionId);
+  const setCurrentSession = useAppStore((state) => state.setCurrentSession);
   const markSessionAsRead = useAppStore((state) => state.markSessionAsRead);
   const clearInvalidSession = useAppStore((state) => state.clearInvalidSession);
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
+  const sidebarCompactMode = useAppStore((state) => state.sidebarCompactMode);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
 
   // Auth state
   const [needsAuth, setNeedsAuth] = useState(() => !hasCredentials());
   const [authKey, setAuthKey] = useState(0); // Used to force re-render after auth
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+B or Ctrl+B to toggle sidebar
+      if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleSidebar]);
 
   const { data: sessions } = useSessions();
   const sendPromptMutation = useSendPrompt();
@@ -35,6 +55,39 @@ function App() {
   const queryClient = useQueryClient();
   const appendThinking = useThinkingStore((state) => state.appendThinking);
   const clearThinking = useThinkingStore((state) => state.clearThinking);
+
+  // Performance monitoring - logs warnings to console
+  usePerformanceMonitor({
+    onLongTask: (duration) => {
+      console.warn(`[Performance] Long task detected: ${Math.round(duration)}ms`);
+    },
+    onFrameDrop: (fps) => {
+      console.warn(`[Performance] Frame drop: ${fps} FPS`);
+    },
+    onMemoryWarning: (used, growth) => {
+      console.warn(`[Performance] Memory growth: +${Math.round(growth)}MB (total: ${Math.round(used)}MB)`);
+    },
+    enableLogging: import.meta.env.DEV,
+    longTaskThreshold: 50,
+    frameDropThreshold: 30,
+    memoryGrowthThreshold: 50,
+  });
+
+  // Command palette
+  const {
+    isOpen: commandPaletteOpen,
+    open: openCommandPalette,
+    close: closeCommandPalette,
+  } = useCommandPalette();
+
+  // Session switching keyboard shortcuts
+  useSessionSwitchingShortcuts(
+    sessions ?? [],
+    currentSessionId,
+    useCallback((sessionId: string) => {
+      setCurrentSession(sessionId);
+    }, [setCurrentSession])
+  );
 
   // Mobile drawer state
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -77,18 +130,21 @@ function App() {
   const currentSession = sessions?.find((s) => s.id === currentSessionId);
   const isSessionActive = currentSession?.is_active ?? false;
 
+  // Get recent and favorite sessions for command palette
+  const recentSessionIds = useAppStore((state) => state.recentSessionIds);
+  const favoriteSessionIds = useAppStore((state) => state.favoriteSessionIds);
+  const activeSessionIds = useAppStore((state) => state.activeSessionIds);
+  const thinkingSessionIds = useAppStore((state) => state.thinkingSessionIds);
+  const unreadSessions = useAppStore((state) => state.unreadSessions);
+
   // Mark current session as read when selected
   useEffect(() => {
     if (currentSessionId) {
       // Mark current session as read when selected
       const session = sessions?.find((s) => s.id === currentSessionId);
       if (session) {
-        // Get current message count
-        queryClient.fetchQuery<Message[]>({
-          queryKey: ["sessions", currentSessionId, "messages"],
-        }).then((messages) => {
-          markSessionAsRead(currentSessionId, messages?.length || 0);
-        });
+        // Mark as read without forcing a full history fetch
+        markSessionAsRead(currentSessionId, 0);
       }
     }
   }, [currentSessionId, sessions, queryClient, markSessionAsRead]);
@@ -207,6 +263,11 @@ function App() {
     }
   }, [mobileDrawerOpen]);
 
+  const { swipeProps: drawerSwipeProps } = useSwipeToClose(
+    () => setMobileDrawerOpen(false),
+    { direction: "left", threshold: 60 }
+  );
+
   return (
     <>
       {/* Auth prompt modal */}
@@ -219,38 +280,48 @@ function App() {
           isSessionActive={isSessionActive}
           onMenuToggle={handleMenuToggle}
           onStopSession={isSessionActive ? handleStopSession : undefined}
+          onOpenCommandPalette={openCommandPalette}
+          onToggleSidebar={toggleSidebar}
         />
 
         {/* Main layout: Sidebar + Content */}
         <div className="flex flex-1 overflow-hidden">
           {/* Desktop Sidebar */}
-          <aside className={`hidden border-r-2 border-dashed border-primary bg-background md:flex flex-col transition-all duration-200 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-64'}`}>
-            <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+          <aside
+            className={`hidden border-r border-border bg-background md:flex flex-col transition-all duration-300 ease-in-out ${
+              sidebarCollapsed
+                ? "w-0 overflow-hidden border-r-0"
+                : sidebarCompactMode
+                ? "w-16"
+                : "w-64"
+            }`}
+          >
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              }
+            >
               <SessionList />
             </Suspense>
           </aside>
-          
-          {/* Sidebar Toggle Button */}
-          <button
-            onClick={toggleSidebar}
-            className="hidden md:flex items-center justify-center w-6 h-12 my-auto -ml-3 bg-background border-2 border-dashed border-primary rounded-r-md hover:bg-muted transition-colors z-10"
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {sidebarCollapsed ? (
-              <PanelLeft className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4 text-muted-foreground" />
-            )}
-          </button>
 
           {/* Mobile Drawer Sidebar */}
           <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
             <SheetContent
               side="left"
-              className="w-[85vw] max-w-[320px] p-0 sm:w-64"
+              className="w-[85vw] max-w-[320px] p-0 sm:w-64 touch-pan-y border-r border-border"
               id="mobile-drawer-content"
+              {...drawerSwipeProps}
             >
-              <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                }
+              >
                 <SessionList onSelect={() => setMobileDrawerOpen(false)} />
               </Suspense>
             </SheetContent>
@@ -259,16 +330,41 @@ function App() {
           {/* Main content area */}
           <main className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-hidden">
-              <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                }
+              >
                 <SessionHistory sessionId={currentSessionId} />
               </Suspense>
             </div>
-            <ChatInput
-              sessionId={currentSessionId}
-              onSendMessage={handleSendMessage}
+            <ChatInput sessionId={currentSessionId} onSendMessage={handleSendMessage} />
+            <NewSessionDialog
+              trigger={
+                <button className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom)+7rem)] right-4 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50 active:scale-95 transition-transform touch-manipulation">
+                  <Plus className="h-6 w-6" />
+                  <span className="sr-only">New Session</span>
+                </button>
+              }
             />
           </main>
         </div>
+
+        {/* Command Palette for quick session switching */}
+        <CommandPalette
+          isOpen={commandPaletteOpen}
+          onClose={closeCommandPalette}
+          sessions={sessions ?? []}
+          recentSessionIds={recentSessionIds}
+          favoriteSessionIds={favoriteSessionIds}
+          currentSessionId={currentSessionId}
+          activeSessionIds={activeSessionIds}
+          thinkingSessionIds={thinkingSessionIds}
+          unreadSessions={unreadSessions}
+          onSelectSession={setCurrentSession}
+        />
       </div>
     </>
   );
