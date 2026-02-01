@@ -5,6 +5,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use uuid::Uuid;
 
 /// Session information extracted from session.jsonl files
@@ -48,7 +49,7 @@ pub enum SessionError {
 }
 
 /// Scan for pi sessions in configured project directories
-pub fn scan_sessions(config: &ProjectConfig) -> Vec<SessionInfo> {
+pub async fn scan_sessions(config: &ProjectConfig) -> Vec<SessionInfo> {
     let mut sessions = Vec::new();
 
     // Get the pi sessions directory
@@ -64,13 +65,15 @@ pub fn scan_sessions(config: &ProjectConfig) -> Vec<SessionInfo> {
     }
 
     for project_path in &config.project_root_paths {
-        // Encode the project path to match pi-coding-agent's naming convention
+        // Encode the project path to match Pika's naming convention
         // e.g., /home/youruser/appifex/appifex -> --home-leo-appifex-appifex--
         let encoded_path = encode_project_path(project_path);
         let project_sessions_dir = pi_sessions_dir.join(&encoded_path);
 
         // Scan each project's sessions directory
-        if let Ok(project_sessions) = scan_project_sessions(project_path, &project_sessions_dir) {
+        if let Ok(project_sessions) =
+            scan_project_sessions(project_path, &project_sessions_dir).await
+        {
             sessions.extend(project_sessions);
         }
     }
@@ -78,7 +81,7 @@ pub fn scan_sessions(config: &ProjectConfig) -> Vec<SessionInfo> {
     sessions
 }
 
-/// Encode a project path to match pi-coding-agent's directory naming convention
+/// Encode a project path to match Pika's directory naming convention
 pub fn encode_project_path(path: &Path) -> String {
     let path_str = path.to_string_lossy();
     let normalized = path_str.trim_start_matches('/').replace(['/', '\\'], "-");
@@ -132,23 +135,47 @@ pub fn get_session_file_path(session_id: &str, project_path: &Path) -> Option<Pa
 }
 
 /// Get the timestamp of the most recent message in a session file
-fn get_last_message_timestamp(session_file: &Path) -> Result<String, SessionError> {
-    let file = fs::File::open(session_file).map_err(|e| SessionError::IoError {
+/// Optimized to read only the last ~4KB of the file instead of the entire file
+async fn get_last_message_timestamp(session_file: &Path) -> Result<String, SessionError> {
+    let mut file =
+        tokio::fs::File::open(session_file)
+            .await
+            .map_err(|e| SessionError::IoError {
+                path: session_file.to_path_buf(),
+                source: e,
+            })?;
+
+    let metadata = file.metadata().await.map_err(|e| SessionError::IoError {
         path: session_file.to_path_buf(),
         source: e,
     })?;
+    let file_size = metadata.len();
 
-    let reader = BufReader::new(file);
-    let mut last_timestamp: Option<String> = None;
+    // Read only the last ~4KB of the file
+    const TAIL_SIZE: u64 = 4096;
+    let seek_pos = file_size.saturating_sub(TAIL_SIZE);
 
-    for line in reader.lines() {
-        let line = line.map_err(|e| SessionError::IoError {
+    file.seek(std::io::SeekFrom::Start(seek_pos))
+        .await
+        .map_err(|e| SessionError::IoError {
             path: session_file.to_path_buf(),
             source: e,
         })?;
 
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
-            // Try to extract timestamp from the message
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)
+        .await
+        .map_err(|e| SessionError::IoError {
+            path: session_file.to_path_buf(),
+            source: e,
+        })?;
+
+    let content = String::from_utf8_lossy(&buffer);
+    let mut last_timestamp: Option<String> = None;
+
+    // Parse each line from the tail, looking for the last valid timestamp
+    for line in content.lines() {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
             if let Some(ts) = json.get("timestamp").and_then(|t| t.as_str()) {
                 last_timestamp = Some(ts.to_string());
             }
@@ -162,7 +189,7 @@ fn get_last_message_timestamp(session_file: &Path) -> Result<String, SessionErro
 }
 
 /// Scan a single project directory for sessions
-fn scan_project_sessions(
+async fn scan_project_sessions(
     project_path: &Path,
     sessions_dir: &Path,
 ) -> Result<Vec<SessionInfo>, SessionError> {
@@ -174,17 +201,18 @@ fn scan_project_sessions(
     }
 
     // Read all session files (*.jsonl)
-    let entries = fs::read_dir(sessions_dir).map_err(|e| SessionError::IoError {
+    let mut entries =
+        tokio::fs::read_dir(sessions_dir)
+            .await
+            .map_err(|e| SessionError::IoError {
+                path: sessions_dir.to_path_buf(),
+                source: e,
+            })?;
+
+    while let Some(entry) = entries.next_entry().await.map_err(|e| SessionError::IoError {
         path: sessions_dir.to_path_buf(),
         source: e,
-    })?;
-
-    for entry in entries {
-        let entry = entry.map_err(|e| SessionError::IoError {
-            path: sessions_dir.to_path_buf(),
-            source: e,
-        })?;
-
+    })? {
         let path = entry.path();
 
         // Skip directories
@@ -218,10 +246,13 @@ fn scan_project_sessions(
         };
 
         // Get file modification time as created_at
-        let metadata = fs::metadata(&path).map_err(|e| SessionError::IoError {
-            path: path.clone(),
-            source: e,
-        })?;
+        let metadata =
+            tokio::fs::metadata(&path)
+                .await
+                .map_err(|e| SessionError::IoError {
+                    path: path.clone(),
+                    source: e,
+                })?;
         let modified = metadata
             .modified()
             .ok()
@@ -232,8 +263,9 @@ fn scan_project_sessions(
             .unwrap_or_else(|| timestamp.clone());
 
         // Try to get the last message timestamp by parsing the session file
-        let last_message_time =
-            get_last_message_timestamp(&path).unwrap_or_else(|_| modified.clone());
+        let last_message_time = get_last_message_timestamp(&path)
+            .await
+            .unwrap_or_else(|_| modified.clone());
 
         sessions.push(SessionInfo {
             id: session_id,
@@ -249,10 +281,23 @@ fn scan_project_sessions(
 }
 
 /// Get messages for a specific session
+#[allow(dead_code)]
 pub fn get_session_messages(
     session_id: &str,
     project_path: &Path,
 ) -> Result<Vec<SessionMessage>, SessionError> {
+    get_session_messages_limited(session_id, project_path, None, false)
+}
+
+pub fn get_session_messages_limited(
+    session_id: &str,
+    project_path: &Path,
+    limit: Option<usize>,
+    from_start: bool,
+) -> Result<Vec<SessionMessage>, SessionError> {
+    if let Some(0) = limit {
+        return Ok(Vec::new());
+    }
     // Get the pi sessions directory
     let pi_sessions_dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -260,7 +305,7 @@ pub fn get_session_messages(
         .join("agent")
         .join("sessions");
 
-    // Encode the project path to match pi-coding-agent's naming convention
+    // Encode the project path to match Pika's naming convention
     let encoded_path = encode_project_path(project_path);
     let project_sessions_dir = pi_sessions_dir.join(&encoded_path);
 
@@ -313,7 +358,7 @@ pub fn get_session_messages(
             continue;
         }
 
-        // Try to parse as a pi-coding-agent session entry
+        // Try to parse as a Pika session entry
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
             // Only process entries with type "message"
             if value.get("type").and_then(|t| t.as_str()) != Some("message") {
@@ -473,6 +518,17 @@ pub fn get_session_messages(
         }
     }
 
+    if let Some(limit) = limit {
+        if from_start {
+            messages.truncate(limit.min(messages.len()));
+            return Ok(messages);
+        }
+
+        if messages.len() > limit {
+            return Ok(messages[messages.len() - limit..].to_vec());
+        }
+    }
+
     Ok(messages)
 }
 
@@ -608,7 +664,7 @@ pub struct CreateSessionResponse {
 }
 
 /// Create a new session in the specified project
-/// Sessions are stored in ~/.pi/agent/sessions/{encoded-project-path}/ to match pi-coding-agent
+/// Sessions are stored in ~/.pi/agent/sessions/{encoded-project-path}/ to match Pika
 pub fn create_session(
     project_path: &Path,
     request: CreateSessionRequest,
@@ -633,7 +689,7 @@ pub fn create_session(
         chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
     });
 
-    // Generate timestamp in pi-coding-agent format: 2026-01-13T00-20-44-881Z
+    // Generate timestamp in Pika format: 2026-01-13T00-20-44-881Z
     let now = chrono::Utc::now();
     let timestamp_for_filename = now.format("%Y-%m-%dT%H-%M-%S").to_string();
     let millis = now.timestamp_subsec_millis();
@@ -649,12 +705,12 @@ pub fn create_session(
         source: e,
     })?;
 
-    // Create the session file with pi-coding-agent naming convention:
+    // Create the session file with Pika naming convention:
     // {timestamp}_{session_id}.jsonl
     let session_filename = format!("{}_{}.jsonl", timestamp_str, session_id);
     let session_file = sessions_dir.join(&session_filename);
 
-    // Create empty session file (pi-coding-agent will populate it when used)
+    // Create empty session file (Pika will populate it when used)
     fs::File::create(&session_file).map_err(|e| SessionError::IoError {
         path: session_file.clone(),
         source: e,
@@ -672,10 +728,10 @@ pub fn create_session(
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_scan_sessions_empty_config() {
+    #[tokio::test]
+    async fn test_scan_sessions_empty_config() {
         let config = ProjectConfig::default();
-        let sessions = scan_sessions(&config);
+        let sessions = scan_sessions(&config).await;
         assert!(sessions.is_empty());
     }
 
