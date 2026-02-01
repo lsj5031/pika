@@ -40,7 +40,6 @@ This will:
 ### 📱 Mobile Access
 - Open https://your-domain.example on any device
 - Responsive design adapts to screen size
-- **Note**: Horizontal overflow on screens <390px (documented in docs/MOBILE_TEST_REPORT.md)
 
 ---
 
@@ -154,6 +153,6 @@ make deploy        # Build and deploy to your-domain.example
 
 ## Documentation
 
-- `DEPLOYMENT.md` - Detailed deployment guide
-- `TUNNEL.md` - Cloudflare tunnel specifics
+- `docs/DEPLOYMENT.md` - Detailed deployment guide
+- `PERFORMANCE_FIXES.md` - Performance optimizations
 - `README.md` - General project documentation
