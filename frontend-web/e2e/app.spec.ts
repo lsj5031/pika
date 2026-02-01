@@ -4,7 +4,7 @@ test.describe('Application', () => {
   test('loads homepage', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page.locator('h1')).toContainText('PI Agent');
+    await expect(page.locator('h1')).toContainText('Pika');
   });
 
   test('has navigation menu', async ({ page }) => {
