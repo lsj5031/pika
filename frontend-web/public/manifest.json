@@ -1,7 +1,7 @@
 {
-  "name": "PI Agent Manager",
-  "short_name": "PI Agent",
-  "description": "Web application for managing pi-coding-agent sessions",
+  "name": "Pika",
+  "short_name": "Pika",
+  "description": "Web application for managing Pika sessions",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -9,13 +9,13 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
+      "src": "/logo.png",
+      "sizes": "1024x1024",
       "type": "image/png"
     },
     {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
+      "src": "/favicon.png",
+      "sizes": "1024x1024",
       "type": "image/png"
     }
   ]

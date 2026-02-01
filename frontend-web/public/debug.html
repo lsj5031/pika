@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PI Performance Debug</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        h1 { color: #3b82f6; }
+        h2 { color: #60a5fa; margin-top: 30px; }
+        .metric {
+            background: #1e293b;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+        .warning {
+            border-left-color: #f59e0b;
+            background: #1e293b;
+        }
+        .error {
+            border-left-color: #ef4444;
+            background: #1e293b;
+        }
+        .success {
+            border-left-color: #10b981;
+            background: #1e293b;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #2563eb; }
+        pre {
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>🔍 PI Performance Diagnostics</h1>
+    <p>This page helps diagnose the frozen UI issue. Click the buttons below to run tests.</p>
+    
+    <button onclick="runDiagnostics()">Run Full Diagnostics</button>
+    <button onclick="monitorPerformance()">Start Performance Monitor</button>
+    <button onclick="stopMonitoring()">Stop Monitor</button>
+    <button onclick="document.getElementById('results').innerHTML=''">Clear Results</button>
+    
+    <div id="results"></div>
+    
+    <h2>📋 Instructions</h2>
+    <ol>
+        <li>Keep this page open in a separate tab</li>
+        <li>Open your PI app in another tab</li>
+        <li>Wait for the freeze to occur</li>
+        <li>Switch back to this tab and click "Run Full Diagnostics"</li>
+        <li>Copy the results and share them</li>
+    </ol>
+    
+    <h2>🎯 What to Look For</h2>
+    <ul>
+        <li><strong>Memory &gt; 500MB</strong>: Memory leak or too much data loaded</li>
+        <li><strong>DOM &gt; 3000 elements</strong>: Too many messages rendered</li>
+        <li><strong>Long tasks &gt; 100ms</strong>: JavaScript blocking the main thread</li>
+        <li><strong>FPS &lt; 30</strong>: UI can't keep up with updates</li>
+    </ul>
+
+    <script>
+        let monitoring = false;
+        let monitorInterval = null;
+        
+        function addResult(title, value, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `metric ${type}`;
+            div.innerHTML = `<strong>${title}</strong><br>${value}`;
+            document.getElementById('results').appendChild(div);
+        }
+        
+        function runDiagnostics() {
+            addResult('⏰ Timestamp', new Date().toLocaleString());
+            
+            // Memory
+            if (performance.memory) {
+                const used = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
+                const total = Math.round(performance.memory.totalJSHeapSize / 1024 / 1024);
+                const limit = Math.round(performance.memory.jsHeapSizeLimit / 1024 / 1024);
+                const type = used > 500 ? 'error' : used > 300 ? 'warning' : 'success';
+                addResult('📊 Memory Usage', `${used}MB / ${total}MB (Limit: ${limit}MB)`, type);
+            } else {
+                addResult('📊 Memory Usage', 'Not available in this browser', 'warning');
+            }
+            
+            // DOM
+            const total = document.querySelectorAll('*').length;
+            const type = total > 3000 ? 'error' : total > 1500 ? 'warning' : 'success';
+            addResult('🌳 DOM Elements', `${total} elements`, type);
+            
+            // Long tasks
+            const tasks = performance.getEntriesByType('longtask');
+            const recentTasks = tasks.filter(t => t.startTime > performance.now() - 10000);
+            const taskInfo = recentTasks.length > 0 
+                ? recentTasks.map(t => `${Math.round(t.duration)}ms`).join(', ')
+                : 'None in last 10s';
+            const taskType = recentTasks.some(t => t.duration > 100) ? 'error' : 
+                           recentTasks.some(t => t.duration > 50) ? 'warning' : 'success';
+            addResult('⏱️ Long Tasks', `${tasks.length} total, recent: ${taskInfo}`, taskType);
+            
+            // Navigation timing
+            const nav = performance.getEntriesByType('navigation')[0];
+            if (nav) {
+                addResult('🌐 Page Load Time', `${Math.round(nav.loadEventEnd - nav.startTime)}ms`);
+            }
+            
+            // User Agent
+            addResult('🖥️ Browser', navigator.userAgent.substring(0, 100) + '...');
+            
+            addResult('✅ Diagnostics Complete', 'Share these results to help identify the issue', 'success');
+        }
+        
+        function monitorPerformance() {
+            if (monitoring) return;
+            monitoring = true;
+            
+            let frameCount = 0;
+            let lastTime = performance.now();
+            let lastMemory = performance.memory ? performance.memory.usedJSHeapSize : 0;
+            
+            function countFrame() {
+                if (!monitoring) return;
+                frameCount++;
+                requestAnimationFrame(countFrame);
+            }
+            requestAnimationFrame(countFrame);
+            
+            monitorInterval = setInterval(() => {
+                const now = performance.now();
+                const fps = Math.round(frameCount * 1000 / (now - lastTime));
+                frameCount = 0;
+                lastTime = now;
+                
+                let memInfo = '';
+                if (performance.memory) {
+                    const used = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
+                    const growth = Math.round((performance.memory.usedJSHeapSize - lastMemory) / 1024 / 1024);
+                    memInfo = ` | Memory: ${used}MB${growth > 0 ? ` (+${growth}MB)` : ''}`;
+                    lastMemory = performance.memory.usedJSHeapSize;
+                }
+                
+                const type = fps < 30 ? 'error' : fps < 50 ? 'warning' : 'success';
+                addResult('📈 Performance', `FPS: ${fps}${memInfo}`, type);
+            }, 2000);
+            
+            addResult('🔴 Monitor Started', 'Updating every 2 seconds...', 'warning');
+        }
+        
+        function stopMonitoring() {
+            monitoring = false;
+            if (monitorInterval) {
+                clearInterval(monitorInterval);
+                monitorInterval = null;
+            }
+            addResult('🛑 Monitor Stopped', 'Performance monitoring disabled', 'success');
+        }
+        
+        // Auto-run on load
+        window.addEventListener('load', () => {
+            addResult('🚀 Debug Page Loaded', 'Ready to diagnose performance issues', 'success');
+        });
+    </script>
+</body>
+</html>
