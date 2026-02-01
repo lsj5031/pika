@@ -7,7 +7,7 @@
 [![Status: Production Ready](https://img.shields.io/badge/status-production%20ready-brightgreen)](https://pi.liu.nz)
 [![Deployment](https://img.shields.io/badge/deployment-pi.liu.nz-blue)](https://pi.liu.nz)
 
-Pika is your cute AI Coding Companion. A web application for managing multiple pi-coding-agent sessions across projects. Built with Rust (Axum) backend and React + TypeScript + Vite frontend.
+Pika is your cute AI Coding Companion. A web application for managing multiple Pika sessions across projects. Built with Rust (Axum) backend and React + TypeScript + Vite frontend.
 
 **Status**: ✅ **Production Ready** - Deployed at https://pi.liu.nz
 
@@ -15,11 +15,11 @@ Pika is your cute AI Coding Companion. A web application for managing multiple p
 
 ### Core Functionality
 - **Pika Companion**: Your friendly rodent manager for AI sessions
-- **Session Management**: View, create, start, and stop pi-coding-agent sessions
+- **Session Management**: View, create, start, and stop Pika sessions
 - **Project Organization**: Sessions grouped by project folder
 - **Real-time Updates**: WebSocket integration for live status updates
 - **Chat Interface**: Send prompts and view conversation history
-- **Authentication**: Secure API key authentication for pi-coding-agent
+- **Authentication**: Secure API key authentication for Pika
 
 ### User Interface
 - **Session List**: View all sessions with status indicators
@@ -42,7 +42,7 @@ Pika is your cute AI Coding Companion. A web application for managing multiple p
 
 - Rust (edition 2024)
 - Node.js 18+ and npm
-- npx (for running pi-coding-agent)
+- npx (for running Pika CLI)
 
 ### Frontend Development
 
@@ -84,7 +84,8 @@ The backend serves API at `http://localhost:8080/api` and WebSocket at `ws://loc
 The application is deployed at **https://pi.liu.nz** using Cloudflare Tunnel.
 
 ```bash
-make deploy        # Build and deploy everything
+make deploy        # Build and deploy everything (requires sudo)
+make deploy-user   # Build and deploy with user systemd services (no sudo)
 ```
 
 This will:
@@ -114,10 +115,14 @@ make frontend       # Build frontend only
 make backend        # Build backend only
 make dev-frontend   # Start frontend dev server
 make dev-backend    # Start backend with hot reload
-make deploy         # Deploy to production
+make deploy         # Deploy to production (requires sudo)
+make deploy-user    # Deploy using user systemd services (no sudo)
 make install-service # Install systemd services
+make install-service-user # Install user systemd services (no sudo)
 make restart-service # Restart services
+make restart-service-user # Restart user services (no sudo)
 make status         # Check service status
+make status-user    # Check user service status
 make help           # Show all available targets
 ```
 
@@ -142,13 +147,17 @@ The server will start on port 7847 (configurable via `config.toml`) and serve th
 ```bash
 # Check service status
 make status
+make status-user
 
 # View logs
 sudo journalctl -u pika -f
 sudo journalctl -u cloudflared-pi -f
+journalctl --user -u pika -f
+journalctl --user -u cloudflared-pi -f
 
 # Restart services
 make restart-service
+make restart-service-user
 ```
 
 ## Project Structure

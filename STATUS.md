@@ -1,4 +1,4 @@
-# PI Agent Manager - Current Status
+# Pika - Current Status
 
 **Last Updated**: January 14, 2026
 **Version**: 1.0.0
@@ -8,7 +8,7 @@
 
 ## 🎉 Application Status: **PRODUCTION READY**
 
-The PI Agent Manager is fully deployed and operational at **https://pi.liu.nz**.
+Pika is fully deployed and operational at **https://pi.liu.nz**.
 
 ### Deployment Details
 - **URL**: https://pi.liu.nz
@@ -132,7 +132,7 @@ sudo journalctl -u cloudflared-pi -f      # Tunnel logs
 
 ### Developer Documentation
 - `docs/DEPLOYMENT.md` - Detailed deployment instructions
-- `docs/MOBILE_TEST_REPORT.md` - Mobile usability test results and fix verification
+- `PERFORMANCE_FIXES.md` - Performance optimizations applied
 
 ### Technical Documentation
 - Cloudflare Tunnel configuration (see `docs/DEPLOYMENT.md`)
