@@ -27,40 +27,40 @@ describe('AppHeader', () => {
       <AppHeader
         connectionStatus="connected"
         isSessionActive={false}
-        onMenuToggle={vi.fn()}
+        onOpenCommandPalette={vi.fn()}
       />,
       { wrapper: createWrapper() }
     )
     expect(screen.getByText('Pika')).toBeInTheDocument()
   })
 
-  it('renders menu button on mobile', () => {
+  it('renders command palette button on mobile', () => {
     render(
       <AppHeader
         connectionStatus="connected"
         isSessionActive={false}
-        onMenuToggle={vi.fn()}
+        onOpenCommandPalette={vi.fn()}
       />,
       { wrapper: createWrapper() }
     )
-    const menuButton = screen.getByTestId('session-list-button')
-    expect(menuButton).toBeInTheDocument()
+    const paletteButton = screen.getByTestId('command-palette-button')
+    expect(paletteButton).toBeInTheDocument()
   })
 
-  it('calls onMenuToggle when menu button is clicked', async () => {
-    const mockToggle = vi.fn()
+  it('calls onOpenCommandPalette when command palette button is clicked', async () => {
+    const mockOpen = vi.fn()
     render(
       <AppHeader
         connectionStatus="connected"
         isSessionActive={false}
-        onMenuToggle={mockToggle}
+        onOpenCommandPalette={mockOpen}
       />,
       { wrapper: createWrapper() }
     )
 
-    const menuButton = screen.getByTestId('session-list-button')
-    menuButton.click()
+    const paletteButton = screen.getByTestId('command-palette-button')
+    paletteButton.click()
 
-    expect(mockToggle).toHaveBeenCalledOnce()
+    expect(mockOpen).toHaveBeenCalledOnce()
   })
 })
