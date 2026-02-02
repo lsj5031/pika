@@ -51,7 +51,7 @@ export function usePerformanceMonitor(options: MonitorOptions = {}) {
 
   const lastMemoryRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
-  const lastFrameTimeRef = useRef<number>(performance.now());
+  const lastFrameTimeRef = useRef<number>(0);
   const rafIdRef = useRef<number | null>(null);
   const observerRef = useRef<PerformanceObserver | null>(null);
 
@@ -82,7 +82,7 @@ export function usePerformanceMonitor(options: MonitorOptions = {}) {
         });
 
         observerRef.current.observe({ entryTypes: ["longtask"] });
-      } catch (e) {
+      } catch {
         // Long task observer not supported
         log("Long task observer not supported");
       }
@@ -91,6 +91,9 @@ export function usePerformanceMonitor(options: MonitorOptions = {}) {
     // Monitor frame rate
     const measureFrameRate = () => {
       const now = performance.now();
+      if (lastFrameTimeRef.current === 0) {
+        lastFrameTimeRef.current = now;
+      }
       frameCountRef.current++;
 
       if (now - lastFrameTimeRef.current >= 1000) {

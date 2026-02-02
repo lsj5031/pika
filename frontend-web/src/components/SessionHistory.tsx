@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, memo, useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { useSessionHistory } from "../hooks/useSessionHistory";
+import { useAppStore } from "../store/appStore";
 import { useThinkingStore } from "../store/thinkingStore";
 import { Card } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
@@ -392,7 +393,8 @@ function exportSessionToMarkdown(messages: Message[], sessionId: string): string
 }
 
 export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
-  const { data: messages, isLoading } = useSessionHistory({ sessionId });
+  const needsAuth = useAppStore((state) => state.needsAuth);
+  const { data: messages, isLoading } = useSessionHistory({ sessionId, enabled: !needsAuth });
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const thinkingState = useThinkingStore((state) =>
@@ -524,7 +526,7 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   const isTruncated = messages.length >= 50; // Matches MAX_INITIAL_MESSAGES
 
   return (
-    <div className={cn("flex flex-col h-full", className)}>
+    <div className={cn("flex flex-col h-full overflow-x-hidden", className)}>
       {messages && messages.length > 0 && (
         <div className="p-2 border-b hidden md:flex justify-between items-center bg-card">
           {isTruncated && (
@@ -545,8 +547,8 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
           </div>
         </div>
       )}
-      <ScrollArea className="flex-1">
-        <div ref={scrollRef} className="p-4 space-y-6">
+      <ScrollArea className="flex-1 overflow-x-hidden">
+        <div ref={scrollRef} className="p-4 space-y-6 overflow-x-hidden">
           {messages.map((message, index) => (
             <MessageBubble key={index} message={message} />
           ))}

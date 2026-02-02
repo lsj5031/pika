@@ -1,4 +1,4 @@
-import { onCLS, onFCP, onINP, onLCP, onTTFB } from 'web-vitals';
+import { onCLS, onFCP, onINP, onLCP, onTTFB, type Metric } from 'web-vitals';
 
 interface PerformanceMetric {
   name: string;
@@ -27,7 +27,7 @@ class PerformanceMonitor {
     onINP(this.recordMetric);
   }
 
-  private recordMetric = (metric: any) => {
+  private recordMetric = (metric: Metric) => {
     const performanceMetric: PerformanceMetric = {
       name: metric.name,
       value: metric.value,
