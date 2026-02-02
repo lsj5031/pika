@@ -4,6 +4,7 @@ import { Textarea } from "./ui/textarea";
 import { Send, Cpu } from "lucide-react";
 import { cn } from "../lib/utils";
 import { usePiSettings, type PiModel } from "../hooks/usePiSettings";
+import { useAppStore } from "../store/appStore";
 
 interface ChatInputProps {
   sessionId: string | null;
@@ -18,9 +19,10 @@ export function ChatInput({
   disabled = false,
   className,
 }: ChatInputProps) {
+  const needsAuth = useAppStore((state) => state.needsAuth);
   const [content, setContent] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { data: settings, isLoading: settingsLoading } = usePiSettings();
+  const { data: settings, isLoading: settingsLoading } = usePiSettings(!needsAuth);
 
   // Auto-resize textarea based on content
   useEffect(() => {

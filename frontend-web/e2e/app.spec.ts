@@ -26,7 +26,7 @@ test.describe('Application', () => {
 });
 
 test.describe('Responsive Design', () => {
-  test('mobile view', async ({ page, viewport }) => {
+  test('mobile view', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/');
 
@@ -37,7 +37,7 @@ test.describe('Responsive Design', () => {
     await expect(header).toBeVisible();
   });
 
-  test('desktop view', async ({ page, viewport }) => {
+  test('desktop view', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/');
 

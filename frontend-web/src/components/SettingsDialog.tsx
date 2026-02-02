@@ -24,6 +24,7 @@ import { usePiSettings } from "../hooks/usePiSettings";
 import { useUpdatePiSettings } from "../hooks/useUpdatePiSettings";
 import { useSwipeToClose } from "../hooks/useSwipe";
 import { ProjectManager } from "./ProjectManager";
+import { useAppStore } from "../store/appStore";
 
 const THINKING_LEVELS = [
   { value: "off", label: "Off" },
@@ -54,23 +55,14 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ trigger }: SettingsDialogProps) {
+  const needsAuth = useAppStore((state) => state.needsAuth);
   const [open, setOpen] = useState(false);
   const isMobile = useIsMobile();
-  const { data: settings, isLoading } = usePiSettings();
+  const { data: settings, isLoading } = usePiSettings(!needsAuth);
   const updateSettingsMutation = useUpdatePiSettings();
 
-  const [localModel, setLocalModel] = useState<string>(settings?.defaultModel || "");
-  const [localThinkingLevel, setLocalThinkingLevel] = useState<string>(
-    settings?.defaultThinkingLevel || "off"
-  );
-
-  // Sync local state when settings load while dialog is open
-  useEffect(() => {
-    if (open && settings) {
-      setLocalModel(settings.defaultModel || "");
-      setLocalThinkingLevel(settings.defaultThinkingLevel || "off");
-    }
-  }, [open, settings]);
+  const [localModel, setLocalModel] = useState<string>("");
+  const [localThinkingLevel, setLocalThinkingLevel] = useState<string>("off");
 
   const { swipeProps: sheetSwipeProps } = useSwipeToClose(
     () => setOpen(false),
@@ -200,7 +192,7 @@ export function SettingsDialog({ trigger }: SettingsDialogProps) {
       </TabsContent>
 
       <TabsContent value="projects" className="space-y-4">
-        <ProjectManager />
+        <ProjectManager mode="inline" />
       </TabsContent>
     </Tabs>
   );

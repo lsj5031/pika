@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { hasCredentials } from "../lib/auth";
 
 interface AppState {
   // State
   currentSessionId: string | null;
   sidebarCollapsed: boolean;
   sidebarCompactMode: boolean; // NEW: Compact icon-only mode
+  needsAuth: boolean;
   activeSessionIds: Set<string>; // Track active sessions
   thinkingSessionIds: Set<string>; // Track sessions with thinking in progress
   unreadSessions: Set<string>; // Track sessions with unread messages
@@ -20,6 +22,7 @@ interface AppState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebarCompactMode: () => void; // NEW
   setSidebarCompactMode: (compact: boolean) => void; // NEW
+  setNeedsAuth: (needsAuth: boolean) => void;
   setActiveSession: (sessionId: string, isActive: boolean) => void;
   setThinkingSession: (sessionId: string, isThinking: boolean) => void;
   markSessionAsRead: (sessionId: string, messageCount: number) => void;
@@ -39,6 +42,7 @@ export const useAppStore = create<AppState>()(
       currentSessionId: null,
       sidebarCollapsed: false,
       sidebarCompactMode: false,
+      needsAuth: !hasCredentials(),
       activeSessionIds: new Set<string>(),
       thinkingSessionIds: new Set<string>(),
       unreadSessions: new Set<string>(),
@@ -63,6 +67,8 @@ export const useAppStore = create<AppState>()(
       toggleSidebarCompactMode: () => set((state) => ({ sidebarCompactMode: !state.sidebarCompactMode })),
 
       setSidebarCompactMode: (compact) => set({ sidebarCompactMode: compact }),
+
+      setNeedsAuth: (needsAuth) => set({ needsAuth }),
 
       setActiveSession: (sessionId, isActive) =>
         set((state) => {
@@ -159,6 +165,7 @@ export const useAppStore = create<AppState>()(
         currentSessionId: state.currentSessionId,
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarCompactMode: state.sidebarCompactMode,
+        needsAuth: state.needsAuth,
         lastSeenMessageCounts: state.lastSeenMessageCounts,
         lastProjectId: state.lastProjectId,
         recentSessionIds: state.recentSessionIds,
