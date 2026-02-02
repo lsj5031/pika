@@ -34,8 +34,9 @@ interface SessionListProps {
 const DEFAULT_SESSION_LIMIT = 5;
 
 export function SessionList({ className, onSelect }: SessionListProps) {
-  const { data: sessions, isLoading: sessionsLoading, refetch: refetchSessions } = useSessions();
-  const { data: projects, isLoading: projectsLoading, refetch: refetchProjects } = useProjects();
+  const needsAuth = useAppStore((state) => state.needsAuth);
+  const { data: sessions, isLoading: sessionsLoading, refetch: refetchSessions } = useSessions(!needsAuth);
+  const { data: projects, isLoading: projectsLoading, refetch: refetchProjects } = useProjects(!needsAuth);
   const currentSessionId = useAppStore((state) => state.currentSessionId);
   const setCurrentSession = useAppStore((state) => state.setCurrentSession);
   const activeSessionIds = useAppStore((state) => state.activeSessionIds);
@@ -235,7 +236,7 @@ export function SessionList({ className, onSelect }: SessionListProps) {
 
   return (
     <div
-      className={cn("flex flex-col h-full bg-background", className)}
+      className={cn("flex flex-col h-full bg-background min-h-0", className)}
       data-testid="session-list"
     >
       {/* Header */}
@@ -243,7 +244,7 @@ export function SessionList({ className, onSelect }: SessionListProps) {
         className="p-4 md:pr-4 border-b flex flex-col gap-3 bg-card text-card-foreground shadow-sm z-10"
         data-testid="session-list-header"
       >
-        <div className="flex items-center justify-between gap-2 pr-4 md:pr-0 min-w-0">
+        <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2">
             <img
               src="/logo.png"
@@ -309,7 +310,7 @@ export function SessionList({ className, onSelect }: SessionListProps) {
       )}
 
       {!isLoading && (
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden min-h-0">
           <PullToRefreshIndicator
             pullDistance={pullDistance}
             isPulling={isPulling}

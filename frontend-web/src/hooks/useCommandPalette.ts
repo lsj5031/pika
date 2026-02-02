@@ -77,6 +77,7 @@ interface UseKeyboardNavigationOptions<T> {
 export function useKeyboardNavigation<T>(options: UseKeyboardNavigationOptions<T>) {
   const { items, onSelect, enabled = true } = options;
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const safeSelectedIndex = items.length === 0 ? 0 : Math.min(selectedIndex, items.length - 1);
 
   useEffect(() => {
     if (!enabled) return;
@@ -95,8 +96,8 @@ export function useKeyboardNavigation<T>(options: UseKeyboardNavigationOptions<T
           break;
         case "Enter":
           e.preventDefault();
-          if (items[selectedIndex]) {
-            onSelect(items[selectedIndex]);
+          if (items[safeSelectedIndex]) {
+            onSelect(items[safeSelectedIndex]);
           }
           break;
         case "Home":
@@ -112,17 +113,12 @@ export function useKeyboardNavigation<T>(options: UseKeyboardNavigationOptions<T
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [items, onSelect, selectedIndex, enabled]);
-
-  // Reset selection when items change
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [items.length]);
+  }, [items, onSelect, safeSelectedIndex, enabled]);
 
   return {
-    selectedIndex,
+    selectedIndex: safeSelectedIndex,
     setSelectedIndex,
-    selectedItem: items[selectedIndex],
+    selectedItem: items[safeSelectedIndex],
   };
 }
 

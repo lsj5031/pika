@@ -30,13 +30,14 @@ interface NewSessionDialogProps {
 }
 
 export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
+  const needsAuth = useAppStore((state) => state.needsAuth);
   const [open, setOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [customPath, setCustomPath] = useState<string>("");
   const [sessionName, setSessionName] = useState<string>("");
   const [useCustomPath, setUseCustomPath] = useState(false);
 
-  const { data: projects, isLoading: projectsLoading } = useProjects();
+  const { data: projects, isLoading: projectsLoading } = useProjects(!needsAuth);
   const createSessionMutation = useCreateSession();
   const createStandaloneMutation = useCreateStandaloneSession();
   const setCurrentSession = useAppStore((state) => state.setCurrentSession);

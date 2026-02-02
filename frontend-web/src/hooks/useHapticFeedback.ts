@@ -2,7 +2,7 @@ type HapticPattern = "light" | "medium" | "heavy" | "success" | "warning" | "err
 
 export function useHapticFeedback() {
   const triggerHaptic = (pattern: HapticPattern = "light") => {
-    if (!navigator.vibrate && !(window as any).navigator.vibrate) {
+    if (!navigator.vibrate) {
       return;
     }
 
@@ -19,7 +19,8 @@ export function useHapticFeedback() {
 
     try {
       navigator.vibrate(vibrationPattern);
-    } catch {
+    } catch (error) {
+      console.warn("Haptic feedback failed", error);
     }
   };
 
@@ -43,7 +44,8 @@ export function withHaptic<T extends (...args: unknown[]) => unknown>(
 
       try {
         navigator.vibrate(patterns[pattern] || patterns.light);
-      } catch {
+      } catch (error) {
+        console.warn("Haptic feedback failed", error);
       }
     }
 
