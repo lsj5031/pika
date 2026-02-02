@@ -1,4 +1,4 @@
-import { Menu, Square, Wifi, WifiOff, Loader2, Command, PanelLeft } from "lucide-react";
+import { Square, Wifi, WifiOff, Loader2, Command, PanelLeft } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { SettingsDialog } from "./SettingsDialog";
@@ -8,7 +8,6 @@ import { cn } from "../lib/utils";
 interface AppHeaderProps {
   connectionStatus: "connecting" | "connected" | "disconnected";
   isSessionActive: boolean;
-  onMenuToggle: () => void;
   onStopSession?: () => void;
   onOpenCommandPalette?: () => void;
   onToggleSidebar?: () => void;
@@ -17,7 +16,6 @@ interface AppHeaderProps {
 export function AppHeader({
   connectionStatus,
   isSessionActive,
-  onMenuToggle,
   onStopSession,
   onOpenCommandPalette,
   onToggleSidebar,
@@ -26,31 +24,19 @@ export function AppHeader({
     <header className="flex h-14 items-center justify-between border-b bg-background px-4 sm:px-6">
       {/* Left: Hamburger menu + App name */}
       <div className="flex items-center gap-3">
-        {/* Mobile menu toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="md:hidden min-w-[44px] min-h-[44px] touch-manipulation"
-          onClick={onMenuToggle}
-          id="session-list-button"
-          data-testid="session-list-button"
-          style={{ touchAction: "manipulation" }}
-        >
-          <Menu className="h-5 w-5 pointer-events-none" />
-          <span className="sr-only">Toggle menu</span>
-        </Button>
-
         {/* Desktop sidebar toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="hidden md:flex text-muted-foreground hover:text-foreground"
-          onClick={onToggleSidebar}
-          title="Toggle Sidebar (⌘B)"
-        >
-          <PanelLeft className="h-5 w-5" />
-          <span className="sr-only">Toggle Sidebar</span>
-        </Button>
+        {onToggleSidebar && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden md:flex text-muted-foreground hover:text-foreground"
+            onClick={onToggleSidebar}
+            title="Toggle Sidebar (⌘B)"
+          >
+            <PanelLeft className="h-5 w-5" />
+            <span className="sr-only">Toggle Sidebar</span>
+          </Button>
+        )}
 
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="Pika Logo" className="h-8 w-8 object-contain" />
@@ -65,7 +51,7 @@ export function AppHeader({
         {/* Theme toggle */}
         <ThemeToggle />
 
-        {/* Command palette trigger - desktop only */}
+        {/* Command palette trigger */}
         <Button
           variant="outline"
           size="sm"
@@ -77,6 +63,18 @@ export function AppHeader({
           <kbd className="hidden lg:inline-flex h-5 items-center rounded border bg-muted px-1.5 font-mono text-xs text-muted-foreground">
             ⌘K
           </kbd>
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onOpenCommandPalette}
+          className="md:hidden min-w-[44px] min-h-[44px] touch-manipulation"
+          id="command-palette-button"
+          data-testid="command-palette-button"
+          style={{ touchAction: "manipulation" }}
+        >
+          <Command className="h-5 w-5 pointer-events-none" />
+          <span className="sr-only">Switch Session</span>
         </Button>
 
         {/* Settings dialog */}
