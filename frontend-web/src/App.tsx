@@ -9,18 +9,14 @@ import { useSessions } from "./hooks/useSessions";
 import { useSendPrompt } from "./hooks/useSendPrompt";
 import { useStopSession } from "./hooks/useStopSession";
 import { useWebSocket } from "./hooks/useWebSocket";
-import { useSwipeToClose } from "./hooks/useSwipe";
 import { useCommandPalette, useSessionSwitchingShortcuts } from "./hooks/useCommandPalette";
 import { usePerformanceMonitor } from "./hooks/usePerformanceMonitor";
 import { useQueryClient } from "@tanstack/react-query";
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from "./components/ui/sheet";
 import { toast } from "sonner";
-import { hasCredentials } from "./lib/auth";
 import { AUTH_ERROR_EVENT } from "./lib/api";
 import type { WSEvent, Message } from "./types";
 
 // Lazy load heavy components
-const SessionList = lazy(() => import("./components/SessionList").then(module => ({ default: module.SessionList })));
 const SessionHistory = lazy(() => import("./components/SessionHistory").then(module => ({ default: module.SessionHistory })));
 
 function App() {
@@ -28,33 +24,11 @@ function App() {
   const setCurrentSession = useAppStore((state) => state.setCurrentSession);
   const markSessionAsRead = useAppStore((state) => state.markSessionAsRead);
   const clearInvalidSession = useAppStore((state) => state.clearInvalidSession);
-  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
-  const sidebarCompactMode = useAppStore((state) => state.sidebarCompactMode);
-  const toggleSidebar = useAppStore((state) => state.toggleSidebar);
 
   // Auth state
-  const [needsAuth, setNeedsAuth] = useState(() => !hasCredentials());
+  const needsAuth = useAppStore((state) => state.needsAuth);
+  const setNeedsAuth = useAppStore((state) => state.setNeedsAuth);
   const [authKey, setAuthKey] = useState(0); // Used to force re-render after auth
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+B or Ctrl+B to toggle sidebar
-      if ((e.metaKey || e.ctrlKey) && e.key === "b") {
-        e.preventDefault();
-        toggleSidebar();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleSidebar]);
-
-  const { data: sessions } = useSessions();
-  const sendPromptMutation = useSendPrompt();
-  const stopSessionMutation = useStopSession();
-  const queryClient = useQueryClient();
-  const appendThinking = useThinkingStore((state) => state.appendThinking);
-  const clearThinking = useThinkingStore((state) => state.clearThinking);
 
   // Performance monitoring - logs warnings to console
   usePerformanceMonitor({
@@ -80,6 +54,13 @@ function App() {
     close: closeCommandPalette,
   } = useCommandPalette();
 
+  const { data: sessions } = useSessions(!needsAuth, { resolveNames: commandPaletteOpen });
+  const sendPromptMutation = useSendPrompt();
+  const stopSessionMutation = useStopSession();
+  const queryClient = useQueryClient();
+  const appendThinking = useThinkingStore((state) => state.appendThinking);
+  const clearThinking = useThinkingStore((state) => state.clearThinking);
+
   // Session switching keyboard shortcuts
   useSessionSwitchingShortcuts(
     sessions ?? [],
@@ -89,8 +70,6 @@ function App() {
     }, [setCurrentSession])
   );
 
-  // Mobile drawer state
-  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   // Listen for auth error events
   useEffect(() => {
@@ -102,7 +81,7 @@ function App() {
     return () => {
       window.removeEventListener(AUTH_ERROR_EVENT, handleAuthError);
     };
-  }, []);
+  }, [setNeedsAuth]);
 
   // Listen for session not found events (404s)
   useEffect(() => {
@@ -124,7 +103,7 @@ function App() {
     setAuthKey((k) => k + 1); // Force refresh
     // Invalidate all queries to refetch with new credentials
     queryClient.invalidateQueries();
-  }, [queryClient]);
+  }, [queryClient, setNeedsAuth]);
 
   // Find current session and check if active
   const currentSession = sessions?.find((s) => s.id === currentSessionId);
@@ -251,23 +230,6 @@ function App() {
     stopSessionMutation.mutate(currentSessionId);
   }, [currentSessionId, stopSessionMutation]);
 
-  // Handle mobile menu toggle
-  const handleMenuToggle = useCallback(() => {
-    setMobileDrawerOpen((prev) => !prev);
-    // Focus the close button when opening for better mobile UX
-    if (!mobileDrawerOpen) {
-      setTimeout(() => {
-        const closeButton = document.querySelector('[data-radix-dialog-close]') as HTMLButtonElement;
-        closeButton?.focus();
-      }, 100);
-    }
-  }, [mobileDrawerOpen]);
-
-  const { swipeProps: drawerSwipeProps } = useSwipeToClose(
-    () => setMobileDrawerOpen(false),
-    { direction: "left", threshold: 60 }
-  );
-
   return (
     <>
       {/* Auth prompt modal */}
@@ -278,24 +240,13 @@ function App() {
         <AppHeader
           connectionStatus={connectionStatus}
           isSessionActive={isSessionActive}
-          onMenuToggle={handleMenuToggle}
           onStopSession={isSessionActive ? handleStopSession : undefined}
           onOpenCommandPalette={openCommandPalette}
-          onToggleSidebar={toggleSidebar}
         />
 
-        {/* Main layout: Sidebar + Content */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Desktop Sidebar */}
-          <aside
-            className={`hidden border-r border-border bg-background md:flex flex-col transition-all duration-300 ease-in-out ${
-              sidebarCollapsed
-                ? "w-0 overflow-hidden border-r-0"
-                : sidebarCompactMode
-                ? "w-16"
-                : "w-64"
-            }`}
-          >
+        {/* Main content area */}
+        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <div className="flex-1 overflow-hidden">
             <Suspense
               fallback={
                 <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -303,59 +254,23 @@ function App() {
                 </div>
               }
             >
-              <SessionList />
+              <SessionHistory sessionId={currentSessionId} />
             </Suspense>
-          </aside>
-
-          {/* Mobile Drawer Sidebar */}
-          <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
-            <SheetContent
-              side="left"
-              className="w-[85vw] max-w-[320px] p-0 sm:w-64 touch-pan-y border-r border-border"
-              id="mobile-drawer-content"
-              {...drawerSwipeProps}
-            >
-              <SheetTitle className="sr-only">Session List</SheetTitle>
-              <SheetDescription className="sr-only">Browse and select sessions</SheetDescription>
-              <Suspense
-                fallback={
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  </div>
-                }
-              >
-                <SessionList onSelect={() => setMobileDrawerOpen(false)} />
-              </Suspense>
-            </SheetContent>
-          </Sheet>
-
-          {/* Main content area */}
-          <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-            <div className="flex-1 overflow-hidden">
-              <Suspense
-                fallback={
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  </div>
-                }
-              >
-                <SessionHistory sessionId={currentSessionId} />
-              </Suspense>
-            </div>
-            <ChatInput sessionId={currentSessionId} onSendMessage={handleSendMessage} />
-            <NewSessionDialog
-              trigger={
-                <button className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom)+7rem)] right-[calc(env(safe-area-inset-right)+1rem)] h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50 active:scale-95 transition-transform touch-manipulation">
-                  <Plus className="h-6 w-6" />
-                  <span className="sr-only">New Session</span>
-                </button>
-              }
-            />
-          </main>
-        </div>
+          </div>
+          <ChatInput sessionId={currentSessionId} onSendMessage={handleSendMessage} />
+          <NewSessionDialog
+            trigger={
+              <button className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom)+7rem)] right-[calc(env(safe-area-inset-right)+1rem)] h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50 active:scale-95 transition-transform touch-manipulation">
+                <Plus className="h-6 w-6" />
+                <span className="sr-only">New Session</span>
+              </button>
+            }
+          />
+        </main>
 
         {/* Command Palette for quick session switching */}
         <CommandPalette
+          key={commandPaletteOpen ? "open" : "closed"}
           isOpen={commandPaletteOpen}
           onClose={closeCommandPalette}
           sessions={sessions ?? []}

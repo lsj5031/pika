@@ -80,16 +80,6 @@ export function CommandPalette({
   onSelectSession,
 }: CommandPaletteProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Reset search when opening
-  useEffect(() => {
-    if (isOpen) {
-      setSearchQuery("");
-      // Focus input after dialog opens
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [isOpen]);
 
   // Filter and sort sessions
   const filteredSessions = useMemo(() => {
@@ -171,14 +161,14 @@ export function CommandPalette({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="p-0 gap-0 overflow-hidden !inset-0 !left-0 !top-0 !right-0 !bottom-0 !translate-x-0 !translate-y-0 !rounded-none !m-0 !w-screen !max-w-none h-[100dvh] sm:!rounded-wobblyMd sm:!left-1/2 sm:!top-1/2 sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:h-auto sm:!max-w-2xl sm:!w-[calc(100vw-2rem)]">
         <DialogTitle className="sr-only">Switch Session</DialogTitle>
 
         {/* Search header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b">
           <Search className="h-5 w-5 text-muted-foreground shrink-0" />
           <Input
-            ref={inputRef}
+            autoFocus
             type="text"
             placeholder="Search sessions... (Cmd+K)"
             value={searchQuery}
@@ -199,7 +189,7 @@ export function CommandPalette({
         </div>
 
         {/* Results list */}
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div className="max-h-[60vh] h-[calc(100dvh-7.5rem)] overflow-y-auto sm:h-auto sm:max-h-[60vh]">
           {filteredSessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <MessageSquare className="h-12 w-12 mb-3 opacity-30" />
@@ -294,7 +284,7 @@ export function CommandPalette({
         </div>
 
         {/* Footer with keyboard hints */}
-        <div className="flex items-center justify-between px-4 py-2 border-t bg-muted/30 text-xs text-muted-foreground">
+        <div className="hidden sm:flex items-center justify-between px-4 py-2 border-t bg-muted/30 text-xs text-muted-foreground">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
               <kbd className="rounded border bg-background px-1.5 py-0.5 font-mono">↑↓</kbd>
