@@ -9,6 +9,7 @@ import { ThinkingIndicator } from "./ThinkingIndicator";
 import { DiffViewer } from "./DiffViewer";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
+import { parseDiffFromMessage } from "../lib/diff-parser";
 import type { Message } from "../types";
 import { Bot, User, Wrench, ChevronDown, ChevronUp, Download } from "lucide-react";
 
@@ -21,68 +22,6 @@ function formatTimestamp(timestamp: string | null): string {
   if (!timestamp) return "";
   const date = new Date(timestamp);
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function parseDiffFromMessage(content: string) {
-  // Strip "Tool Result:" or "Tool Result (Error):" prefix
-  let cleanContent = content.replace(/^Tool Result(\s+\(Error\))?:\s*/, "");
-
-  // Strip "Tool Call: name(...)" wrapper to get inner JSON
-  const toolCallMatch = cleanContent.match(/^Tool Call:\s*\w+(([\s\S]*))\s*$/);
-  if (toolCallMatch) {
-    cleanContent = toolCallMatch[1];
-  } else {
-    // Fallback for lowercase "Tool call:" prefix
-    cleanContent = cleanContent.replace(/^Tool call:\s*/, "");
-  }
-
-  cleanContent = cleanContent.trim();
-
-  // Pattern 1: Markdown code blocks
-  const fileBlockRegex = /```(\w+)?\n(?:\/\/ (.+?)\n)?([\s\S]*?)```/g;
-  const matches = [...cleanContent.matchAll(fileBlockRegex)];
-
-  if (matches.length >= 2) {
-    return {
-      filePath: matches[0][2] || undefined,
-      language: matches[0][1] || "text",
-      oldContent: matches[0][3]?.trim(),
-      newContent: matches[1][3]?.trim(),
-    };
-  }
-
-  // Pattern 2: Tool call JSON (e.g. from replace_file_content)
-  try {
-    if (cleanContent.startsWith("{") || cleanContent.startsWith("[")) {
-      const data = JSON.parse(cleanContent);
-      // If it's an array, take the first item if it looks like an object
-      const root = Array.isArray(data) ? data[0] : data;
-
-      // Check for replacement_content or code_content patterns
-      const args = root.function?.arguments ? JSON.parse(root.function.arguments) : root.arguments || root;
-
-      if (args.ReplacementContent && args.TargetContent) {
-        return {
-          filePath: args.TargetFile || undefined,
-          language: args.TargetFile?.split('.').pop() || "text",
-          oldContent: args.TargetContent,
-          newContent: args.ReplacementContent,
-        };
-      }
-      if (args.CodeContent && args.TargetFile) {
-        return {
-          filePath: args.TargetFile,
-          language: args.TargetFile.split('.').pop() || "text",
-          oldContent: "", // New file creation
-          newContent: args.CodeContent,
-        };
-      }
-    }
-  } catch {
-    // Ignore parse errors
-  }
-
-  return null;
 }
 
 const COLLAPSE_THRESHOLD = 12; // Lines before we collapse
