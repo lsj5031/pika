@@ -188,6 +188,38 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
         )}
       </div>
 
+      {/* Image attachments - shown before text for user messages */}
+      {message.images && message.images.length > 0 && (
+        <div
+          className={cn(
+            "grid gap-2 mb-3 max-w-[85%] md:max-w-[80%]",
+            message.images.length > 1 ? "grid-cols-2" : "grid-cols-1"
+          )}
+        >
+          {message.images.map((img) => (
+            <a
+              key={img.id}
+              href={img.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block group"
+            >
+              <img
+                src={img.url}
+                alt={img.filename}
+                className="rounded-lg border border-border w-full object-cover 
+                         max-h-64 hover:opacity-90 transition-opacity"
+                loading="lazy"
+              />
+              <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-70 
+                            transition-opacity mt-1 block">
+                {img.filename} ({(img.size / 1024).toFixed(1)} KB)
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
+
       {/* Main message card */}
       <Card
         className={cn(

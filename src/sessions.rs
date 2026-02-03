@@ -36,6 +36,9 @@ pub struct SessionMessage {
     /// Message timestamp (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<String>,
+    /// Image attachments (for user messages with images)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<ImageAttachmentStored>>,
 }
 
 /// Session discovery errors
@@ -514,6 +517,7 @@ pub fn get_session_messages_limited(
                 role,
                 content,
                 timestamp: Some(timestamp),
+                images: None,
             });
         }
     }
@@ -541,6 +545,25 @@ pub struct StoredUserPrompt {
     pub timestamp: String,
 }
 
+/// Image attachment stored with user prompt
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageAttachmentStored {
+    pub id: String,
+    pub filename: String,
+    pub content_type: String,
+    pub size: usize,
+    pub url: String,
+}
+
+/// Stored user prompt with optional image attachments
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredUserPromptWithImages {
+    pub prompt: String,
+    pub timestamp: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<ImageAttachmentStored>>,
+}
+
 /// Get the path to the user prompts file for a session
 fn get_user_prompts_path(session_id: &str, project_path: &Path) -> Option<PathBuf> {
     let pi_sessions_dir = dirs::home_dir()?
@@ -561,26 +584,36 @@ pub fn store_user_prompt(
     project_path: &Path,
     prompt: &str,
 ) -> Result<(), SessionError> {
+    store_user_prompt_with_images(session_id, project_path, prompt, None)
+}
+
+/// Store a user prompt with optional image attachments for later retrieval
+pub fn store_user_prompt_with_images(
+    session_id: &str,
+    project_path: &Path,
+    prompt: &str,
+    images: Option<Vec<ImageAttachmentStored>>,
+) -> Result<(), SessionError> {
     let prompts_path = match get_user_prompts_path(session_id, project_path) {
         Some(p) => p,
-        None => return Ok(()), // Silently fail if we can't determine the path
+        None => return Ok(()),
     };
-    
-    // Create parent directory if it doesn't exist
+
     if let Some(parent) = prompts_path.parent() {
         fs::create_dir_all(parent).map_err(|e| SessionError::IoError {
             path: parent.to_path_buf(),
             source: e,
         })?;
     }
-    
-    let stored_prompt = StoredUserPrompt {
+
+    let stored_prompt = StoredUserPromptWithImages {
         prompt: prompt.to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
+        images,
     };
-    
+
     let line = serde_json::to_string(&stored_prompt).unwrap_or_default();
-    
+
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -589,12 +622,12 @@ pub fn store_user_prompt(
             path: prompts_path.clone(),
             source: e,
         })?;
-    
+
     writeln!(file, "{}", line).map_err(|e| SessionError::IoError {
         path: prompts_path,
         source: e,
     })?;
-    
+
     Ok(())
 }
 
@@ -607,38 +640,51 @@ pub fn load_user_prompts(
         Some(p) => p,
         None => return Vec::new(),
     };
-    
+
     if !prompts_path.exists() {
         return Vec::new();
     }
-    
+
     let file = match fs::File::open(&prompts_path) {
         Ok(f) => f,
         Err(_) => return Vec::new(),
     };
-    
+
     let reader = BufReader::new(file);
     let mut prompts = Vec::new();
-    
+
     for line in reader.lines() {
         let line = match line {
             Ok(l) => l,
             Err(_) => continue,
         };
-        
+
         if line.trim().is_empty() {
             continue;
         }
-        
+
+        // Try parsing with images first (new format)
+        if let Ok(stored) = serde_json::from_str::<StoredUserPromptWithImages>(&line) {
+            prompts.push(SessionMessage {
+                role: "user".to_string(),
+                content: stored.prompt,
+                timestamp: Some(stored.timestamp),
+                images: stored.images,
+            });
+            continue;
+        }
+
+        // Fallback to parsing without images (backward compatibility)
         if let Ok(stored) = serde_json::from_str::<StoredUserPrompt>(&line) {
             prompts.push(SessionMessage {
                 role: "user".to_string(),
                 content: stored.prompt,
                 timestamp: Some(stored.timestamp),
+                images: None,
             });
         }
     }
-    
+
     prompts
 }
 
