@@ -229,12 +229,13 @@ function App() {
 
   // Handle sending messages
   const handleSendMessage = useCallback(
-    (content: string) => {
+    (content: string, images?: import("./types/api").ImageUploadRequest[]) => {
       if (!currentSessionId) return;
 
       sendPromptMutation.mutate({
         sessionId: currentSessionId,
         prompt: content,
+        images,
       });
     },
     [currentSessionId, sendPromptMutation]
