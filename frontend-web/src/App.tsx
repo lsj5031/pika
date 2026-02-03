@@ -30,6 +30,23 @@ function App() {
   const setNeedsAuth = useAppStore((state) => state.setNeedsAuth);
   const [authKey, setAuthKey] = useState(0); // Used to force re-render after auth
 
+  const chatInputWrapperRef = useRef<HTMLDivElement>(null);
+  const [footerHeight, setFooterHeight] = useState(140);
+
+  useEffect(() => {
+    const element = chatInputWrapperRef.current;
+    if (!element) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setFooterHeight(entry.contentRect.height);
+      }
+    });
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
   // Performance monitoring - logs warnings to console
   usePerformanceMonitor({
     onLongTask: (duration) => {
@@ -257,10 +274,15 @@ function App() {
               <SessionHistory sessionId={currentSessionId} />
             </Suspense>
           </div>
-          <ChatInput sessionId={currentSessionId} onSendMessage={handleSendMessage} />
+          <div ref={chatInputWrapperRef}>
+            <ChatInput sessionId={currentSessionId} onSendMessage={handleSendMessage} />
+          </div>
           <NewSessionDialog
             trigger={
-              <button className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom)+7rem)] right-[calc(env(safe-area-inset-right)+1rem)] h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50 active:scale-95 transition-transform touch-manipulation">
+              <button 
+                className="fixed right-[calc(env(safe-area-inset-right)+1rem)] h-14 w-14 rounded-full bg-background text-foreground border-2 border-border shadow-lg hover:bg-accent hover:text-accent-foreground flex items-center justify-center z-50 active:scale-95 touch-manipulation transition-all duration-200"
+                style={{ bottom: `calc(env(safe-area-inset-bottom) + ${footerHeight}px + 1rem)` }}
+              >
                 <Plus className="h-6 w-6" />
                 <span className="sr-only">New Session</span>
               </button>
