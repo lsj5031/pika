@@ -23,6 +23,14 @@ pub struct JsonRpcEvent {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
+/// Image attachment for sending to pi-coding-agent
+#[derive(Debug, Clone)]
+pub struct ImageUpload {
+    pub filename: String,
+    pub content_type: String,
+    pub data: String,
+}
+
 /// Manages a pi subprocess
 pub struct PiProcess {
     /// The subprocess handle
@@ -125,11 +133,35 @@ impl PiProcess {
 
     /// Send a prompt to the pi process via stdin
     pub async fn send_prompt(&mut self, prompt: &str) -> Result<(), PiProcessError> {
-        // Create RPC command (Pika uses "type" not "method")
-        let request = serde_json::json!({
+        self.send_prompt_with_images(prompt, &[]).await
+    }
+
+    /// Send a prompt with optional images to the pi process via stdin
+    pub async fn send_prompt_with_images(
+        &mut self,
+        prompt: &str,
+        images: &[ImageUpload],
+    ) -> Result<(), PiProcessError> {
+        let image_contents: Vec<serde_json::Value> = images
+            .iter()
+            .map(|img| {
+                serde_json::json!({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": format!("data:{};base64,{}", img.content_type, img.data)
+                    }
+                })
+            })
+            .collect();
+
+        let mut request = serde_json::json!({
             "type": "prompt",
             "message": prompt
         });
+
+        if !image_contents.is_empty() {
+            request["images"] = serde_json::Value::Array(image_contents);
+        }
 
         let request_str = format!("{}\n", request);
         let stdin = &mut self.stdin;
@@ -373,12 +405,22 @@ impl ProcessManager {
 
     /// Send a prompt to a specific process by ID
     pub async fn send_prompt(&mut self, id: &str, prompt: &str) -> Result<(), PiProcessError> {
+        self.send_prompt_with_images(id, prompt, &[]).await
+    }
+
+    /// Send a prompt with images to a specific process by ID
+    pub async fn send_prompt_with_images(
+        &mut self,
+        id: &str,
+        prompt: &str,
+        images: &[ImageUpload],
+    ) -> Result<(), PiProcessError> {
         let process = self
             .processes
             .get_mut(id)
             .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
 
-        process.send_prompt(prompt).await
+        process.send_prompt_with_images(prompt, images).await
     }
 
     /// Spawn a new pi process for a specific session

@@ -5,15 +5,17 @@ use axum::{
     response::{IntoResponse, Json, Response},
     routing::{delete, get, post},
 };
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::AppState;
 use crate::config::ProjectConfig;
+use crate::pi::ImageUpload;
 use crate::sessions::{
     CreateSessionRequest, create_session, get_session_messages_limited, load_user_prompts,
-    scan_sessions, store_user_prompt,
+    scan_sessions,
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -72,6 +74,24 @@ pub struct MessageResponse {
     /// Message timestamp (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<String>,
+    /// Image attachments (for user messages with images)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<ImageAttachmentResponse>>,
+}
+
+/// Image attachment in a message response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageAttachmentResponse {
+    /// Unique image ID
+    pub id: String,
+    /// Original filename
+    pub filename: String,
+    /// MIME type
+    pub content_type: String,
+    /// Image size in bytes
+    pub size: usize,
+    /// URL to access the image (data URL format)
+    pub url: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,11 +100,25 @@ pub struct SessionMessagesQuery {
     pub direction: Option<String>,
 }
 
+/// Image attachment in a prompt request
+#[derive(Debug, Deserialize)]
+pub struct ImageAttachment {
+    /// Original filename
+    pub filename: String,
+    /// MIME type (e.g., "image/png", "image/jpeg")
+    pub content_type: String,
+    /// Base64 encoded image data (without data URL prefix)
+    pub data: String,
+}
+
 /// Request to send a prompt to a session
 #[derive(Debug, Deserialize)]
 pub struct PromptRequest {
     /// The prompt text to send
     pub prompt: String,
+    /// Optional image attachments (base64 encoded)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<ImageAttachment>>,
 }
 
 /// Response when starting a session
@@ -490,10 +524,24 @@ pub async fn get_session_messages(
 
         if take_prompt {
             if let Some(prompt) = prompt_iter.next() {
+                let response_images = prompt.images.map(|stored_imgs| {
+                    stored_imgs
+                        .into_iter()
+                        .map(|img| ImageAttachmentResponse {
+                            id: img.id,
+                            filename: img.filename,
+                            content_type: img.content_type,
+                            size: img.size,
+                            url: img.url,
+                        })
+                        .collect()
+                });
+
                 all_messages.push(MessageResponse {
                     role: prompt.role,
                     content: prompt.content,
                     timestamp: prompt.timestamp,
+                    images: response_images,
                 });
             }
         } else if let Some(pi_msg) = pi_iter.next() {
@@ -501,6 +549,7 @@ pub async fn get_session_messages(
                 role: pi_msg.role,
                 content: pi_msg.content,
                 timestamp: pi_msg.timestamp,
+                images: None,
             });
         }
     }
@@ -530,17 +579,28 @@ pub async fn send_prompt_to_session(
         }
     };
 
+    // Convert images to the format expected by pi-coding-agent
+    let images_to_send: Vec<ImageUpload> = req
+        .images
+        .as_ref()
+        .map_or(&Vec::new(), |v| v)
+        .iter()
+        .map(|img| ImageUpload {
+            filename: img.filename.clone(),
+            content_type: img.content_type.clone(),
+            data: img.data.clone(),
+        })
+        .collect();
+
     // Lock the process manager
     let mut process_manager = state.process_manager.lock().await;
 
     // Check if the session is already running
     let process_id = if process_manager.is_session_running(&session_id) {
-        // Get the existing process ID
         process_manager
             .get_process_id_for_session(&session_id)
             .unwrap()
     } else {
-        // Start the session (spawn a new process)
         process_manager
             .spawn_for_session(&session_id, session.project_path.clone())
             .map_err(|e| ErrorResponse {
@@ -549,17 +609,47 @@ pub async fn send_prompt_to_session(
             })?
     };
 
-    // Send the prompt to the process
+    // Send the prompt with images to the process
     process_manager
-        .send_prompt(&process_id, &req.prompt)
+        .send_prompt_with_images(&process_id, &req.prompt, &images_to_send)
         .await
         .map_err(|e| ErrorResponse {
             error: "INTERNAL_ERROR".to_string(),
             message: format!("Failed to send prompt: {}", e),
         })?;
 
-    // Store the user prompt for later retrieval (pi-agent doesn't persist initial prompts)
-    if let Err(e) = store_user_prompt(&session_id, &session.project_path, &req.prompt) {
+    // Store the user prompt with image metadata for later retrieval
+    let images_to_store: Vec<crate::sessions::ImageAttachmentStored> = req
+        .images
+        .as_ref()
+        .map_or(&Vec::new(), |v| v)
+        .iter()
+        .map(|img| {
+            let actual_size = base64::engine::general_purpose::STANDARD
+                .decode(&img.data)
+                .map(|decoded| decoded.len())
+                .unwrap_or(img.data.len());
+
+            crate::sessions::ImageAttachmentStored {
+                id: uuid::Uuid::new_v4().to_string(),
+                filename: img.filename.clone(),
+                content_type: img.content_type.clone(),
+                size: actual_size,
+                url: format!("data:{};base64,{}", img.content_type, img.data),
+            }
+        })
+        .collect();
+
+    if let Err(e) = crate::sessions::store_user_prompt_with_images(
+        &session_id,
+        &session.project_path,
+        &req.prompt,
+        if images_to_store.is_empty() {
+            None
+        } else {
+            Some(images_to_store)
+        },
+    ) {
         eprintln!("Failed to store user prompt: {}", e);
     }
 

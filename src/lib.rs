@@ -52,6 +52,8 @@ async fn health_check() -> Json<Value> {
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils {
     use super::*;
+    use axum::{Router, routing::get};
+    use axum::middleware;
     use tower_http::cors::{Any, CorsLayer};
 
     pub fn create_test_router() -> Router {

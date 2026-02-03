@@ -52,6 +52,22 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string | null;
+  images?: ImageAttachment[];
+}
+
+// Image attachment types
+export interface ImageAttachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  url: string;
+}
+
+export interface ImageUploadRequest {
+  filename: string;
+  content_type: string;
+  data: string; // base64 encoded (without prefix)
 }
 
 // Code diff types
@@ -69,6 +85,7 @@ export interface CodeDiff {
 // API request types
 export interface PromptRequest {
   prompt: string;
+  images?: ImageUploadRequest[];
 }
 
 // Error types
