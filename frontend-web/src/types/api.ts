@@ -64,13 +64,6 @@ export interface CodeDiff {
   language: string;
   filePath: string;
   createdAt: string;
-  diffUrl?: string;
-}
-
-export interface DiffIntegrationSettings {
-  enabled: boolean;
-  apiKey?: string;
-  autoGenerate: boolean;
 }
 
 // API request types
