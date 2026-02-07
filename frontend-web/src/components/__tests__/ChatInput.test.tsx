@@ -31,7 +31,7 @@ describe('ChatInput', () => {
 
   it('renders send button', () => {
     render(<ChatInput sessionId="test-123" onSendMessage={vi.fn()} />, { wrapper: createWrapper() })
-    const sendButton = screen.getByRole('button')
+    const sendButton = screen.getByTestId('send-button')
     expect(sendButton).toBeInTheDocument()
   })
 
@@ -40,17 +40,17 @@ describe('ChatInput', () => {
     render(<ChatInput sessionId="test-123" onSendMessage={mockSend} />, { wrapper: createWrapper() })
 
     const textarea = screen.getByRole('textbox')
-    const sendButton = screen.getByRole('button')
+    const sendButton = screen.getByTestId('send-button')
 
     await userEvent.type(textarea, 'Test message')
     await userEvent.click(sendButton)
 
-    expect(mockSend).toHaveBeenCalledWith('Test message')
+    expect(mockSend).toHaveBeenCalledWith('Test message', [])
   })
 
   it('disables send button when input is empty', () => {
     render(<ChatInput sessionId="test-123" onSendMessage={vi.fn()} />, { wrapper: createWrapper() })
-    const sendButton = screen.getByRole('button')
+    const sendButton = screen.getByTestId('send-button')
     expect(sendButton).toBeDisabled()
   })
 

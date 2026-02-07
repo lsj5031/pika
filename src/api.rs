@@ -7,15 +7,14 @@ use axum::{
 };
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::AppState;
 use crate::config::ProjectConfig;
 use crate::pi::ImageUpload;
 use crate::sessions::{
-    CreateSessionRequest, create_session, get_session_messages_limited, load_user_prompts,
-    scan_sessions,
+    CreateSessionRequest, SessionMessage, build_session_index, create_session,
+    get_session_messages_before, get_session_messages_limited, load_user_prompts,
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -178,6 +177,99 @@ impl IntoResponse for ErrorResponse {
     }
 }
 
+/// Generic paged response wrapper
+#[derive(Debug, Serialize)]
+pub struct PagedResponse<T> {
+    pub data: Vec<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PagedSessionsQuery {
+    pub limit: Option<usize>,
+    pub cursor: Option<String>,
+    pub q: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SessionMessagesPagedQuery {
+    pub limit: Option<usize>,
+    pub before: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SessionsLookupRequest {
+    pub ids: Vec<String>,
+}
+
+const DEFAULT_PAGE_LIMIT: usize = 50;
+const MAX_PAGE_LIMIT: usize = 200;
+
+async fn find_session(state: &AppState, session_id: &str) -> Option<crate::sessions::SessionInfo> {
+    let index = state.session_index.read().await;
+    index.get(session_id).cloned()
+}
+
+fn merge_messages(
+    stored_prompts: Vec<SessionMessage>,
+    pi_messages: Vec<SessionMessage>,
+) -> Vec<MessageResponse> {
+    let mut all_messages: Vec<MessageResponse> = Vec::new();
+
+    let mut prompt_iter = stored_prompts.into_iter().peekable();
+    let mut pi_iter = pi_messages.into_iter().peekable();
+
+    while prompt_iter.peek().is_some() || pi_iter.peek().is_some() {
+        let take_prompt = match (prompt_iter.peek(), pi_iter.peek()) {
+            (Some(prompt), Some(pi_msg)) => match (&prompt.timestamp, &pi_msg.timestamp) {
+                (Some(p_ts), Some(m_ts)) => p_ts <= m_ts,
+                (Some(_), None) => true,
+                (None, Some(_)) => false,
+                (None, None) => true,
+            },
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => break,
+        };
+
+        if take_prompt {
+            if let Some(prompt) = prompt_iter.next() {
+                let response_images = prompt.images.map(|stored_imgs| {
+                    stored_imgs
+                        .into_iter()
+                        .map(|img| ImageAttachmentResponse {
+                            id: img.id,
+                            filename: img.filename,
+                            content_type: img.content_type,
+                            size: img.size,
+                            url: img.url,
+                        })
+                        .collect()
+                });
+
+                all_messages.push(MessageResponse {
+                    role: prompt.role,
+                    content: prompt.content,
+                    timestamp: prompt.timestamp,
+                    images: response_images,
+                });
+            }
+        } else if let Some(pi_msg) = pi_iter.next() {
+            all_messages.push(MessageResponse {
+                role: pi_msg.role,
+                content: pi_msg.content,
+                timestamp: pi_msg.timestamp,
+                images: None,
+            });
+        }
+    }
+
+    all_messages
+}
+
 /// Generate a project ID from path (simple hash-based approach)
 fn project_id_from_path(path: &PathBuf) -> String {
     // Use a simple hash of the path string as ID
@@ -202,15 +294,8 @@ pub async fn get_projects(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<ProjectResponse>>, ErrorResponse> {
     let config = state.api_state.config.read().await;
-
-    // Scan all sessions to get counts per project
-    let sessions = scan_sessions(&config).await;
-    let mut session_counts: HashMap<String, usize> = HashMap::new();
-
-    for session in &sessions {
-        let project_id = project_id_from_path(&session.project_path);
-        *session_counts.entry(project_id).or_insert(0) += 1;
-    }
+    let index = state.session_index.read().await;
+    let session_counts = index.project_counts();
 
     // Build project responses
     let projects: Vec<ProjectResponse> = config
@@ -222,7 +307,7 @@ pub async fn get_projects(
                 id: project_id.clone(),
                 path: path.clone(),
                 name: project_name_from_path(path),
-                session_count: session_counts.get(&project_id).copied().unwrap_or(0),
+                session_count: session_counts.get(path).copied().unwrap_or(0),
             }
         })
         .collect();
@@ -317,6 +402,11 @@ pub async fn add_project(
         }
     }
 
+    let config = state.api_state.config.read().await;
+    let rebuilt = build_session_index(&config).await;
+    let mut index = state.session_index.write().await;
+    *index = rebuilt;
+
     Ok(Json(AddProjectResponse {
         id: project_id,
         name: project_name_from_path(&absolute_path),
@@ -355,6 +445,11 @@ pub async fn remove_project(
         }
     }
 
+    let config = state.api_state.config.read().await;
+    let rebuilt = build_session_index(&config).await;
+    let mut index = state.session_index.write().await;
+    *index = rebuilt;
+
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
@@ -381,11 +476,10 @@ pub async fn get_project_sessions(
         }
     };
 
-    // Scan all sessions and filter by project
-    let sessions = scan_sessions(&config).await;
-    let project_sessions: Vec<SessionResponse> = sessions
+    let index = state.session_index.read().await;
+    let project_sessions = index
+        .list_sorted(Some(project_path), None)
         .into_iter()
-        .filter(|s| s.project_path == *project_path)
         .map(|s| SessionResponse {
             id: s.id,
             name: s.name,
@@ -399,22 +493,69 @@ pub async fn get_project_sessions(
     Ok(Json(project_sessions))
 }
 
+/// GET /api/projects/:id/sessions/paged - returns sessions for a project with pagination
+pub async fn get_project_sessions_paged(
+    State(state): State<AppState>,
+    Path(project_id): Path<String>,
+    Query(query): Query<PagedSessionsQuery>,
+) -> Result<Json<PagedResponse<SessionResponse>>, ErrorResponse> {
+    let config = state.api_state.config.read().await;
+
+    let project_path = config
+        .project_root_paths
+        .iter()
+        .find(|path| project_id_from_path(path) == project_id);
+
+    let project_path = match project_path {
+        Some(path) => path,
+        None => {
+            return Err(ErrorResponse {
+                error: "NOT_FOUND".to_string(),
+                message: format!("Project with ID '{}' not found", project_id),
+            });
+        }
+    };
+
+    let limit = query
+        .limit
+        .unwrap_or(DEFAULT_PAGE_LIMIT)
+        .min(MAX_PAGE_LIMIT);
+
+    let index = state.session_index.read().await;
+    let page = index.paged(
+        Some(project_path),
+        query.q.as_deref(),
+        limit,
+        query.cursor.as_deref(),
+    );
+
+    let data = page
+        .sessions
+        .into_iter()
+        .map(|s| SessionResponse {
+            id: s.id,
+            name: s.name,
+            project_id: project_id.clone(),
+            project_path: s.project_path,
+            created_at: s.created_at,
+            is_active: s.is_active,
+        })
+        .collect();
+
+    Ok(Json(PagedResponse {
+        data,
+        next_cursor: page.next_cursor,
+        total: Some(page.total),
+    }))
+}
+
 /// GET /api/sessions - returns all sessions across all projects
 pub async fn get_sessions(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<SessionResponse>>, ErrorResponse> {
-    let config = state.api_state.config.read().await;
-
-    let mut sessions = scan_sessions(&config).await;
-
-    // Sort by last_message_time (most recent first), fall back to created_at
-    sessions.sort_by(|a, b| {
-        let time_a = a.last_message_time.as_ref().unwrap_or(&a.created_at);
-        let time_b = b.last_message_time.as_ref().unwrap_or(&b.created_at);
-        time_b.cmp(time_a) // Reverse order for most recent first
-    });
-
-    let session_responses: Vec<SessionResponse> = sessions
+    let index = state.session_index.read().await;
+    let session_responses: Vec<SessionResponse> = index
+        .list_sorted(None, None)
         .into_iter()
         .map(|s| {
             let project_id = project_id_from_path(&s.project_path);
@@ -432,18 +573,71 @@ pub async fn get_sessions(
     Ok(Json(session_responses))
 }
 
+/// GET /api/sessions/paged - returns sessions with pagination
+pub async fn get_sessions_paged(
+    State(state): State<AppState>,
+    Query(query): Query<PagedSessionsQuery>,
+) -> Result<Json<PagedResponse<SessionResponse>>, ErrorResponse> {
+    let limit = query
+        .limit
+        .unwrap_or(DEFAULT_PAGE_LIMIT)
+        .min(MAX_PAGE_LIMIT);
+    let index = state.session_index.read().await;
+    let page = index.paged(None, query.q.as_deref(), limit, query.cursor.as_deref());
+
+    let data = page
+        .sessions
+        .into_iter()
+        .map(|s| SessionResponse {
+            id: s.id,
+            name: s.name,
+            project_id: project_id_from_path(&s.project_path),
+            project_path: s.project_path,
+            created_at: s.created_at,
+            is_active: s.is_active,
+        })
+        .collect();
+
+    Ok(Json(PagedResponse {
+        data,
+        next_cursor: page.next_cursor,
+        total: Some(page.total),
+    }))
+}
+
+/// POST /api/sessions/lookup - fetch sessions by IDs
+pub async fn lookup_sessions(
+    State(state): State<AppState>,
+    Json(request): Json<SessionsLookupRequest>,
+) -> Result<Json<Vec<SessionResponse>>, ErrorResponse> {
+    if request.ids.is_empty() {
+        return Ok(Json(Vec::new()));
+    }
+
+    let index = state.session_index.read().await;
+    let sessions = index.lookup(&request.ids);
+
+    let response = sessions
+        .into_iter()
+        .map(|s| SessionResponse {
+            id: s.id,
+            name: s.name,
+            project_id: project_id_from_path(&s.project_path),
+            project_path: s.project_path,
+            created_at: s.created_at,
+            is_active: s.is_active,
+        })
+        .collect();
+
+    Ok(Json(response))
+}
+
 /// GET /api/sessions/:id - returns session details and metadata
 pub async fn get_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<SessionResponse>, ErrorResponse> {
-    let config = state.api_state.config.read().await;
-
-    // Scan all sessions and find the matching one
-    let sessions = scan_sessions(&config).await;
-    let session = sessions.into_iter().find(|s| s.id == session_id);
-
-    let session = match session {
+    let session = match find_session(&state, &session_id).await {
         Some(s) => s,
         None => {
             return Err(ErrorResponse {
@@ -471,13 +665,7 @@ pub async fn get_session_messages(
     Path(session_id): Path<String>,
     Query(query): Query<SessionMessagesQuery>,
 ) -> Result<Json<Vec<MessageResponse>>, ErrorResponse> {
-    let config = state.api_state.config.read().await;
-
-    // Scan all sessions and find the matching one
-    let sessions = scan_sessions(&config).await;
-    let session = sessions.into_iter().find(|s| s.id == session_id);
-
-    let session = match session {
+    let session = match find_session(&state, &session_id).await {
         Some(s) => s,
         None => {
             return Err(ErrorResponse {
@@ -513,65 +701,55 @@ pub async fn get_session_messages(
         message: format!("Failed to read messages: {}", e),
     })?;
 
-    // Merge stored prompts with pi-agent messages
-    // Strategy: interleave based on timestamps
-    let mut all_messages: Vec<MessageResponse> = Vec::new();
+    Ok(Json(merge_messages(stored_prompts, pi_messages)))
+}
 
-    // Convert stored prompts to MessageResponse
-    let mut prompt_iter = stored_prompts.into_iter().peekable();
-    let mut pi_iter = pi_messages.into_iter().peekable();
-
-    // Merge by timestamp (stored prompts should come before their corresponding assistant responses)
-    while prompt_iter.peek().is_some() || pi_iter.peek().is_some() {
-        // Compare timestamps to determine order
-        let take_prompt = match (prompt_iter.peek(), pi_iter.peek()) {
-            (Some(prompt), Some(pi_msg)) => {
-                // Compare timestamps - prompt should come before pi message if its timestamp is earlier
-                match (&prompt.timestamp, &pi_msg.timestamp) {
-                    (Some(p_ts), Some(m_ts)) => p_ts <= m_ts,
-                    (Some(_), None) => true,
-                    (None, Some(_)) => false,
-                    (None, None) => true, // Default to taking prompt first
-                }
-            }
-            (Some(_), None) => true,
-            (None, Some(_)) => false,
-            (None, None) => break,
-        };
-
-        if take_prompt {
-            if let Some(prompt) = prompt_iter.next() {
-                let response_images = prompt.images.map(|stored_imgs| {
-                    stored_imgs
-                        .into_iter()
-                        .map(|img| ImageAttachmentResponse {
-                            id: img.id,
-                            filename: img.filename,
-                            content_type: img.content_type,
-                            size: img.size,
-                            url: img.url,
-                        })
-                        .collect()
-                });
-
-                all_messages.push(MessageResponse {
-                    role: prompt.role,
-                    content: prompt.content,
-                    timestamp: prompt.timestamp,
-                    images: response_images,
-                });
-            }
-        } else if let Some(pi_msg) = pi_iter.next() {
-            all_messages.push(MessageResponse {
-                role: pi_msg.role,
-                content: pi_msg.content,
-                timestamp: pi_msg.timestamp,
-                images: None,
+/// GET /api/sessions/:id/messages/paged - returns paged messages for a session
+pub async fn get_session_messages_paged(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Query(query): Query<SessionMessagesPagedQuery>,
+) -> Result<Json<Vec<MessageResponse>>, ErrorResponse> {
+    let session = match find_session(&state, &session_id).await {
+        Some(s) => s,
+        None => {
+            return Err(ErrorResponse {
+                error: "NOT_FOUND".to_string(),
+                message: format!("Session with ID '{}' not found", session_id),
             });
         }
+    };
+
+    let limit = query
+        .limit
+        .unwrap_or(DEFAULT_PAGE_LIMIT)
+        .min(MAX_PAGE_LIMIT);
+
+    let stored_prompts = load_user_prompts(&session.id, &session.project_path)
+        .into_iter()
+        .filter(|prompt| match query.before.as_deref() {
+            Some(before) => prompt.timestamp.as_deref().map(|ts| ts < before).unwrap_or(false),
+            None => true,
+        })
+        .collect::<Vec<_>>();
+
+    let pi_messages = get_session_messages_before(
+        &session.id,
+        &session.project_path,
+        limit,
+        query.before.as_deref(),
+    )
+    .map_err(|e| ErrorResponse {
+        error: "INTERNAL_ERROR".to_string(),
+        message: format!("Failed to read messages: {}", e),
+    })?;
+
+    let mut merged = merge_messages(stored_prompts, pi_messages);
+    if merged.len() > limit {
+        merged = merged[merged.len() - limit..].to_vec();
     }
 
-    Ok(Json(all_messages))
+    Ok(Json(merged))
 }
 
 /// POST /api/sessions/:id/prompt - send a prompt to a session
@@ -580,13 +758,7 @@ pub async fn send_prompt_to_session(
     Path(session_id): Path<String>,
     Json(req): Json<PromptRequest>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    // First, find the session to get its project path
-    let config = state.api_state.config.read().await;
-    let sessions = scan_sessions(&config).await;
-
-    let session = sessions.into_iter().find(|s| s.id == session_id);
-
-    let session = match session {
+    let session = match find_session(&state, &session_id).await {
         Some(s) => s,
         None => {
             return Err(ErrorResponse {
@@ -683,13 +855,7 @@ pub async fn start_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<StartSessionResponse>, ErrorResponse> {
-    // First, find the session to get its project path
-    let config = state.api_state.config.read().await;
-    let sessions = scan_sessions(&config).await;
-
-    let session = sessions.into_iter().find(|s| s.id == session_id);
-
-    let session = match session {
+    let session = match find_session(&state, &session_id).await {
         Some(s) => s,
         None => {
             return Err(ErrorResponse {
@@ -724,13 +890,7 @@ pub async fn get_session_status(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<SessionStatusResponse>, ErrorResponse> {
-    // First, verify the session exists
-    let config = state.api_state.config.read().await;
-    let sessions = scan_sessions(&config).await;
-
-    let session = sessions.into_iter().find(|s| s.id == session_id);
-
-    if session.is_none() {
+    if find_session(&state, &session_id).await.is_none() {
         return Err(ErrorResponse {
             error: "NOT_FOUND".to_string(),
             message: format!("Session with ID '{}' not found", session_id),
@@ -760,21 +920,12 @@ pub async fn stop_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<StopSessionResponse>, ErrorResponse> {
-    // First, verify the session exists
-    let config = state.api_state.config.read().await;
-    let sessions = scan_sessions(&config).await;
-
-    let session = sessions.into_iter().find(|s| s.id == session_id);
-
-    if session.is_none() {
+    if find_session(&state, &session_id).await.is_none() {
         return Err(ErrorResponse {
             error: "NOT_FOUND".to_string(),
             message: format!("Session with ID '{}' not found", session_id),
         });
     }
-
-    // Drop config read lock before killing process
-    drop(config);
 
     // Lock the process manager and get the process ID before killing
     let mut process_manager = state.process_manager.lock().await;
@@ -994,13 +1145,23 @@ pub fn create_api_router() -> Router<AppState> {
         .route("/api/projects/{id}", delete(remove_project))
         .route("/api/projects/{id}/sessions", get(get_project_sessions))
         .route(
+            "/api/projects/{id}/sessions/paged",
+            get(get_project_sessions_paged),
+        )
+        .route(
             "/api/projects/{id}/sessions",
             post(create_session_in_project),
         )
         .route("/api/sessions", get(get_sessions))
+        .route("/api/sessions/paged", get(get_sessions_paged))
+        .route("/api/sessions/lookup", post(lookup_sessions))
         .route("/api/sessions/create", post(create_standalone_session))
         .route("/api/sessions/{id}", get(get_session))
         .route("/api/sessions/{id}/messages", get(get_session_messages))
+        .route(
+            "/api/sessions/{id}/messages/paged",
+            get(get_session_messages_paged),
+        )
         .route("/api/sessions/{id}/prompt", post(send_prompt_to_session))
         .route("/api/sessions/{id}/status", get(get_session_status))
         .route("/api/sessions/{id}/start", post(start_session))

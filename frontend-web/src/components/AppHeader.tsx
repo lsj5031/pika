@@ -64,6 +64,7 @@ export function AppHeader({
             size="sm"
             onClick={onOpenCommandPalette}
             className="items-center gap-2 h-9 px-3 text-muted-foreground hover:text-foreground"
+            data-testid="command-palette-button"
           >
             <Command className="h-4 w-4" />
             <span className="text-sm">Switch Session</span>
