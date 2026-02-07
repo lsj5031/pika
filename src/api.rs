@@ -153,6 +153,13 @@ pub struct StopSessionResponse {
     pub was_running: bool,
 }
 
+/// Auth status response
+#[derive(Debug, Serialize)]
+pub struct AuthStatusResponse {
+    /// Whether auth is enabled
+    pub enabled: bool,
+}
+
 /// API error response
 #[derive(Debug, Serialize)]
 pub struct ErrorResponse {
@@ -221,6 +228,16 @@ pub async fn get_projects(
         .collect();
 
     Ok(Json(projects))
+}
+
+/// GET /api/auth/status - returns whether auth is enabled
+pub async fn get_auth_status(
+    State(state): State<AppState>,
+) -> Result<Json<AuthStatusResponse>, ErrorResponse> {
+    let config = state.api_state.config.read().await;
+    Ok(Json(AuthStatusResponse {
+        enabled: config.is_auth_enabled(),
+    }))
 }
 
 /// Request to add a new project
@@ -972,6 +989,7 @@ pub async fn create_session_in_project(
 /// Create the API router with all endpoints
 pub fn create_api_router() -> Router<AppState> {
     Router::new()
+        .route("/api/auth/status", get(get_auth_status))
         .route("/api/projects", get(get_projects).post(add_project))
         .route("/api/projects/{id}", delete(remove_project))
         .route("/api/projects/{id}/sessions", get(get_project_sessions))

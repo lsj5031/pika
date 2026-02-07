@@ -8,6 +8,8 @@ project_root_paths = [
 
 # HTTP Basic Authentication (optional)
 # If both username and password are set, auth is required for all routes except /health
+# Set debug_disable_auth = true (or AUTH_DISABLE=true) to temporarily disable auth.
 # These can also be set via environment variables: AUTH_USERNAME and AUTH_PASSWORD
 # auth_username = "admin"
 # auth_password = "your-secure-password"
+debug_disable_auth = false
