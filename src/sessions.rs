@@ -577,16 +577,6 @@ fn get_user_prompts_path(session_id: &str, project_path: &Path) -> Option<PathBu
     Some(project_sessions_dir.join(format!(".user-prompts-{}.jsonl", session_id)))
 }
 
-/// Store a user prompt for later retrieval
-/// This is needed because pi-agent doesn't persist the initial prompt as a message
-pub fn store_user_prompt(
-    session_id: &str,
-    project_path: &Path,
-    prompt: &str,
-) -> Result<(), SessionError> {
-    store_user_prompt_with_images(session_id, project_path, prompt, None)
-}
-
 /// Store a user prompt with optional image attachments for later retrieval
 pub fn store_user_prompt_with_images(
     session_id: &str,
