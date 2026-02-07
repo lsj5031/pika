@@ -131,11 +131,6 @@ impl PiProcess {
         self.tx.subscribe()
     }
 
-    /// Send a prompt to the pi process via stdin
-    pub async fn send_prompt(&mut self, prompt: &str) -> Result<(), PiProcessError> {
-        self.send_prompt_with_images(prompt, &[]).await
-    }
-
     /// Send a prompt with optional images to the pi process via stdin
     pub async fn send_prompt_with_images(
         &mut self,
