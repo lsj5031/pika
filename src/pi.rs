@@ -180,6 +180,30 @@ impl PiProcess {
         Ok(())
     }
 
+    /// Send a raw JSON command to the pi process via stdin
+    pub async fn send_command(&mut self, command: serde_json::Value) -> Result<(), PiProcessError> {
+        let request_str = format!("{}\n", command);
+        let stdin = &mut self.stdin;
+
+        stdin
+            .write_all(request_str.as_bytes())
+            .await
+            .map_err(|e| PiProcessError::WriteFailed {
+                id: self.id.clone(),
+                source: e,
+            })?;
+
+        stdin
+            .flush()
+            .await
+            .map_err(|e| PiProcessError::WriteFailed {
+                id: self.id.clone(),
+                source: e,
+            })?;
+
+        Ok(())
+    }
+
     /// Kill the pi process
     pub async fn kill(mut self) -> Result<(), PiProcessError> {
         self.process
@@ -416,6 +440,20 @@ impl ProcessManager {
             .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
 
         process.send_prompt_with_images(prompt, images).await
+    }
+
+    /// Send a raw JSON command to a specific process by ID
+    pub async fn send_command(
+        &mut self,
+        id: &str,
+        command: serde_json::Value,
+    ) -> Result<(), PiProcessError> {
+        let process = self
+            .processes
+            .get_mut(id)
+            .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
+
+        process.send_command(command).await
     }
 
     /// Spawn a new pi process for a specific session
