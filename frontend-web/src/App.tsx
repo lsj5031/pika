@@ -271,7 +271,7 @@ function App() {
       {/* Auth prompt modal */}
       <AuthPrompt open={needsAuth} onAuthenticated={handleAuthenticated} />
 
-      <div className="flex h-screen w-full flex-col">
+      <div className="flex h-dvh min-h-screen w-full flex-col overflow-hidden">
         {/* Header */}
         <AppHeader
           connectionStatus={connectionStatus}
@@ -299,8 +299,8 @@ function App() {
           <NewSessionDialog
             trigger={
               <button 
-                className="fixed h-14 w-14 rounded-full border-2 border-border shadow-lg hover:bg-accent hover:text-accent-foreground flex items-center justify-center z-50 active:scale-95 touch-manipulation transition-all duration-200 bg-card text-card-foreground"
-                style={{ 
+                className="hidden md:flex fixed h-14 w-14 rounded-full border-2 border-border shadow-lg hover:bg-accent hover:text-accent-foreground items-center justify-center z-50 active:scale-95 touch-manipulation transition-all duration-200 bg-card text-card-foreground"
+                style={{  
                   bottom: `calc(env(safe-area-inset-bottom) + ${footerHeight}px + 1rem)`,
                   right: `calc(env(safe-area-inset-right) + 1rem)`,
                 }}

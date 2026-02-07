@@ -1,4 +1,5 @@
 export { SessionList } from "./SessionList";
+// Re-export SessionHistory
 export { SessionHistory } from "./SessionHistory";
 export { ChatInput } from "./ChatInput";
 export { ThinkingIndicator } from "./ThinkingIndicator";

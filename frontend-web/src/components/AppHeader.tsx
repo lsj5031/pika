@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { Square, Wifi, WifiOff, Loader2, Command, PanelLeft } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { SettingsDialog } from "./SettingsDialog";
+import { NewSessionDialog } from "./NewSessionDialog";
 import { ThemeToggle } from "./ThemeToggle";
+import { MobileHeaderMenu } from "./MobileHeaderMenu";
 import { cn } from "../lib/utils";
 
 interface AppHeaderProps {
@@ -20,8 +23,11 @@ export function AppHeader({
   onOpenCommandPalette,
   onToggleSidebar,
 }: AppHeaderProps) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
+
   return (
-    <header className="flex h-14 items-center justify-between border-b bg-background px-4 sm:px-6">
+    <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6 safe-top">
       {/* Left: Hamburger menu + App name */}
       <div className="flex items-center gap-3">
         {/* Desktop sidebar toggle */}
@@ -48,37 +54,39 @@ export function AppHeader({
 
       {/* Right: Connection status + Settings + Stop button */}
       <div className="flex items-center gap-1.5 md:gap-3">
-        {/* Theme toggle */}
-        <ThemeToggle />
+        {/* Desktop Actions */}
+        <div className="hidden md:flex items-center gap-3">
+          <ThemeToggle />
 
-        {/* Command palette trigger */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onOpenCommandPalette}
-          className="hidden md:flex items-center gap-2 h-9 px-3 text-muted-foreground hover:text-foreground"
-        >
-          <Command className="h-4 w-4" />
-          <span className="text-sm">Switch Session</span>
-          <kbd className="hidden lg:inline-flex h-5 items-center rounded border bg-muted px-1.5 font-mono text-xs text-muted-foreground">
-            ⌘K
-          </kbd>
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onOpenCommandPalette}
-          className="md:hidden min-w-[44px] min-h-[44px] touch-manipulation"
-          id="command-palette-button"
-          data-testid="command-palette-button"
-          style={{ touchAction: "manipulation" }}
-        >
-          <Command className="h-5 w-5 pointer-events-none" />
-          <span className="sr-only">Switch Session</span>
-        </Button>
+          {/* Command palette trigger */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenCommandPalette}
+            className="items-center gap-2 h-9 px-3 text-muted-foreground hover:text-foreground"
+          >
+            <Command className="h-4 w-4" />
+            <span className="text-sm">Switch Session</span>
+            <kbd className="hidden lg:inline-flex h-5 items-center rounded border bg-muted px-1.5 font-mono text-xs text-muted-foreground">
+              ⌘K
+            </kbd>
+          </Button>
 
-        {/* Settings dialog */}
-        <SettingsDialog />
+          {/* Settings dialog */}
+          <SettingsDialog />
+        </div>
+
+        {/* Mobile Menu */}
+        <div className="md:hidden">
+          <MobileHeaderMenu 
+            onNewSession={() => setNewSessionOpen(true)}
+            onSwitchSession={onOpenCommandPalette}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+          {/* Controlled Dialogs for Mobile Menu */}
+          <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} trigger={<span />} />
+          <NewSessionDialog open={newSessionOpen} onOpenChange={setNewSessionOpen} trigger={<span />} />
+        </div>
 
         {/* Connection status indicator */}
         <Badge

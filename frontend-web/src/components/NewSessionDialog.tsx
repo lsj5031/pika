@@ -27,11 +27,18 @@ import { useMemo } from "react";
 
 interface NewSessionDialogProps {
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function NewSessionDialog({ trigger }: NewSessionDialogProps) {
+export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange: setControlledOpen }: NewSessionDialogProps) {
   const needsAuth = useAppStore((state) => state.needsAuth);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? setControlledOpen! : setInternalOpen;
+
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [customPath, setCustomPath] = useState<string>("");
   const [sessionName, setSessionName] = useState<string>("");
