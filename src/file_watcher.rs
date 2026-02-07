@@ -24,6 +24,12 @@ pub enum SessionFileEvent {
         session_id: String,
         file_path: PathBuf,
     },
+    /// A session file was removed
+    SessionFileRemoved {
+        project_path: PathBuf,
+        session_id: String,
+        file_path: PathBuf,
+    },
 }
 
 /// Watches the pi sessions directory for changes
@@ -144,6 +150,13 @@ impl SessionFileWatcher {
                                 }
                                 EventKind::Modify(_) => {
                                     Some(SessionFileEvent::SessionFileModified {
+                                        project_path,
+                                        session_id,
+                                        file_path: path.clone(),
+                                    })
+                                }
+                                EventKind::Remove(_) => {
+                                    Some(SessionFileEvent::SessionFileRemoved {
                                         project_path,
                                         session_id,
                                         file_path: path.clone(),

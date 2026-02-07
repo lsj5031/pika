@@ -11,7 +11,7 @@ import { useStopSession } from "./hooks/useStopSession";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useCommandPalette, useSessionSwitchingShortcuts } from "./hooks/useCommandPalette";
 import { usePerformanceMonitor } from "./hooks/usePerformanceMonitor";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AUTH_ERROR_EVENT } from "./lib/api";
 import type { WSEvent, Message } from "./types";
@@ -201,9 +201,16 @@ function App() {
             content: event.data.content,
             timestamp: event.data.timestamp,
           };
-          queryClient.setQueryData<Message[]>(
-            ["sessions", event.data.session_id, "messages"],
-            (old) => old ? [...old, newMessage] : [newMessage]
+          queryClient.setQueryData<InfiniteData<Message[]>>(
+            ["sessions", event.data.session_id, "messages", "paged"],
+            (old) => {
+              if (!old) {
+                return { pages: [[newMessage]], pageParams: [undefined] };
+              }
+              const pages = [...old.pages];
+              pages[0] = [...pages[0], newMessage];
+              return { ...old, pages };
+            }
           );
           break;
         }

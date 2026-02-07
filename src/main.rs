@@ -1,44 +1,16 @@
 use axum::{Router, middleware, response::Json, routing::get};
 use clap::Parser;
+use pika::{
+    AppState, AuthCredentials, ProjectConfig, ProcessManagerEvent, WSEvent,
+    SessionFileEvent, SessionFileWatcher,
+    build_encoded_project_map, build_session_index, load_session_info_from_file,
+    create_api_router, basic_auth_middleware, ws_handler, serve_static_files,
+};
 use serde_json::Value;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
-
-mod api;
-mod auth;
-mod config;
-mod file_watcher;
-mod pi;
-mod sessions;
-mod static_files;
-mod websocket;
-use api::ApiState;
-use auth::AuthCredentials;
-use config::ProjectConfig;
-use pi::ProcessManager;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use websocket::{WSEvent, WSState};
-
-/// Combined application state
-#[derive(Clone)]
-pub struct AppState {
-    pub ws_state: WSState,
-    pub api_state: ApiState,
-    pub process_manager: Arc<Mutex<ProcessManager>>,
-}
-
-impl AppState {
-    pub fn new(config: ProjectConfig) -> Self {
-        Self {
-            ws_state: WSState::new(),
-            api_state: ApiState::new(config),
-            process_manager: Arc::new(Mutex::new(ProcessManager::new())),
-        }
-    }
-}
 
 /// Pika - Manages multiple agent sessions and their execution contexts
 #[derive(Parser, Debug)]
@@ -92,6 +64,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create combined application state
     let app_state = AppState::new(config.clone());
 
+    // Build in-memory session index for fast lookups
+    let session_index = build_session_index(&config).await;
+    {
+        let mut index = app_state.session_index.write().await;
+        *index = session_index;
+    }
+
     // Set up auth credentials
     let auth_credentials = if config.is_auth_disabled() {
         AuthCredentials::new(String::new(), String::new())
@@ -105,11 +84,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build protected API routes (require auth via HTTP header if enabled)
     let protected_routes = Router::new()
-        .merge(api::create_api_router())
+        .merge(create_api_router())
         .with_state(app_state.clone())
         .layer(middleware::from_fn(move |req, next| {
             let creds = auth_credentials.clone();
-            auth::basic_auth_middleware(req, next, creds)
+            basic_auth_middleware(req, next, creds)
         }));
 
     // Build the full application
@@ -119,8 +98,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // - API routes are protected
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/ws", get(websocket::ws_handler))
-        .fallback(static_files::serve_static_files)
+        .route("/ws", get(ws_handler))
+        .fallback(serve_static_files)
         .with_state(app_state.clone())
         .merge(protected_routes)
         .layer(
@@ -150,7 +129,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Build encoded project map for lossless path resolution
-    let encoded_project_map = sessions::build_encoded_project_map(&config);
+    let encoded_project_map = build_encoded_project_map(&config);
 
     // Start file watcher task for real-time session updates
     let app_state_for_watcher = app_state.clone();
@@ -168,7 +147,6 @@ async fn file_watcher_task(
     app_state: AppState,
     encoded_project_map: std::collections::HashMap<String, std::path::PathBuf>,
 ) {
-    use file_watcher::{SessionFileEvent, SessionFileWatcher};
     use tokio::sync::broadcast::error::RecvError;
 
     // Create file watcher with the encoded project map
@@ -214,6 +192,13 @@ async fn file_watcher_task(
 
                         // Also log the file path for debugging
                         println!("   File: {:?}", file_path);
+
+                        if let Ok(session_info) =
+                            load_session_info_from_file(&project_path, &file_path).await
+                        {
+                            let mut index = app_state.session_index.write().await;
+                            index.upsert(session_info);
+                        }
                     }
                     SessionFileEvent::SessionFileModified {
                         project_path,
@@ -230,14 +215,40 @@ async fn file_watcher_task(
                         );
                         println!("   File: {:?}", file_path);
 
+                        if let Ok(session_info) =
+                            load_session_info_from_file(&project_path, &file_path).await
+                        {
+                            let mut index = app_state.session_index.write().await;
+                            index.upsert(session_info);
+                        }
+
                         // Note: We don't send MessageAdded here because the pi process
                         // already sends that event via JSON-RPC when it writes to the file.
                         // This watcher is mainly for catching external changes.
+                    }
+                    SessionFileEvent::SessionFileRemoved {
+                        project_path,
+                        session_id,
+                        file_path,
+                    } => {
+                        println!(
+                            "🗑️ Session file removed: {} (in {})",
+                            session_id,
+                            project_path.display()
+                        );
+                        println!("   File: {:?}", file_path);
+
+                        let mut index = app_state.session_index.write().await;
+                        index.remove(&session_id);
                     }
                 }
             }
             Err(RecvError::Lagged(count)) => {
                 eprintln!("⚠️ File watcher lagged, missed {} events", count);
+                let config = app_state.api_state.config.read().await;
+                let rebuilt = build_session_index(&config).await;
+                let mut index = app_state.session_index.write().await;
+                *index = rebuilt;
                 continue;
             }
             Err(RecvError::Closed) => {
@@ -251,7 +262,6 @@ async fn file_watcher_task(
 
 /// Background task that bridges ProcessManager events to WebSocket events
 async fn event_bridge_task(app_state: AppState) {
-    use pi::ProcessManagerEvent;
     use tokio::sync::broadcast::error::RecvError;
 
     let mut rx = {
@@ -577,35 +587,4 @@ async fn health_check() -> Json<Value> {
     }))
 }
 
-#[cfg(test)]
-pub fn create_test_router() -> Router {
-    let config = ProjectConfig::default();
-    let app_state = AppState::new(config);
-    let auth_credentials = AuthCredentials::new(String::new(), String::new());
 
-    let protected_routes = Router::new()
-        .merge(api::create_api_router())
-        .with_state(app_state.clone())
-        .layer(middleware::from_fn(move |req, next| {
-            let creds = auth_credentials.clone();
-            auth::basic_auth_middleware(req, next, creds)
-        }));
-
-    Router::new()
-        .route("/health", get(health_check))
-        .route("/ws", get(websocket::ws_handler))
-        .fallback(static_files::serve_static_files)
-        .with_state(app_state)
-        .merge(protected_routes)
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
-}
-
-#[cfg(test)]
-pub async fn create_test_app() -> Router {
-    create_test_router()
-}
