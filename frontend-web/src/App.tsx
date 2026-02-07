@@ -122,6 +122,24 @@ function App() {
     queryClient.invalidateQueries();
   }, [queryClient, setNeedsAuth]);
 
+  // Check server auth status on load to avoid showing auth prompt when disabled
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const response = await fetch("/api/auth/status");
+        if (!response.ok) return;
+        const data = (await response.json()) as { enabled: boolean };
+        if (!data.enabled) {
+          setNeedsAuth(false);
+        }
+      } catch {
+        // Ignore network errors; auth prompt will show if needed.
+      }
+    };
+
+    checkAuthStatus();
+  }, [setNeedsAuth]);
+
   // Find current session and check if active
   const currentSession = sessions?.find((s) => s.id === currentSessionId);
   const isSessionActive = currentSession?.is_active ?? false;
@@ -281,8 +299,11 @@ function App() {
           <NewSessionDialog
             trigger={
               <button 
-                className="fixed right-[calc(env(safe-area-inset-right)+1rem)] h-14 w-14 rounded-full bg-background text-foreground border-2 border-border shadow-lg hover:bg-accent hover:text-accent-foreground flex items-center justify-center z-50 active:scale-95 touch-manipulation transition-all duration-200"
-                style={{ bottom: `calc(env(safe-area-inset-bottom) + ${footerHeight}px + 1rem)` }}
+                className="fixed h-14 w-14 rounded-full border-2 border-border shadow-lg hover:bg-accent hover:text-accent-foreground flex items-center justify-center z-50 active:scale-95 touch-manipulation transition-all duration-200 bg-card text-card-foreground"
+                style={{ 
+                  bottom: `calc(env(safe-area-inset-bottom) + ${footerHeight}px + 1rem)`,
+                  right: `calc(env(safe-area-inset-right) + 1rem)`,
+                }}
               >
                 <Plus className="h-6 w-6" />
                 <span className="sr-only">New Session</span>

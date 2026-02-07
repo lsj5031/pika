@@ -205,7 +205,7 @@ export function ChatInput({
         </div>
       )}
 
-      <div className="flex items-end gap-2 max-w-4xl mx-auto">
+      <div className="flex items-center gap-2 max-w-4xl mx-auto px-2">
         <Button
           onClick={() => fileInputRef.current?.click()}
           disabled={!sessionId || disabled}
@@ -238,7 +238,7 @@ export function ChatInput({
               : "Type a message... (Shift+Enter for new line, paste images or click 📎)"
           }
           disabled={!sessionId || disabled}
-          className="min-h-[44px] max-h-[200px] resize-none text-base py-2.5"
+          className="min-h-[44px] max-h-[200px] resize-none text-base py-2.5 leading-6 flex-1"
           rows={1}
           id="chat-input"
           data-testid="chat-input"
@@ -258,7 +258,7 @@ export function ChatInput({
       </div>
 
       {sessionId && (
-        <div className="flex items-center gap-1.5 max-w-4xl mx-auto mt-2 px-1">
+        <div className="flex items-center gap-1.5 max-w-4xl mx-auto mt-2 px-2">
           <Cpu className="h-3 w-3 text-muted-foreground shrink-0" />
           <span className="text-xs text-muted-foreground hidden sm:inline">
             Model:

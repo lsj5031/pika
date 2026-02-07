@@ -93,11 +93,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_state = AppState::new(config.clone());
 
     // Set up auth credentials
-    let auth_credentials = AuthCredentials::new(
-        config.get_auth_username().unwrap_or_default(),
-        config.get_auth_password().unwrap_or_default(),
-    );
-    let auth_enabled = auth_credentials.is_enabled();
+    let auth_credentials = if config.is_auth_disabled() {
+        AuthCredentials::new(String::new(), String::new())
+    } else {
+        AuthCredentials::new(
+            config.get_auth_username().unwrap_or_default(),
+            config.get_auth_password().unwrap_or_default(),
+        )
+    };
+    let auth_enabled = config.is_auth_enabled();
 
     // Build protected API routes (require auth via HTTP header if enabled)
     let protected_routes = Router::new()
@@ -131,6 +135,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("📡 WebSocket endpoint available at ws://{}", addr);
     if auth_enabled {
         println!("🔐 HTTP Basic Auth enabled");
+    } else if config.is_auth_disabled() {
+        println!("⚠️  HTTP Basic Auth disabled (debug override enabled)");
     } else {
         println!("⚠️  HTTP Basic Auth disabled (no credentials configured)");
     }
