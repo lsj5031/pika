@@ -11,6 +11,10 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub project_root_paths: Vec<PathBuf>,
 
+    /// Disable auth requirement (debug only, can be set via AUTH_DISABLE env var)
+    #[serde(default)]
+    pub debug_disable_auth: bool,
+
     /// HTTP Basic Auth username (optional, can be set via AUTH_USERNAME env var)
     #[serde(default)]
     pub auth_username: Option<String>,
@@ -37,9 +41,33 @@ impl ProjectConfig {
             .filter(|s| !s.is_empty())
     }
 
+    /// Check if authentication is explicitly disabled (debug mode)
+    pub fn is_auth_disabled(&self) -> bool {
+        match std::env::var("AUTH_DISABLE")
+            .ok()
+            .as_deref()
+            .map(parse_bool_value)
+        {
+            Some(Some(value)) => value,
+            Some(None) | None => self.debug_disable_auth,
+        }
+    }
+
     /// Check if authentication is enabled
     pub fn is_auth_enabled(&self) -> bool {
+        if self.is_auth_disabled() {
+            return false;
+        }
+
         self.get_auth_username().is_some() && self.get_auth_password().is_some()
+    }
+}
+
+fn parse_bool_value(value: &str) -> Option<bool> {
+    match value.trim().to_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
     }
 }
 
@@ -126,6 +154,15 @@ mod tests {
     fn test_default_config() {
         let config = ProjectConfig::default();
         assert!(config.project_root_paths.is_empty());
+    }
+
+    #[test]
+    fn test_auth_disabled_via_config() {
+        let mut config = ProjectConfig::default();
+        config.debug_disable_auth = true;
+        config.auth_username = Some("user".to_string());
+        config.auth_password = Some("pass".to_string());
+        assert!(!config.is_auth_enabled());
     }
 
     #[test]

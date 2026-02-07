@@ -99,10 +99,11 @@ pub async fn ws_handler(
         config.get_auth_username().unwrap_or_default(),
         config.get_auth_password().unwrap_or_default(),
     );
+    let auth_enabled = config.is_auth_enabled();
     drop(config); // Release lock before potentially long-lived upgrade
 
     // Validate auth if enabled
-    if auth_creds.is_enabled() {
+    if auth_enabled && auth_creds.is_enabled() {
         match params.auth {
             Some(encoded) => {
                 // Decode base64 and validate

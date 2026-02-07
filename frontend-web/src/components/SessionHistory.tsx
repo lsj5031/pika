@@ -164,8 +164,8 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
   return (
     <div
       className={cn(
-        "flex w-full flex-col gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300",
-        isUser ? "items-end" : "items-start"
+        "flex w-full max-w-full flex-col gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 min-w-0",
+        isUser ? "items-end px-4" : "items-start px-4"
       )}
     >
       {/* Role indicator */}
@@ -223,10 +223,10 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
       {/* Main message card */}
       <Card
         className={cn(
-          "max-w-[85%] md:max-w-[80%] px-4 py-3 border-2 shadow-sm transition-all hover:shadow-md",
+          "max-w-full sm:max-w-[85%] px-4 py-3 border-2 shadow-sm transition-all hover:shadow-md",
           colors.bg,
           colors.border,
-          "overflow-hidden min-w-0" // Ensure nothing leaks out
+          "overflow-hidden min-w-0"
         )}
       >
         {/* Response content */}
@@ -240,30 +240,30 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
                 <span className="font-bold opacity-70 block mb-1">
                   {displayResponse.split(":")[0]}:
                 </span>
-                <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-[10px] font-mono whitespace-pre">
+                <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-[10px] font-mono whitespace-pre-wrap break-all max-w-full">
                   {formattedJson}
                 </pre>
               </div>
             ) : displayResponse.trim().startsWith("{") || displayResponse.trim().startsWith("[") ? (
-              <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-[10px] font-mono whitespace-pre">
+              <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-[10px] font-mono whitespace-pre-wrap break-all max-w-full">
                 {formattedJson || displayResponse}
               </pre>
             ) : (
               <ReactMarkdown
                 components={{
-                  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                  p: ({ children }) => <p className="mb-2 last:mb-0 break-words">{children}</p>,
                   strong: ({ children }) => <strong className="font-bold">{children}</strong>,
                   em: ({ children }) => <em className="italic">{children}</em>,
                   ul: ({ children }) => <ul className="list-disc list-inside mb-2">{children}</ul>,
                   ol: ({ children }) => <ol className="list-decimal list-inside mb-2">{children}</ol>,
                   li: ({ children }) => <li className="mb-1">{children}</li>,
                   code: ({ children }) => (
-                    <code className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded text-xs font-mono">
+                    <code className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded text-xs font-mono break-words">
                       {children}
                     </code>
                   ),
                   pre: ({ children }) => (
-                    <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-xs font-mono my-2">
+                    <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-xs font-mono my-2 whitespace-pre-wrap break-words max-w-full">
                       {children}
                     </pre>
                   ),
@@ -497,7 +497,7 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   const isTruncated = messages.length >= 50; // Matches MAX_INITIAL_MESSAGES
 
   return (
-    <div className={cn("flex flex-col h-full overflow-x-hidden", className)}>
+    <div className={cn("flex flex-col h-full w-full max-w-full min-w-0 overflow-x-hidden", className)}>
       {messages && messages.length > 0 && (
         <div className="p-2 border-b hidden md:flex justify-between items-center bg-card">
           {isTruncated && (
@@ -518,8 +518,11 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
           </div>
         </div>
       )}
-      <ScrollArea className="flex-1 overflow-x-hidden">
-        <div ref={scrollRef} className="p-4 space-y-6 overflow-x-hidden">
+      <ScrollArea className="flex-1 w-full max-w-full min-w-0 overflow-x-hidden">
+        <div
+          ref={scrollRef}
+          className="w-full max-w-full min-w-0 box-border p-4 pr-16 pb-24 sm:pr-4 sm:pb-6 space-y-6 overflow-x-hidden"
+        >
           {messages.map((message, index) => (
             <MessageBubble key={index} message={message} />
           ))}

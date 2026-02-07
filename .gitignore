@@ -27,3 +27,4 @@ deploy/cloudflared-tunnel.yml
 
 # Pika local data
 .pi/
+.sisyphus/
