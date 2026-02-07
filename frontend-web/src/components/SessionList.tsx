@@ -1,9 +1,13 @@
-import { useState } from "react";
-import { useSessions } from "../hooks/useSessions";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useProjects } from "../hooks/useProjects";
 import { useAppStore } from "../store/appStore";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useRecentSessions } from "../hooks/useRecentSessions";
+import { useProjectSessionsPaged } from "../hooks/useProjectSessionsPaged";
+import { useSessionsPaged } from "../hooks/useSessionsPaged";
+import { useSessionLookup } from "../hooks/useSessionLookup";
+import { useResolvedSessions } from "../hooks/useResolvedSessions";
 import { ScrollArea } from "./ui/scroll-area";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
@@ -25,6 +29,7 @@ import {
   Minimize2,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import type { Project, Session } from "../types";
 
 interface SessionListProps {
   className?: string;
@@ -33,30 +38,218 @@ interface SessionListProps {
 
 const DEFAULT_SESSION_LIMIT = 5;
 
+interface ProjectSessionsSectionProps {
+  project: Project;
+  isExpanded: boolean;
+  onToggle: () => void;
+  currentSessionId: string | null;
+  activeSessionIds: Set<string>;
+  thinkingSessionIds: Set<string>;
+  unreadSessions: Set<string>;
+  isFavoriteSession: (sessionId: string) => boolean;
+  onToggleFavorite: (sessionId: string) => void;
+  onSelectSession: (sessionId: string) => void;
+  enabled: boolean;
+}
+
+function ProjectSessionsSection({
+  project,
+  isExpanded,
+  onToggle,
+  currentSessionId,
+  activeSessionIds,
+  thinkingSessionIds,
+  unreadSessions,
+  isFavoriteSession,
+  onToggleFavorite,
+  onSelectSession,
+  enabled,
+}: ProjectSessionsSectionProps) {
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useProjectSessionsPaged(project.id, enabled, DEFAULT_SESSION_LIMIT);
+
+  const sessions = useMemo(() => data?.pages.flatMap((page) => page.data) ?? [], [data]);
+  const resolvedSessions = useResolvedSessions(sessions, enabled, { resolveNames: true }) ?? [];
+
+  const displayedSessions = isExpanded
+    ? resolvedSessions
+    : resolvedSessions.slice(0, DEFAULT_SESSION_LIMIT);
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          "w-full flex items-center gap-2 px-1 py-1.5 text-sm font-semibold",
+          "text-muted-foreground hover:text-foreground transition-colors group"
+        )}
+      >
+        <div className="p-0.5 rounded hover:bg-muted transition-colors">
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+        </div>
+        <span className="flex-1 text-left truncate">{project.name}</span>
+        <Badge variant="outline" className="text-xs font-mono">
+          {project.session_count}
+        </Badge>
+      </button>
+
+      {isLoading && resolvedSessions.length === 0 && (
+        <div className="px-8 py-3 text-sm text-muted-foreground italic border rounded-lg opacity-60">
+          Loading sessions...
+        </div>
+      )}
+
+      {!isLoading && displayedSessions.length === 0 && (
+        <div className="px-8 py-3 text-sm text-muted-foreground italic border rounded-lg opacity-60">
+          No sessions yet
+        </div>
+      )}
+
+      {displayedSessions.length > 0 && (
+        <div className="space-y-1 pl-1">
+          {displayedSessions.map((session) => (
+            <SessionItem
+              key={session.id}
+              session={session}
+              isSelected={currentSessionId === session.id}
+              isActive={activeSessionIds.has(session.id) || session.is_active}
+              isThinking={thinkingSessionIds.has(session.id)}
+              isUnread={unreadSessions.has(session.id)}
+              isFavorite={isFavoriteSession(session.id)}
+              onClick={() => onSelectSession(session.id)}
+              onToggleFavorite={() => onToggleFavorite(session.id)}
+              showFavoriteButton={true}
+            />
+          ))}
+        </div>
+      )}
+
+      {hasNextPage && !isExpanded && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onToggle}
+          className="w-full justify-center text-xs h-8 font-medium text-muted-foreground hover:text-foreground"
+        >
+          <span>Show more...</span>
+        </Button>
+      )}
+
+      {isExpanded && (
+        <div className="flex flex-col gap-1">
+          {hasNextPage && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="w-full justify-center text-xs h-8 font-medium text-muted-foreground hover:text-foreground"
+            >
+              {isFetchingNextPage ? "Loading..." : "Load more"}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggle}
+            className="w-full justify-center text-xs h-8 font-medium text-muted-foreground hover:text-foreground"
+          >
+            <span>Show less</span>
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SessionList({ className, onSelect }: SessionListProps) {
   const needsAuth = useAppStore((state) => state.needsAuth);
-  const { data: sessions, isLoading: sessionsLoading, refetch: refetchSessions } = useSessions(!needsAuth);
+  const queryClient = useQueryClient();
   const { data: projects, isLoading: projectsLoading, refetch: refetchProjects } = useProjects(!needsAuth);
   const currentSessionId = useAppStore((state) => state.currentSessionId);
   const setCurrentSession = useAppStore((state) => state.setCurrentSession);
   const activeSessionIds = useAppStore((state) => state.activeSessionIds);
   const thinkingSessionIds = useAppStore((state) => state.thinkingSessionIds);
   const unreadSessions = useAppStore((state) => state.unreadSessions);
+  const recentSessionIds = useAppStore((state) => state.recentSessionIds);
+  const favoriteSessionIds = useAppStore((state) => state.favoriteSessionIds);
   const sidebarCompactMode = useAppStore((state) => state.sidebarCompactMode);
   const toggleSidebarCompactMode = useAppStore((state) => state.toggleSidebarCompactMode);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
 
+  const lookupIds = useMemo(
+    () => Array.from(new Set([...recentSessionIds, ...favoriteSessionIds, ...activeSessionIds])),
+    [recentSessionIds, favoriteSessionIds, activeSessionIds]
+  );
+  const { data: lookupSessions } = useSessionLookup(lookupIds, !needsAuth);
+  const resolvedLookupSessions = useResolvedSessions(lookupSessions, !needsAuth, { resolveNames: true });
+
   const { recentSessions, favoriteSessions, hasRecentSessions, hasFavoriteSessions, toggleFavoriteSession, isFavoriteSession } =
-    useRecentSessions(sessions);
+    useRecentSessions(resolvedLookupSessions);
 
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
 
-  const isLoading = sessionsLoading || projectsLoading;
+  const searchActive = searchQuery.trim().length > 0;
+  const {
+    data: searchPages,
+    isLoading: searchLoading,
+    fetchNextPage: fetchNextSearchPage,
+    hasNextPage: hasNextSearchPage,
+    isFetchingNextPage: isFetchingSearchPage,
+  } = useSessionsPaged(searchQuery.trim(), !needsAuth && searchActive);
+
+  const searchSessions = useMemo(
+    () => searchPages?.pages.flatMap((page) => page.data) ?? [],
+    [searchPages]
+  );
+  const resolvedSearchSessions = useResolvedSessions(
+    searchSessions,
+    !needsAuth && searchActive,
+    { resolveNames: true }
+  );
+  const resolvedSearchList = useMemo(
+    () => resolvedSearchSessions ?? [],
+    [resolvedSearchSessions]
+  );
+
+  const searchSessionsByProject = useMemo(() => {
+    const grouped = new Map<string, Session[]>();
+    for (const session of resolvedSearchList) {
+      const list = grouped.get(session.project_id) ?? [];
+      list.push(session);
+      grouped.set(session.project_id, list);
+    }
+    return grouped;
+  }, [resolvedSearchList]);
+
+  const activeLookupSessions = useMemo(() => {
+    if (!resolvedLookupSessions) return [] as Session[];
+    return resolvedLookupSessions.filter(
+      (session) =>
+        (activeSessionIds.has(session.id) || session.is_active) &&
+        !recentSessions.find((r) => r.id === session.id) &&
+        !favoriteSessions.find((f) => f.id === session.id)
+    );
+  }, [resolvedLookupSessions, activeSessionIds, recentSessions, favoriteSessions]);
+
+  const isLoading = projectsLoading || (searchActive && searchLoading);
 
   const handleRefresh = async () => {
-    // refetch already triggers a fresh fetch; no need for additional invalidation
-    await Promise.all([refetchSessions(), refetchProjects()]);
+    await Promise.all([
+      refetchProjects(),
+      queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+    ]);
   };
 
   const {
@@ -70,42 +263,6 @@ export function SessionList({ className, onSelect }: SessionListProps) {
     threshold: 80,
   });
 
-  // Filter sessions based on search query
-  const filteredSessions =
-    sessions?.filter((session) => {
-      if (!searchQuery.trim()) return true;
-      const query = searchQuery.toLowerCase();
-      return (
-        session.name.toLowerCase().includes(query) ||
-        session.project_path.toLowerCase().includes(query) ||
-        session.id.toLowerCase().includes(query)
-      );
-    }) ?? [];
-
-  // Group sessions by project and limit to DEFAULT_SESSION_LIMIT
-  const sessionsByProject = projects?.map((project) => {
-    const projectSessions = filteredSessions.filter(
-      (session) => session.project_id === project.id
-    );
-    // Sort sessions by creation date desc (assuming newer is more relevant)
-    projectSessions.sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-
-    const isExpanded = expandedProjects.has(project.id);
-    const displayedSessions = isExpanded
-      ? projectSessions
-      : projectSessions.slice(0, DEFAULT_SESSION_LIMIT);
-    const hasMore = projectSessions.length > DEFAULT_SESSION_LIMIT;
-
-    return {
-      ...project,
-      sessions: projectSessions,
-      displayedSessions,
-      hasMore,
-      isExpanded,
-    };
-  });
 
   const toggleProjectExpanded = (projectId: string) => {
     setExpandedProjects((prev) => {
@@ -195,25 +352,18 @@ export function SessionList({ className, onSelect }: SessionListProps) {
                 ))}
 
               {/* Active sessions not in recent/favorites */}
-              {sessions
-                ?.filter(
-                  (s) =>
-                    (activeSessionIds.has(s.id) || s.is_active) &&
-                    !recentSessions.find((r) => r.id === s.id) &&
-                    !favoriteSessions.find((f) => f.id === s.id)
-                )
-                .map((session) => (
-                  <SessionItem
-                    key={session.id}
-                    session={session}
-                    isSelected={currentSessionId === session.id}
-                    isActive={true}
-                    isThinking={thinkingSessionIds.has(session.id)}
-                    isUnread={unreadSessions.has(session.id)}
-                    isCompact={true}
-                    onClick={() => handleSessionSelect(session.id)}
-                  />
-                ))}
+              {activeLookupSessions.map((session) => (
+                <SessionItem
+                  key={session.id}
+                  session={session}
+                  isSelected={currentSessionId === session.id}
+                  isActive={true}
+                  isThinking={thinkingSessionIds.has(session.id)}
+                  isUnread={unreadSessions.has(session.id)}
+                  isCompact={true}
+                  onClick={() => handleSessionSelect(session.id)}
+                />
+              ))}
             </div>
           </ScrollArea>
         </div>
@@ -319,7 +469,7 @@ export function SessionList({ className, onSelect }: SessionListProps) {
           />
           <ScrollArea className="h-full" {...pullToRefreshProps}>
             <div className="p-3 space-y-4 min-h-full">
-              {filteredSessions.length === 0 && searchQuery.trim() && (
+              {searchActive && resolvedSearchList.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <Search className="h-12 w-12 mb-3 opacity-50" />
                   <p className="text-lg font-medium">No sessions found</p>
@@ -327,8 +477,55 @@ export function SessionList({ className, onSelect }: SessionListProps) {
                 </div>
               )}
 
+              {searchActive && resolvedSearchList.length > 0 && (
+                <div className="space-y-4">
+                  {(projects ?? []).map((project) => {
+                    const projectSessions = searchSessionsByProject.get(project.id) ?? [];
+                    if (projectSessions.length === 0) return null;
+                    return (
+                      <div key={project.id} className="space-y-1">
+                        <div className="flex items-center gap-2 px-1 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                          <span className="truncate">{project.name}</span>
+                          <Badge variant="outline" className="text-xs font-mono">
+                            {projectSessions.length}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1 pl-1">
+                          {projectSessions.map((session) => (
+                            <SessionItem
+                              key={session.id}
+                              session={session}
+                              isSelected={currentSessionId === session.id}
+                              isActive={activeSessionIds.has(session.id) || session.is_active}
+                              isThinking={thinkingSessionIds.has(session.id)}
+                              isUnread={unreadSessions.has(session.id)}
+                              isFavorite={isFavoriteSession(session.id)}
+                              onClick={() => handleSessionSelect(session.id)}
+                              onToggleFavorite={() => toggleFavoriteSession(session.id)}
+                              showFavoriteButton={true}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {hasNextSearchPage && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => fetchNextSearchPage()}
+                      disabled={isFetchingSearchPage}
+                      className="w-full justify-center text-xs h-8 font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      {isFetchingSearchPage ? "Loading..." : "Load more results"}
+                    </Button>
+                  )}
+                </div>
+              )}
+
               {/* Favorites Section */}
-              {!searchQuery.trim() && hasFavoriteSessions && (
+              {!searchActive && hasFavoriteSessions && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 px-1 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                     <Pin className="h-3.5 w-3.5" />
@@ -354,7 +551,7 @@ export function SessionList({ className, onSelect }: SessionListProps) {
               )}
 
               {/* Recent Section */}
-              {!searchQuery.trim() && hasRecentSessions && (
+              {!searchActive && hasRecentSessions && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 px-1 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                     <Clock className="h-3.5 w-3.5" />
@@ -383,78 +580,30 @@ export function SessionList({ className, onSelect }: SessionListProps) {
               )}
 
               {/* Divider */}
-              {!searchQuery.trim() && (hasFavoriteSessions || hasRecentSessions) && (
+              {!searchActive && (hasFavoriteSessions || hasRecentSessions) && (
                 <div className="border-t my-2" />
               )}
 
               {/* Projects */}
-              {sessionsByProject?.map((project) => (
-                <div key={project.id} className="space-y-1">
-                  {/* Project header */}
-                  <button
-                    type="button"
-                    onClick={() => toggleProjectExpanded(project.id)}
-                    className={cn(
-                      "w-full flex items-center gap-2 px-1 py-1.5 text-sm font-semibold",
-                      "text-muted-foreground hover:text-foreground transition-colors group"
-                    )}
-                  >
-                    <div className="p-0.5 rounded hover:bg-muted transition-colors">
-                      {project.isExpanded ? (
-                        <ChevronDown className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )}
-                    </div>
-                    <span className="flex-1 text-left truncate">{project.name}</span>
-                    <Badge variant="outline" className="text-xs font-mono">
-                      {project.sessions.length}
-                    </Badge>
-                  </button>
+              {!searchActive &&
+                projects?.map((project) => (
+                  <ProjectSessionsSection
+                    key={project.id}
+                    project={project}
+                    isExpanded={expandedProjects.has(project.id)}
+                    onToggle={() => toggleProjectExpanded(project.id)}
+                    currentSessionId={currentSessionId}
+                    activeSessionIds={activeSessionIds}
+                    thinkingSessionIds={thinkingSessionIds}
+                    unreadSessions={unreadSessions}
+                    isFavoriteSession={isFavoriteSession}
+                    onToggleFavorite={toggleFavoriteSession}
+                    onSelectSession={handleSessionSelect}
+                    enabled={!needsAuth}
+                  />
+                ))}
 
-                  {/* Project sessions */}
-                  {project.displayedSessions.length === 0 ? (
-                    <div className="px-8 py-3 text-sm text-muted-foreground italic border rounded-lg opacity-60">
-                      No sessions yet
-                    </div>
-                  ) : (
-                    <div className="space-y-1 pl-1">
-                      {project.displayedSessions.map((session) => (
-                        <SessionItem
-                          key={session.id}
-                          session={session}
-                          isSelected={currentSessionId === session.id}
-                          isActive={activeSessionIds.has(session.id) || session.is_active}
-                          isThinking={thinkingSessionIds.has(session.id)}
-                          isUnread={unreadSessions.has(session.id)}
-                          isFavorite={isFavoriteSession(session.id)}
-                          onClick={() => handleSessionSelect(session.id)}
-                          onToggleFavorite={() => toggleFavoriteSession(session.id)}
-                          showFavoriteButton={true}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Show more/less button */}
-                  {project.hasMore && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleProjectExpanded(project.id)}
-                      className="w-full justify-center text-xs h-8 font-medium text-muted-foreground hover:text-foreground"
-                    >
-                      {project.isExpanded ? (
-                        <span>Show less</span>
-                      ) : (
-                        <span>Show {project.sessions.length - DEFAULT_SESSION_LIMIT} more...</span>
-                      )}
-                    </Button>
-                  )}
-                </div>
-              ))}
-
-              {sessionsByProject?.length === 0 && (
+              {!searchActive && projects?.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 text-muted-foreground">
                   <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
                     <Plus className="h-8 w-8 opacity-40" />

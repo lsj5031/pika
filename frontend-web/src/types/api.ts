@@ -16,6 +16,12 @@ export interface Session {
   is_active: boolean;
 }
 
+export interface PagedResponse<T> {
+  data: T[];
+  next_cursor?: string;
+  total?: number;
+}
+
 export interface StartSessionResponse {
   process_id: string;
   newly_spawned: boolean;

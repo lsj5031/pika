@@ -1,6 +1,7 @@
 mod api;
 mod auth;
 mod config;
+mod file_watcher;
 pub mod metrics;
 mod pi;
 mod sessions;
@@ -10,16 +11,16 @@ mod websocket;
 use axum::response::Json;
 use serde_json::Value;
 
-pub use api::create_api_router;
+pub use api::{create_api_router, ApiState};
 pub use auth::{AuthCredentials, basic_auth_middleware};
 pub use config::ProjectConfig;
-pub use pi::ProcessManager;
+pub use file_watcher::{SessionFileEvent, SessionFileWatcher};
+pub use pi::{ProcessManager, ProcessManagerEvent};
+pub use sessions::{SessionIndex, build_session_index, build_encoded_project_map, load_session_info_from_file};
 pub use static_files::serve_static_files;
-pub use websocket::{WSState, ws_handler};
-
-use api::ApiState;
+pub use websocket::{WSEvent, WSState, ws_handler};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 /// Combined application state
 #[derive(Clone)]
@@ -27,6 +28,7 @@ pub struct AppState {
     pub ws_state: WSState,
     pub api_state: ApiState,
     pub process_manager: Arc<Mutex<ProcessManager>>,
+    pub session_index: Arc<RwLock<SessionIndex>>,
 }
 
 impl AppState {
@@ -35,6 +37,7 @@ impl AppState {
             ws_state: WSState::new(),
             api_state: ApiState::new(config),
             process_manager: Arc::new(Mutex::new(ProcessManager::new())),
+            session_index: Arc::new(RwLock::new(SessionIndex::empty())),
         }
     }
 }

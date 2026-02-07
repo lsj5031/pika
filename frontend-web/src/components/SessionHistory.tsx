@@ -11,7 +11,7 @@ import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import { parseDiffFromMessage } from "../lib/diff-parser";
 import type { Message } from "../types";
-import { Bot, User, Wrench, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { Bot, User, Wrench, ChevronDown, ChevronUp, Download, Loader2 } from "lucide-react";
 
 interface SessionHistoryProps {
   sessionId: string | null;
@@ -366,7 +366,13 @@ function exportSessionToMarkdown(messages: Message[], sessionId: string): string
 export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   // Session history component
   const needsAuth = useAppStore((state) => state.needsAuth);
-  const { data: messages, isLoading } = useSessionHistory({ sessionId, enabled: !needsAuth });
+  const {
+    data: messages,
+    isLoading,
+    fetchOlder,
+    hasOlder,
+    isFetchingOlder,
+  } = useSessionHistory({ sessionId, enabled: !needsAuth });
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const thinkingState = useThinkingStore((state) =>
@@ -374,6 +380,7 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   );
   const prevSessionIdRef = useRef<string | null>(null);
   const initialScrollDoneRef = useRef<boolean>(false);
+  const loadingOlderRef = useRef<boolean>(false);
 
   // Track previous message count to detect new messages
   const prevMessageCountRef = useRef<number>(0);
@@ -409,6 +416,10 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
     if (!messages) return;
 
     const messageCount = messages.length;
+    if (loadingOlderRef.current) {
+      prevMessageCountRef.current = messageCount;
+      return;
+    }
     const hasNewMessages = messageCount > prevMessageCountRef.current;
 
     // Only scroll if:
@@ -455,6 +466,16 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
     };
   }, [messages, thinkingState.isThinking, sessionId]); // Note: using thinkingState.isThinking, not full object
 
+  const handleLoadOlder = useCallback(async () => {
+    if (!fetchOlder || isFetchingOlder) return;
+    loadingOlderRef.current = true;
+    try {
+      await fetchOlder();
+    } finally {
+      loadingOlderRef.current = false;
+    }
+  }, [fetchOlder, isFetchingOlder]);
+
   if (!sessionId) {
     return (
       <div
@@ -495,7 +516,7 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   }
 
   // Warn about truncated sessions
-  const isTruncated = messages.length >= 50; // Matches MAX_INITIAL_MESSAGES
+  const isTruncated = Boolean(hasOlder);
 
   return (
     <div className={cn("flex flex-col h-full w-full max-w-full min-w-0 overflow-x-hidden", className)}>
@@ -524,6 +545,20 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
           ref={scrollRef}
           className="w-full max-w-full min-w-0 box-border p-4 pb-6 md:pr-16 md:pb-24 space-y-6 overflow-x-hidden"
         >
+          {hasOlder && (
+            <div className="flex justify-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLoadOlder}
+                disabled={isFetchingOlder}
+                className="gap-2 rounded-lg text-muted-foreground"
+              >
+                {isFetchingOlder && <Loader2 className="h-4 w-4 animate-spin" />}
+                Load older messages
+              </Button>
+            </div>
+          )}
           {messages.map((message, index) => (
             <MessageBubble key={index} message={message} />
           ))}
