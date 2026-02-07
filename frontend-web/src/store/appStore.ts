@@ -5,8 +5,6 @@ import { hasCredentials } from "../lib/auth";
 interface AppState {
   // State
   currentSessionId: string | null;
-  sidebarCollapsed: boolean;
-  sidebarCompactMode: boolean; // NEW: Compact icon-only mode
   needsAuth: boolean;
   activeSessionIds: Set<string>; // Track active sessions
   thinkingSessionIds: Set<string>; // Track sessions with thinking in progress
@@ -18,10 +16,6 @@ interface AppState {
 
   // Actions
   setCurrentSession: (sessionId: string | null) => void;
-  toggleSidebar: () => void;
-  setSidebarCollapsed: (collapsed: boolean) => void;
-  toggleSidebarCompactMode: () => void; // NEW
-  setSidebarCompactMode: (compact: boolean) => void; // NEW
   setNeedsAuth: (needsAuth: boolean) => void;
   setActiveSession: (sessionId: string, isActive: boolean) => void;
   setThinkingSession: (sessionId: string, isThinking: boolean) => void;
@@ -40,8 +34,6 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       // Initial state
       currentSessionId: null,
-      sidebarCollapsed: false,
-      sidebarCompactMode: false,
       needsAuth: !hasCredentials(),
       activeSessionIds: new Set<string>(),
       thinkingSessionIds: new Set<string>(),
@@ -59,14 +51,6 @@ export const useAppStore = create<AppState>()(
         }
         set({ currentSessionId: sessionId });
       },
-
-      toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-
-      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-
-      toggleSidebarCompactMode: () => set((state) => ({ sidebarCompactMode: !state.sidebarCompactMode })),
-
-      setSidebarCompactMode: (compact) => set({ sidebarCompactMode: compact }),
 
       setNeedsAuth: (needsAuth) => set({ needsAuth }),
 
@@ -157,14 +141,13 @@ export const useAppStore = create<AppState>()(
       isFavoriteSession: (sessionId) => {
         return get().favoriteSessionIds.includes(sessionId);
       },
+
     }),
     {
       name: "pika-storage",
       // Don't persist Sets (they'll be re-synced from WebSocket)
       partialize: (state) => ({
         currentSessionId: state.currentSessionId,
-        sidebarCollapsed: state.sidebarCollapsed,
-        sidebarCompactMode: state.sidebarCompactMode,
         needsAuth: state.needsAuth,
         lastSeenMessageCounts: state.lastSeenMessageCounts,
         lastProjectId: state.lastProjectId,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Square, Wifi, WifiOff, Loader2, Command, PanelLeft } from "lucide-react";
+import { Square, Wifi, WifiOff, Loader2, Command } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { SettingsDialog } from "./SettingsDialog";
@@ -13,7 +13,6 @@ interface AppHeaderProps {
   isSessionActive: boolean;
   onStopSession?: () => void;
   onOpenCommandPalette?: () => void;
-  onToggleSidebar?: () => void;
 }
 
 export function AppHeader({
@@ -21,29 +20,14 @@ export function AppHeader({
   isSessionActive,
   onStopSession,
   onOpenCommandPalette,
-  onToggleSidebar,
 }: AppHeaderProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newSessionOpen, setNewSessionOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6 safe-top">
-      {/* Left: Hamburger menu + App name */}
+      {/* Left: App name */}
       <div className="flex items-center gap-3">
-        {/* Desktop sidebar toggle */}
-        {onToggleSidebar && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden md:flex text-muted-foreground hover:text-foreground"
-            onClick={onToggleSidebar}
-            title="Toggle Sidebar (⌘B)"
-          >
-            <PanelLeft className="h-5 w-5" />
-            <span className="sr-only">Toggle Sidebar</span>
-          </Button>
-        )}
-
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="Pika Logo" className="h-8 w-8 object-contain" />
           <h1 className="text-xl md:text-2xl font-heading font-bold tracking-tight whitespace-nowrap">

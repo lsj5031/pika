@@ -122,8 +122,11 @@ export function CommandPalette({
       });
     }
 
-    // Sort by score (descending)
-    scoredSessions.sort((a, b) => b.score - a.score);
+    // Sort by score (descending), then by most recently created
+    scoredSessions.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(b.session.created_at).getTime() - new Date(a.session.created_at).getTime();
+    });
 
     return scoredSessions;
   }, [
@@ -161,35 +164,43 @@ export function CommandPalette({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="p-0 gap-0 overflow-hidden !inset-0 !left-0 !top-0 !right-0 !bottom-0 !translate-x-0 !translate-y-0 !rounded-none !m-0 !w-screen !max-w-none h-[100dvh] sm:!rounded-wobblyMd sm:!left-1/2 sm:!top-1/2 sm:!-translate-x-1/2 sm:!-translate-y-1/2 sm:h-auto sm:!max-w-2xl sm:!w-[calc(100vw-2rem)]">
+      <DialogContent className="p-0 gap-0 overflow-hidden sm:!max-w-2xl sm:!w-[calc(100vw-2rem)] [&>button:last-child]:hidden">
         <DialogTitle className="sr-only">Switch Session</DialogTitle>
 
         {/* Search header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b">
-          <Search className="h-5 w-5 text-muted-foreground shrink-0" />
-          <Input
-            autoFocus
-            type="text"
-            placeholder="Search sessions... (Cmd+K)"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-0 text-base"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="p-1 rounded hover:bg-muted transition-colors"
-            >
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
-          )}
+        <div className="flex items-center gap-2 px-3 py-3 border-b">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              autoFocus
+              type="text"
+              placeholder="Search sessions... (Cmd+K)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-9 h-11 text-base"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-muted transition-colors sm:hidden"
+          >
+            <X className="h-5 w-5 text-muted-foreground" />
+          </button>
           <kbd className="hidden sm:inline-flex h-6 items-center gap-1 rounded border bg-muted px-2 font-mono text-xs text-muted-foreground">
             ESC
           </kbd>
         </div>
 
         {/* Results list */}
-        <div className="max-h-[60vh] h-[calc(100dvh-7.5rem)] overflow-y-auto sm:h-auto sm:max-h-[60vh]">
+        <div className="max-h-[60vh] overflow-y-auto">
           {filteredSessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <MessageSquare className="h-12 w-12 mb-3 opacity-30" />
