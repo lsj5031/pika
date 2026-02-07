@@ -235,7 +235,7 @@ export function ChatInput({
           placeholder={
             !sessionId
               ? "Select a session"
-              : "Type a message... (Shift+Enter for new line, paste images or click 📎)"
+              : "Type a message..."
           }
           disabled={!sessionId || disabled}
           className="min-h-[44px] max-h-[200px] resize-none text-base py-2.5 leading-6 flex-1"
