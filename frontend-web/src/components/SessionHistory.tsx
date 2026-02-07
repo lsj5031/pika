@@ -223,10 +223,10 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
       {/* Main message card */}
       <Card
         className={cn(
-          "max-w-full sm:max-w-[85%] px-4 py-3 border-2 shadow-sm transition-all hover:shadow-md",
+          "max-w-full sm:max-w-[85%] px-4 py-3 border-2 shadow-sm transition-all hover:shadow-md overflow-visible !overflow-visible",
           colors.bg,
           colors.border,
-          "overflow-hidden min-w-0"
+          "min-w-0"
         )}
       >
         {/* Response content */}
@@ -310,7 +310,7 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
                 <span className="inline-block w-2 h-2 rounded-full bg-current animate-pulse"></span>
                 Thinking Process
               </summary>
-              <div className={cn("text-xs whitespace-pre-wrap break-words leading-relaxed pl-3 border-l-2 border-current opacity-90", colors.text)}>
+              <div className={cn("text-xs whitespace-pre-wrap break-words leading-relaxed pl-3 pb-4 border-l-2 border-current opacity-90", colors.text)}>
                 {thinking}
               </div>
             </details>
@@ -364,6 +364,7 @@ function exportSessionToMarkdown(messages: Message[], sessionId: string): string
 }
 
 export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
+  // Session history component
   const needsAuth = useAppStore((state) => state.needsAuth);
   const { data: messages, isLoading } = useSessionHistory({ sessionId, enabled: !needsAuth });
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -521,7 +522,7 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
       <ScrollArea className="flex-1 w-full max-w-full min-w-0 overflow-x-hidden">
         <div
           ref={scrollRef}
-          className="w-full max-w-full min-w-0 box-border p-4 pr-16 pb-24 sm:pr-4 sm:pb-6 space-y-6 overflow-x-hidden"
+          className="w-full max-w-full min-w-0 box-border p-4 pb-6 md:pr-16 md:pb-24 space-y-6 overflow-x-hidden"
         >
           {messages.map((message, index) => (
             <MessageBubble key={index} message={message} />

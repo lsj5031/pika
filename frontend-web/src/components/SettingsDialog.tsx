@@ -52,12 +52,19 @@ function useIsMobile() {
 
 interface SettingsDialogProps {
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function SettingsDialog({ trigger }: SettingsDialogProps) {
+export function SettingsDialog({ trigger, open: controlledOpen, onOpenChange: setControlledOpen }: SettingsDialogProps) {
   const needsAuth = useAppStore((state) => state.needsAuth);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const isMobile = useIsMobile();
+  
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? setControlledOpen! : setInternalOpen;
+
   const { data: settings, isLoading } = usePiSettings(!needsAuth);
   const updateSettingsMutation = useUpdatePiSettings();
 
