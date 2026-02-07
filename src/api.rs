@@ -958,6 +958,78 @@ pub async fn stop_session(
     }))
 }
 
+/// POST /api/sessions/:id/cycle-thinking-level - cycle thinking level on the running process
+pub async fn cycle_thinking_level(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let mut process_manager = state.process_manager.lock().await;
+
+    let process_id = process_manager
+        .get_process_id_for_session(&session_id)
+        .ok_or_else(|| ErrorResponse {
+            error: "NOT_RUNNING".to_string(),
+            message: format!("Session '{}' has no running process", session_id),
+        })?;
+
+    process_manager
+        .send_command(
+            &process_id,
+            serde_json::json!({ "type": "cycle_thinking_level" }),
+        )
+        .await
+        .map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to cycle thinking level: {}", e),
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "status": "ok",
+        "session_id": session_id,
+    })))
+}
+
+/// POST /api/sessions/:id/set-thinking-level - set thinking level on the running process
+pub async fn set_thinking_level(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(req): Json<SetThinkingLevelRequest>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let mut process_manager = state.process_manager.lock().await;
+
+    let process_id = process_manager
+        .get_process_id_for_session(&session_id)
+        .ok_or_else(|| ErrorResponse {
+            error: "NOT_RUNNING".to_string(),
+            message: format!("Session '{}' has no running process", session_id),
+        })?;
+
+    process_manager
+        .send_command(
+            &process_id,
+            serde_json::json!({
+                "type": "set_thinking_level",
+                "level": req.level,
+            }),
+        )
+        .await
+        .map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to set thinking level: {}", e),
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "status": "ok",
+        "session_id": session_id,
+        "level": req.level,
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetThinkingLevelRequest {
+    pub level: String,
+}
+
 /// Request to create a new session in a project
 #[derive(Debug, Deserialize)]
 pub struct CreateSessionInProjectRequest {
@@ -1166,6 +1238,14 @@ pub fn create_api_router() -> Router<AppState> {
         .route("/api/sessions/{id}/status", get(get_session_status))
         .route("/api/sessions/{id}/start", post(start_session))
         .route("/api/sessions/{id}/stop", post(stop_session))
+        .route(
+            "/api/sessions/{id}/cycle-thinking-level",
+            post(cycle_thinking_level),
+        )
+        .route(
+            "/api/sessions/{id}/set-thinking-level",
+            post(set_thinking_level),
+        )
         .route(
             "/api/settings",
             get(get_pi_settings).post(update_pi_settings),

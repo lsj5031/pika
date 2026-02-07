@@ -13,6 +13,7 @@ interface AppState {
   lastProjectId: string | null; // Track most recently used project
   recentSessionIds: string[]; // NEW: Recently accessed sessions (max 5)
   favoriteSessionIds: string[]; // NEW: Favorite/pinned sessions
+  sessionThinkingLevels: Record<string, string>; // Per-session thinking level
 
   // Actions
   setCurrentSession: (sessionId: string | null) => void;
@@ -27,6 +28,8 @@ interface AppState {
   removeRecentSession: (sessionId: string) => void; // NEW: Remove from recent sessions
   toggleFavoriteSession: (sessionId: string) => void; // NEW: Toggle favorite status
   isFavoriteSession: (sessionId: string) => boolean; // NEW: Check if favorite
+  setSessionThinkingLevel: (sessionId: string, level: string) => void;
+  getSessionThinkingLevel: (sessionId: string) => string | null;
 }
 
 export const useAppStore = create<AppState>()(
@@ -42,6 +45,7 @@ export const useAppStore = create<AppState>()(
       lastProjectId: null,
       recentSessionIds: [],
       favoriteSessionIds: [],
+      sessionThinkingLevels: {},
 
       // Actions
       setCurrentSession: (sessionId) => {
@@ -142,6 +146,14 @@ export const useAppStore = create<AppState>()(
         return get().favoriteSessionIds.includes(sessionId);
       },
 
+      setSessionThinkingLevel: (sessionId, level) =>
+        set((state) => ({
+          sessionThinkingLevels: { ...state.sessionThinkingLevels, [sessionId]: level },
+        })),
+
+      getSessionThinkingLevel: (sessionId) => {
+        return get().sessionThinkingLevels[sessionId] || null;
+      },
     }),
     {
       name: "pika-storage",
@@ -153,6 +165,7 @@ export const useAppStore = create<AppState>()(
         lastProjectId: state.lastProjectId,
         recentSessionIds: state.recentSessionIds,
         favoriteSessionIds: state.favoriteSessionIds,
+        sessionThinkingLevels: state.sessionThinkingLevels,
       }),
     }
   )

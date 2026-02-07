@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { Send, Cpu, X, ImageIcon } from "lucide-react";
+import { Send, Cpu, X, ImageIcon, Brain } from "lucide-react";
 import { cn } from "../lib/utils";
 import { usePiSettings, type PiModel } from "../hooks/usePiSettings";
+import { useThinkingLevel } from "../hooks/useThinkingLevel";
 import { useAppStore } from "../store/appStore";
 import type { ImageUploadRequest } from "../types/api";
 
@@ -34,6 +35,7 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: settings, isLoading: settingsLoading } = usePiSettings(!needsAuth);
+  const { currentLevel: thinkingLevel, cycleLevel: cycleThinkingLevel } = useThinkingLevel(sessionId);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -238,7 +240,7 @@ export function ChatInput({
               : "Type a message..."
           }
           disabled={!sessionId || disabled}
-          className="min-h-[44px] max-h-[200px] resize-none text-base py-2.5 leading-6 flex-1"
+          className="min-h-[44px] max-h-[200px] resize-none text-base py-2.5 leading-6 flex-1 overflow-hidden"
           rows={1}
           id="chat-input"
           data-testid="chat-input"
@@ -271,6 +273,16 @@ export function ChatInput({
               ({providerDisplay})
             </span>
           )}
+          <span className="text-xs text-muted-foreground/50">·</span>
+          <button
+            type="button"
+            onClick={cycleThinkingLevel}
+            className="flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+            title="Click to cycle thinking level"
+          >
+            <Brain className="h-3 w-3" />
+            {thinkingLevel}
+          </button>
         </div>
       )}
     </div>
