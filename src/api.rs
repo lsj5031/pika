@@ -1,21 +1,24 @@
 use axum::{
     Router,
-    extract::{Path, State, Query},
-    http::StatusCode,
+    extract::{ConnectInfo, Path, Query, State},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Json, Response},
     routing::{delete, get, post},
 };
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use crate::AppState;
+use crate::auth::is_request_authenticated;
 use crate::config::ProjectConfig;
 use crate::pi::ImageUpload;
 use crate::sessions::{
     CreateSessionRequest, SessionMessage, build_session_index, create_session,
     get_session_messages_before, get_session_messages_limited, load_user_prompts,
 };
+use crate::{AppState, extract_client_ip};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -23,12 +26,14 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct ApiState {
     pub config: Arc<RwLock<ProjectConfig>>,
+    pub config_path: PathBuf,
 }
 
 impl ApiState {
-    pub fn new(config: ProjectConfig) -> Self {
+    pub fn new(config: ProjectConfig, config_path: PathBuf) -> Self {
         Self {
             config: Arc::new(RwLock::new(config)),
+            config_path,
         }
     }
 }
@@ -157,6 +162,22 @@ pub struct StopSessionResponse {
 pub struct AuthStatusResponse {
     /// Whether auth is enabled
     pub enabled: bool,
+    /// Whether the current request is already authenticated (session cookie)
+    pub authenticated: bool,
+}
+
+/// Login request body
+#[derive(Debug, Deserialize)]
+pub struct LoginRequest {
+    pub username: String,
+    pub password: String,
+}
+
+/// Login response body
+#[derive(Debug, Serialize)]
+pub struct LoginResponse {
+    pub success: bool,
+    pub expires_in_seconds: u64,
 }
 
 /// API error response
@@ -169,8 +190,12 @@ pub struct ErrorResponse {
 impl IntoResponse for ErrorResponse {
     fn into_response(self) -> Response {
         let status = match self.error.as_str() {
-            "NOT_FOUND" => StatusCode::NOT_FOUND,
-            "BAD_REQUEST" => StatusCode::BAD_REQUEST,
+            "NOT_FOUND" | "PROJECT_NOT_FOUND" => StatusCode::NOT_FOUND,
+            "BAD_REQUEST" | "INVALID_PATH" | "PROJECT_EXISTS" | "NOT_RUNNING"
+            | "VALIDATION_ERROR" => StatusCode::BAD_REQUEST,
+            "UNAUTHORIZED" => StatusCode::UNAUTHORIZED,
+            "TOO_MANY_REQUESTS" => StatusCode::TOO_MANY_REQUESTS,
+            "PAYLOAD_TOO_LARGE" => StatusCode::PAYLOAD_TOO_LARGE,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(self)).into_response()
@@ -207,6 +232,50 @@ pub struct SessionsLookupRequest {
 
 const DEFAULT_PAGE_LIMIT: usize = 50;
 const MAX_PAGE_LIMIT: usize = 200;
+
+fn resolve_canonical_path(input_path: &str) -> Result<PathBuf, ErrorResponse> {
+    let expanded_path = if let Some(stripped) = input_path.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            home.join(stripped)
+        } else {
+            PathBuf::from(input_path)
+        }
+    } else {
+        PathBuf::from(input_path)
+    };
+
+    let absolute_path = if expanded_path.is_absolute() {
+        expanded_path
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(&expanded_path)
+    };
+
+    absolute_path.canonicalize().map_err(|_| ErrorResponse {
+        error: "INVALID_PATH".to_string(),
+        message: format!("Cannot canonicalize path: {}", absolute_path.display()),
+    })
+}
+
+async fn enforce_project_root_policy(
+    state: &AppState,
+    candidate_path: &std::path::Path,
+) -> Result<(), ErrorResponse> {
+    let config = state.api_state.config.read().await;
+
+    if config.is_path_allowed(candidate_path) {
+        Ok(())
+    } else {
+        Err(ErrorResponse {
+            error: "INVALID_PATH".to_string(),
+            message: format!(
+                "Path '{}' is outside configured allowed project roots",
+                candidate_path.display()
+            ),
+        })
+    }
+}
 
 async fn find_session(state: &AppState, session_id: &str) -> Option<crate::sessions::SessionInfo> {
     let index = state.session_index.read().await;
@@ -315,14 +384,93 @@ pub async fn get_projects(
     Ok(Json(projects))
 }
 
-/// GET /api/auth/status - returns whether auth is enabled
+/// GET /api/auth/status - returns auth mode and whether request is already authenticated
 pub async fn get_auth_status(
     State(state): State<AppState>,
+    headers: HeaderMap,
 ) -> Result<Json<AuthStatusResponse>, ErrorResponse> {
     let config = state.api_state.config.read().await;
+    let enabled = config.is_auth_enabled();
+    drop(config);
+
+    let authenticated = if enabled {
+        is_request_authenticated(&headers, &state.auth_context)
+    } else {
+        true
+    };
+
     Ok(Json(AuthStatusResponse {
-        enabled: config.is_auth_enabled(),
+        enabled,
+        authenticated,
     }))
+}
+
+/// POST /api/auth/login - validate credentials and issue session cookie
+pub async fn login(
+    State(state): State<AppState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Json(request): Json<LoginRequest>,
+) -> Result<Response, ErrorResponse> {
+    if !state.auth_context.auth_enabled {
+        return Ok(Json(LoginResponse {
+            success: true,
+            expires_in_seconds: state.auth_context.session_cookie.ttl_seconds(),
+        })
+        .into_response());
+    }
+
+    let client_ip = extract_client_ip(
+        &headers,
+        peer_addr,
+        state.trusted_proxy_cidrs.as_ref().as_slice(),
+    );
+    let decision = state.rate_limits.login.check(&client_ip.to_string()).await;
+    if !decision.allowed {
+        return Err(ErrorResponse {
+            error: "TOO_MANY_REQUESTS".to_string(),
+            message: format!(
+                "Too many login attempts. Try again in {}s.",
+                decision.retry_after_seconds
+            ),
+        });
+    }
+
+    if !state
+        .auth_context
+        .credentials
+        .validate(&request.username, &request.password)
+    {
+        return Err(ErrorResponse {
+            error: "UNAUTHORIZED".to_string(),
+            message: "Invalid username or password".to_string(),
+        });
+    }
+
+    let cookie = state
+        .auth_context
+        .session_cookie
+        .issue_session_cookie(&request.username);
+
+    Ok((
+        [(header::SET_COOKIE, cookie)],
+        Json(LoginResponse {
+            success: true,
+            expires_in_seconds: state.auth_context.session_cookie.ttl_seconds(),
+        }),
+    )
+        .into_response())
+}
+
+/// POST /api/auth/logout - clear session cookie
+pub async fn logout(State(state): State<AppState>) -> Result<Response, ErrorResponse> {
+    let clear_cookie = state.auth_context.session_cookie.clear_session_cookie();
+
+    Ok((
+        [(header::SET_COOKIE, clear_cookie)],
+        Json(serde_json::json!({ "success": true })),
+    )
+        .into_response())
 }
 
 /// Request to add a new project
@@ -348,53 +496,38 @@ pub async fn add_project(
     State(state): State<AppState>,
     Json(request): Json<AddProjectRequest>,
 ) -> Result<Json<AddProjectResponse>, ErrorResponse> {
-    // Expand ~ to home directory
-    let expanded_path = if request.path.starts_with("~/") {
-        if let Some(home) = dirs::home_dir() {
-            home.join(&request.path[2..])
-        } else {
-            PathBuf::from(&request.path)
-        }
-    } else {
-        PathBuf::from(&request.path)
-    };
-
-    // Convert to absolute path
-    let absolute_path = if expanded_path.is_absolute() {
-        expanded_path
-    } else {
-        std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(&expanded_path)
-    };
+    let canonical_path = resolve_canonical_path(&request.path)?;
 
     // Validate path exists
-    if !absolute_path.exists() {
+    if !canonical_path.exists() {
         return Err(ErrorResponse {
             error: "INVALID_PATH".to_string(),
-            message: format!("Path does not exist: {}", absolute_path.display()),
+            message: format!("Path does not exist: {}", canonical_path.display()),
         });
     }
 
-    let project_id = project_id_from_path(&absolute_path);
+    enforce_project_root_policy(&state, &canonical_path).await?;
+
+    let project_id = project_id_from_path(&canonical_path);
 
     // Update config
+    let config_path = state.api_state.config_path.clone();
     {
         let mut config = state.api_state.config.write().await;
 
         // Check if project already exists
-        if config.project_root_paths.contains(&absolute_path) {
+        if config.project_root_paths.contains(&canonical_path) {
             return Err(ErrorResponse {
                 error: "PROJECT_EXISTS".to_string(),
-                message: format!("Project already exists: {}", absolute_path.display()),
+                message: format!("Project already exists: {}", canonical_path.display()),
             });
         }
 
         // Add project
-        config.project_root_paths.push(absolute_path.clone());
+        config.project_root_paths.push(canonical_path.clone());
 
         // Save to config file
-        if let Err(e) = config.to_file("config.toml") {
+        if let Err(e) = config.to_file(&config_path) {
             return Err(ErrorResponse {
                 error: "CONFIG_SAVE_FAILED".to_string(),
                 message: format!("Failed to save config: {}", e),
@@ -409,8 +542,8 @@ pub async fn add_project(
 
     Ok(Json(AddProjectResponse {
         id: project_id,
-        name: project_name_from_path(&absolute_path),
-        path: absolute_path,
+        name: project_name_from_path(&canonical_path),
+        path: canonical_path,
     }))
 }
 
@@ -420,6 +553,7 @@ pub async fn remove_project(
     Path(project_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
     // Update config
+    let config_path = state.api_state.config_path.clone();
     {
         let mut config = state.api_state.config.write().await;
 
@@ -437,7 +571,7 @@ pub async fn remove_project(
         }
 
         // Save to config file
-        if let Err(e) = config.to_file("config.toml") {
+        if let Err(e) = config.to_file(&config_path) {
             return Err(ErrorResponse {
                 error: "CONFIG_SAVE_FAILED".to_string(),
                 message: format!("Failed to save config: {}", e),
@@ -728,7 +862,11 @@ pub async fn get_session_messages_paged(
     let stored_prompts = load_user_prompts(&session.id, &session.project_path)
         .into_iter()
         .filter(|prompt| match query.before.as_deref() {
-            Some(before) => prompt.timestamp.as_deref().map(|ts| ts < before).unwrap_or(false),
+            Some(before) => prompt
+                .timestamp
+                .as_deref()
+                .map(|ts| ts < before)
+                .unwrap_or(false),
             None => true,
         })
         .collect::<Vec<_>>();
@@ -768,11 +906,92 @@ pub async fn send_prompt_to_session(
         }
     };
 
+    if req.prompt.trim().is_empty() {
+        return Err(ErrorResponse {
+            error: "VALIDATION_ERROR".to_string(),
+            message: "Prompt must not be empty".to_string(),
+        });
+    }
+
+    let config = state.api_state.config.read().await;
+    if req.prompt.chars().count() > config.max_prompt_chars {
+        return Err(ErrorResponse {
+            error: "PAYLOAD_TOO_LARGE".to_string(),
+            message: format!(
+                "Prompt exceeds maximum length of {} characters",
+                config.max_prompt_chars
+            ),
+        });
+    }
+
+    let request_images: &[ImageAttachment] = req.images.as_deref().unwrap_or(&[]);
+    if request_images.len() > config.max_images_per_prompt {
+        return Err(ErrorResponse {
+            error: "VALIDATION_ERROR".to_string(),
+            message: format!(
+                "Too many images: {} (max {})",
+                request_images.len(),
+                config.max_images_per_prompt
+            ),
+        });
+    }
+
+    let allowed_mime_types: HashSet<String> = config
+        .allowed_image_mime_types
+        .iter()
+        .map(|mime| mime.to_lowercase())
+        .collect();
+
+    let max_image_bytes = config.max_image_bytes;
+    let max_total_image_bytes = config.max_total_image_bytes;
+    drop(config);
+
+    let mut decoded_image_sizes = Vec::with_capacity(request_images.len());
+    let mut total_decoded_bytes = 0usize;
+
+    for image in request_images {
+        let content_type = image.content_type.to_lowercase();
+        if !allowed_mime_types.contains(&content_type) {
+            return Err(ErrorResponse {
+                error: "VALIDATION_ERROR".to_string(),
+                message: format!("Unsupported image MIME type: {}", image.content_type),
+            });
+        }
+
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&image.data)
+            .map_err(|_| ErrorResponse {
+                error: "VALIDATION_ERROR".to_string(),
+                message: format!("Image '{}' has invalid base64 payload", image.filename),
+            })?;
+
+        let decoded_len = decoded.len();
+        if decoded_len > max_image_bytes {
+            return Err(ErrorResponse {
+                error: "PAYLOAD_TOO_LARGE".to_string(),
+                message: format!(
+                    "Image '{}' exceeds per-image size limit of {} bytes",
+                    image.filename, max_image_bytes
+                ),
+            });
+        }
+
+        total_decoded_bytes = total_decoded_bytes.saturating_add(decoded_len);
+        if total_decoded_bytes > max_total_image_bytes {
+            return Err(ErrorResponse {
+                error: "PAYLOAD_TOO_LARGE".to_string(),
+                message: format!(
+                    "Total image payload exceeds limit of {} bytes",
+                    max_total_image_bytes
+                ),
+            });
+        }
+
+        decoded_image_sizes.push(decoded_len);
+    }
+
     // Convert images to the format expected by pi-coding-agent
-    let images_to_send: Vec<ImageUpload> = req
-        .images
-        .as_ref()
-        .map_or(&Vec::new(), |v| v)
+    let images_to_send: Vec<ImageUpload> = request_images
         .iter()
         .map(|img| ImageUpload {
             filename: img.filename.clone(),
@@ -808,24 +1027,15 @@ pub async fn send_prompt_to_session(
         })?;
 
     // Store the user prompt with image metadata for later retrieval
-    let images_to_store: Vec<crate::sessions::ImageAttachmentStored> = req
-        .images
-        .as_ref()
-        .map_or(&Vec::new(), |v| v)
+    let images_to_store: Vec<crate::sessions::ImageAttachmentStored> = request_images
         .iter()
-        .map(|img| {
-            let actual_size = base64::engine::general_purpose::STANDARD
-                .decode(&img.data)
-                .map(|decoded| decoded.len())
-                .unwrap_or(img.data.len());
-
-            crate::sessions::ImageAttachmentStored {
-                id: uuid::Uuid::new_v4().to_string(),
-                filename: img.filename.clone(),
-                content_type: img.content_type.clone(),
-                size: actual_size,
-                url: format!("data:{};base64,{}", img.content_type, img.data),
-            }
+        .enumerate()
+        .map(|(index, img)| crate::sessions::ImageAttachmentStored {
+            id: uuid::Uuid::new_v4().to_string(),
+            filename: img.filename.clone(),
+            content_type: img.content_type.clone(),
+            size: decoded_image_sizes.get(index).copied().unwrap_or(0),
+            url: format!("data:{};base64,{}", img.content_type, img.data),
         })
         .collect();
 
@@ -1088,31 +1298,7 @@ pub async fn create_standalone_session(
 ) -> Result<Json<CreateStandaloneSessionResponse>, ErrorResponse> {
     use crate::sessions::{CreateSessionRequest, create_session};
 
-    // Expand ~ to home directory
-    let expanded_path = if request.path.starts_with("~/") {
-        if let Some(home) = dirs::home_dir() {
-            home.join(&request.path[2..])
-        } else {
-            PathBuf::from(&request.path)
-        }
-    } else {
-        PathBuf::from(&request.path)
-    };
-
-    // Convert to absolute path and canonicalize
-    let absolute_path = if expanded_path.is_absolute() {
-        expanded_path
-    } else {
-        std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(&expanded_path)
-    };
-
-    // Canonicalize the path
-    let canonical_path = absolute_path.canonicalize().map_err(|_| ErrorResponse {
-        error: "INVALID_PATH".to_string(),
-        message: format!("Cannot canonicalize path: {}", absolute_path.display()),
-    })?;
+    let canonical_path = resolve_canonical_path(&request.path)?;
 
     // Validate path exists
     if !canonical_path.exists() {
@@ -1121,6 +1307,8 @@ pub async fn create_standalone_session(
             message: format!("Path does not exist: {}", canonical_path.display()),
         });
     }
+
+    enforce_project_root_policy(&state, &canonical_path).await?;
 
     // Create the session
     let create_request = CreateSessionRequest { name: request.name };
@@ -1132,11 +1320,19 @@ pub async fn create_standalone_session(
 
     // Register the folder path in project_root_paths for discoverability
     // This ensures the session shows up in the session list
+    let config_path = state.api_state.config_path.clone();
     {
         let mut config = state.api_state.config.write().await;
         // Only add if not already present
         if !config.project_root_paths.contains(&canonical_path) {
             config.project_root_paths.push(canonical_path.clone());
+
+            if let Err(e) = config.to_file(&config_path) {
+                return Err(ErrorResponse {
+                    error: "CONFIG_SAVE_FAILED".to_string(),
+                    message: format!("Failed to save config: {}", e),
+                });
+            }
         }
     }
 
@@ -1209,10 +1405,17 @@ pub async fn create_session_in_project(
     }))
 }
 
-/// Create the API router with all endpoints
-pub fn create_api_router() -> Router<AppState> {
+/// Public auth router (unprotected endpoints)
+pub fn create_auth_router() -> Router<AppState> {
     Router::new()
         .route("/api/auth/status", get(get_auth_status))
+        .route("/api/auth/login", post(login))
+        .route("/api/auth/logout", post(logout))
+}
+
+/// Create the protected API router with all endpoints
+pub fn create_api_router() -> Router<AppState> {
+    Router::new()
         .route("/api/projects", get(get_projects).post(add_project))
         .route("/api/projects/{id}", delete(remove_project))
         .route("/api/projects/{id}/sessions", get(get_project_sessions))
@@ -1299,7 +1502,10 @@ pub struct UpdatePiSettingsRequest {
     #[serde(rename = "defaultModel", skip_serializing_if = "Option::is_none")]
     pub default_model: Option<String>,
     /// Default thinking level
-    #[serde(rename = "defaultThinkingLevel", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "defaultThinkingLevel",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub default_thinking_level: Option<String>,
     /// Default provider
     #[serde(rename = "defaultProvider", skip_serializing_if = "Option::is_none")]

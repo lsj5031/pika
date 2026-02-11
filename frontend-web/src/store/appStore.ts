@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { hasCredentials } from "../lib/auth";
+import { hasAuthState } from "../lib/auth";
 
 interface AppState {
   // State
@@ -37,7 +37,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       // Initial state
       currentSessionId: null,
-      needsAuth: !hasCredentials(),
+      needsAuth: !hasAuthState(),
       activeSessionIds: new Set<string>(),
       thinkingSessionIds: new Set<string>(),
       unreadSessions: new Set<string>(),
@@ -160,7 +160,6 @@ export const useAppStore = create<AppState>()(
       // Don't persist Sets (they'll be re-synced from WebSocket)
       partialize: (state) => ({
         currentSessionId: state.currentSessionId,
-        needsAuth: state.needsAuth,
         lastSeenMessageCounts: state.lastSeenMessageCounts,
         lastProjectId: state.lastProjectId,
         recentSessionIds: state.recentSessionIds,

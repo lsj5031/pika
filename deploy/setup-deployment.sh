@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo "🚀 Setting up your-domain.example deployment"
 
@@ -8,6 +8,11 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+PIKA_USER="${PIKA_USER:-pika}"
+PIKA_GROUP="${PIKA_GROUP:-pika}"
+PIKA_OPT_DIR="${PIKA_OPT_DIR:-/opt/pika}"
+PIKA_ETC_DIR="${PIKA_ETC_DIR:-/etc/pika}"
 
 # Check if running as root
 if [ "$EUID" -eq 0 ]; then
@@ -30,21 +35,49 @@ cd "$PROJECT_ROOT"
 cargo build --release
 echo -e "${GREEN}✓ Backend built${NC}"
 
-echo -e "${YELLOW}Step 3: Installing cloudflared systemd service...${NC}"
-sudo cp "$SCRIPT_DIR/cloudflared-pi.service" /etc/systemd/system/
-sudo systemctl daemon-reload
-echo -e "${GREEN}✓ Cloudflared service installed${NC}"
+echo -e "${YELLOW}Step 3: Preparing runtime layout (${PIKA_OPT_DIR}, ${PIKA_ETC_DIR})...${NC}"
+if ! id -u "$PIKA_USER" >/dev/null 2>&1; then
+    sudo useradd --system --home /var/lib/pika --create-home --shell /usr/sbin/nologin "$PIKA_USER"
+fi
 
-echo -e "${YELLOW}Step 4: Installing Pika systemd service...${NC}"
+sudo install -d -m 0755 -o "$PIKA_USER" -g "$PIKA_GROUP" \
+    /var/lib/pika "$PIKA_OPT_DIR" "$PIKA_OPT_DIR/target" "$PIKA_OPT_DIR/target/release" "$PIKA_OPT_DIR/frontend-web"
+sudo install -d -m 0750 -o root -g "$PIKA_GROUP" "$PIKA_ETC_DIR"
+
+sudo install -m 0755 -o "$PIKA_USER" -g "$PIKA_GROUP" \
+    "$PROJECT_ROOT/target/release/pika" "$PIKA_OPT_DIR/target/release/pika"
+
+sudo rm -rf "$PIKA_OPT_DIR/frontend-web/dist"
+sudo cp -r "$PROJECT_ROOT/frontend-web/dist" "$PIKA_OPT_DIR/frontend-web/"
+sudo chown -R "$PIKA_USER:$PIKA_GROUP" "$PIKA_OPT_DIR/frontend-web/dist"
+
+if [ ! -f "$PIKA_ETC_DIR/config.toml" ]; then
+    if [ -f "$PROJECT_ROOT/config.toml" ]; then
+        sudo install -m 0640 -o root -g "$PIKA_GROUP" \
+            "$PROJECT_ROOT/config.toml" "$PIKA_ETC_DIR/config.toml"
+    else
+        sudo install -m 0640 -o root -g "$PIKA_GROUP" \
+            "$PROJECT_ROOT/config.toml.example" "$PIKA_ETC_DIR/config.toml"
+    fi
+fi
+
+if [ ! -f "$PIKA_ETC_DIR/pika.env" ]; then
+    sudo install -m 0640 -o root -g "$PIKA_GROUP" /dev/null "$PIKA_ETC_DIR/pika.env"
+fi
+
+echo -e "${GREEN}✓ Runtime artifacts staged${NC}"
+
+echo -e "${YELLOW}Step 4: Installing systemd services...${NC}"
+sudo cp "$SCRIPT_DIR/cloudflared-pi.service" /etc/systemd/system/
 sudo cp "$SCRIPT_DIR/pika.service" /etc/systemd/system/
 sudo systemctl daemon-reload
-echo -e "${GREEN}✓ Pika service installed${NC}"
+sudo systemctl enable cloudflared-pi.service
+sudo systemctl enable pika.service
+echo -e "${GREEN}✓ Services installed${NC}"
 
 echo -e "${YELLOW}Step 5: Starting services...${NC}"
-sudo systemctl enable cloudflared-pi.service
 sudo systemctl start cloudflared-pi.service
-sudo systemctl enable pika.service
-sudo systemctl start pika.service
+sudo systemctl restart pika.service
 echo -e "${GREEN}✓ Services started${NC}"
 
 echo ""
@@ -57,8 +90,7 @@ sudo systemctl status pika.service --no-pager -l
 echo ""
 echo "Your app should now be available at: https://your-domain.example"
 echo ""
-echo "Useful commands:"
-echo "  - View logs: sudo journalctl -u pika -f"
-echo "  - Restart: sudo systemctl restart pika"
-echo "  - Update frontend: cd frontend-web && npm run build && sudo systemctl restart pika"
-echo "  - Update backend: cargo build --release && sudo systemctl restart pika"
+echo "Post-deploy checklist:"
+echo "  1) Edit $PIKA_ETC_DIR/pika.env with AUTH_USERNAME, AUTH_PASSWORD, AUTH_SESSION_SECRET"
+echo "  2) Review $PIKA_ETC_DIR/config.toml project paths and CORS settings"
+echo "  3) Restart service after config changes: sudo systemctl restart pika"

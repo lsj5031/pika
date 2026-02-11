@@ -19,15 +19,15 @@ Pika is your cute AI Coding Companion. A web application for managing multiple P
 - **Project Organization**: Sessions grouped by project folder
 - **Real-time Updates**: WebSocket integration for live status updates
 - **Chat Interface**: Send prompts and view conversation history
-- **Authentication**: Secure API key authentication for Pika
+- **Authentication**: Environment-backed login with signed HttpOnly session cookies (cookie-only protected routes)
 
 ### User Interface
 - **Session List**: View all sessions with status indicators
 - **Session Detail**: Full conversation history with diff viewer
 - **Create Sessions**: Easy wizard for creating new sessions
 - **Project Management**: Add and manage project folders
-- **Settings**: Configure API keys and connection settings
-- **Mobile Responsive**: Optimized for mobile devices (with known overflow issue on <390px screens)
+- **Settings**: Configure model/runtime settings and connection options
+- **Mobile Responsive**: Optimized for mobile devices (including narrow screens)
 
 ### Technical Features
 - **WebSocket Support**: Real-time session status updates
@@ -71,11 +71,32 @@ cargo build --release    # Build for production
 For frontend development, create `frontend-web/.env`:
 
 ```
-VITE_API_URL=http://localhost:8080/api
-VITE_WS_URL=ws://localhost:8080/ws
+VITE_API_URL=http://localhost:7847
+VITE_WS_URL=ws://localhost:7847/ws
 ```
 
-The backend serves API at `http://localhost:8080/api` and WebSocket at `ws://localhost:8080/ws`.
+For backend auth/security, configure environment variables (especially in production):
+
+```bash
+AUTH_USERNAME=admin
+AUTH_PASSWORD=change-me
+AUTH_SESSION_SECRET=32+bytes-random-secret
+BIND_ADDRESS=127.0.0.1
+# Optional overrides:
+# CORS_ALLOWED_ORIGINS=https://your-domain.example
+# TRUSTED_PROXY_CIDRS=127.0.0.1/32
+# ALLOW_INSECURE_REMOTE=false
+# ALLOWED_PROJECT_ROOTS=/srv/projects:/opt/work
+```
+
+Notes:
+- Credentials are environment-only (not read from `config.toml`).
+- Protected API/WS routes require a valid signed session cookie (no Basic Auth fallback).
+- Session cookies default to `Secure=true` (set `session_cookie_secure=false` only for local HTTP dev).
+- `AUTH_SESSION_SECRET` should be at least 32 bytes.
+- Default bind is localhost (`127.0.0.1`).
+- Remote bind without auth is blocked unless explicitly overridden.
+- HSTS is configured at Cloudflare edge (see `docs/DEPLOYMENT.md`).
 
 ## Deployment
 
@@ -90,8 +111,9 @@ make deploy-user   # Build and deploy with user systemd services (no sudo)
 
 This will:
 1. Build frontend and backend
-2. Install systemd services
-3. Start both tunnel and backend services
+2. Stage runtime files under `/opt/pika` and `/etc/pika`
+3. Install systemd services
+4. Start/restart tunnel and backend services
 
 ### Building for Production
 
@@ -117,6 +139,7 @@ make dev-frontend   # Start frontend dev server
 make dev-backend    # Start backend with hot reload
 make deploy         # Deploy to production (requires sudo)
 make deploy-user    # Deploy using user systemd services (no sudo)
+make stage-runtime  # Stage runtime files under /opt/pika + /etc/pika
 make install-service # Install systemd services
 make install-service-user # Install user systemd services (no sudo)
 make restart-service # Restart services
@@ -172,7 +195,7 @@ pika/
 │   ├── src/
 │   │   ├── components/    # React components
 │   │   │   ├── AppHeader.tsx       # Header with settings & status
-│   │   │   ├── AuthPrompt.tsx      # API key input
+│   │   │   ├── AuthPrompt.tsx      # Login prompt
 │   │   │   ├── ChatInput.tsx       # Chat input component
 │   │   │   ├── DiffViewer.tsx      # Code diff viewer
 │   │   │   ├── NewSessionDialog.tsx # Create session wizard

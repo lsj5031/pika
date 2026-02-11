@@ -1,63 +1,25 @@
-// Authentication utilities for localStorage and credential management
+// In-memory auth session helpers.
+// No credentials are persisted to browser storage.
 
-const AUTH_KEY = "pika-auth";
+let authenticatedInMemory = false;
 
-export interface AuthCredentials {
-  username: string;
-  password: string;
+/**
+ * Mark auth as established for the current tab lifetime.
+ */
+export function markAuthenticated(): void {
+  authenticatedInMemory = true;
 }
 
 /**
- * Store auth credentials in localStorage
+ * Clear in-memory auth state.
  */
-export function storeCredentials(credentials: AuthCredentials): void {
-  localStorage.setItem(AUTH_KEY, JSON.stringify(credentials));
+export function clearAuthState(): void {
+  authenticatedInMemory = false;
 }
 
 /**
- * Retrieve auth credentials from localStorage
+ * Check whether this tab has authenticated in current runtime.
  */
-export function getCredentials(): AuthCredentials | null {
-  const stored = localStorage.getItem(AUTH_KEY);
-  if (!stored) return null;
-
-  try {
-    const parsed = JSON.parse(stored) as AuthCredentials;
-    if (parsed.username && parsed.password) {
-      return parsed;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Clear stored auth credentials
- */
-export function clearCredentials(): void {
-  localStorage.removeItem(AUTH_KEY);
-}
-
-/**
- * Check if credentials are stored
- */
-export function hasCredentials(): boolean {
-  return getCredentials() !== null;
-}
-
-/**
- * Encode credentials to Base64 for Basic Auth header
- */
-export function encodeBasicAuth(credentials: AuthCredentials): string {
-  const combined = `${credentials.username}:${credentials.password}`;
-  return btoa(combined);
-}
-
-/**
- * Get the Authorization header value for Basic Auth
- */
-export function getAuthHeader(credentials: AuthCredentials | null): string | null {
-  if (!credentials) return null;
-  return `Basic ${encodeBasicAuth(credentials)}`;
+export function hasAuthState(): boolean {
+  return authenticatedInMemory;
 }

@@ -14,6 +14,8 @@ import { usePerformanceMonitor } from "./hooks/usePerformanceMonitor";
 import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AUTH_ERROR_EVENT } from "./lib/api";
+import { clearAuthState, markAuthenticated } from "./lib/auth";
+import { config } from "./config/env";
 import type { WSEvent, Message } from "./types";
 
 // Lazy load heavy components
@@ -91,6 +93,7 @@ function App() {
   // Listen for auth error events
   useEffect(() => {
     const handleAuthError = () => {
+      clearAuthState();
       setNeedsAuth(true);
     };
 
@@ -116,21 +119,38 @@ function App() {
 
   // Handle successful authentication
   const handleAuthenticated = useCallback(() => {
+    markAuthenticated();
     setNeedsAuth(false);
     setAuthKey((k) => k + 1); // Force refresh
-    // Invalidate all queries to refetch with new credentials
+    // Invalidate all queries to refetch after authentication
     queryClient.invalidateQueries();
   }, [queryClient, setNeedsAuth]);
 
-  // Check server auth status on load to avoid showing auth prompt when disabled
+  // Check auth status on load so valid session cookies skip the login prompt.
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const response = await fetch("/api/auth/status");
+        const response = await fetch(`${config.API_URL}/api/auth/status`, {
+          credentials: "include",
+        });
         if (!response.ok) return;
-        const data = (await response.json()) as { enabled: boolean };
+
+        const data = (await response.json()) as {
+          enabled: boolean;
+          authenticated: boolean;
+        };
+
         if (!data.enabled) {
           setNeedsAuth(false);
+          return;
+        }
+
+        if (data.authenticated) {
+          markAuthenticated();
+          setNeedsAuth(false);
+        } else {
+          clearAuthState();
+          setNeedsAuth(true);
         }
       } catch {
         // Ignore network errors; auth prompt will show if needed.
