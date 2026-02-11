@@ -75,6 +75,43 @@ jobs:
       - name: Build release
         run: cargo build --release --verbose
 
+  security-checks:
+    name: Security Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Cargo dependency audit
+        run: cargo audit
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend-web/package-lock.json
+
+      - name: Install production frontend dependencies
+        run: npm ci --omit=dev
+        working-directory: ./frontend-web
+
+      - name: NPM production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: ./frontend-web
+
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest

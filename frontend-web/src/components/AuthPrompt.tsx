@@ -11,7 +11,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Lock } from "lucide-react";
-import { storeCredentials } from "../lib/auth";
+import { markAuthenticated } from "../lib/auth";
 import { config } from "../config/env";
 
 interface AuthPromptProps {
@@ -35,28 +35,30 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
         setError(null);
 
         try {
-            // Test credentials by making a request to the API
-            const encoded = btoa(`${username}:${password}`);
-            const response = await fetch(`${config.API_URL}/api/projects`, {
+            const response = await fetch(`${config.API_URL}/api/auth/login`, {
+                method: "POST",
                 headers: {
-                    Authorization: `Basic ${encoded}`,
+                    "Content-Type": "application/json",
                 },
+                credentials: "include",
+                body: JSON.stringify({
+                    username: username.trim(),
+                    password,
+                }),
             });
 
             if (response.ok) {
-                // Credentials valid - store them
-                storeCredentials({ username, password });
+                markAuthenticated();
                 onAuthenticated();
             } else if (response.status === 401) {
                 setError("Invalid username or password");
+            } else if (response.status === 429) {
+                setError("Too many attempts. Please try again shortly.");
             } else {
                 setError(`Authentication failed: ${response.statusText}`);
             }
         } catch {
-            // Network error - might mean server doesn't have auth enabled
-            // Store credentials anyway and let the user proceed
-            storeCredentials({ username, password });
-            onAuthenticated();
+            setError("Unable to reach server. Check your connection and try again.");
         } finally {
             setIsLoading(false);
         }
@@ -81,7 +83,7 @@ export function AuthPrompt({ open, onAuthenticated }: AuthPromptProps) {
                         <span>Authentication Required</span>
                     </DialogTitle>
                     <DialogDescription className="text-muted-foreground">
-                        Please enter your credentials to access Pika.
+                        Please sign in to access Pika.
                     </DialogDescription>
                 </DialogHeader>
 

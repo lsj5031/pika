@@ -4,16 +4,32 @@ After=network.target cloudflared-pi.service
 
 [Service]
 Type=simple
+# Run under the primary operator account so project roots and ~/.pi are accessible.
 User=leo
-WorkingDirectory=/home/leo/code/pi-agent-manager
-ExecStart=/home/leo/code/pi-agent-manager/target/release/pika
+# Keep group access to /etc/pika/*.toml and /etc/pika/pika.env (root:pika, 0640).
+Group=pika
+WorkingDirectory=/opt/pika
+ExecStart=/opt/pika/target/release/pika --config /etc/pika/config.toml
 Restart=always
 RestartSec=5
 Environment=PORT=7847
+EnvironmentFile=-/etc/pika/pika.env
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
-# Hardening
+# Security hardening (loosened to support development under /home/leo)
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=false
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ReadWritePaths=/var/lib/pika /run/pika
+StateDirectory=pika
+RuntimeDirectory=pika
 
 [Install]
 WantedBy=multi-user.target
