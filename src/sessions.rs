@@ -1,4 +1,5 @@
 use crate::config::ProjectConfig;
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
@@ -6,7 +7,6 @@ use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Read as _, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use futures::future::join_all;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use uuid::Uuid;
 
@@ -92,10 +92,10 @@ impl SessionIndex {
             .sessions_by_id
             .values()
             .filter(|session| {
-                if let Some(project_path) = project_path {
-                    if &session.project_path != project_path {
-                        return false;
-                    }
+                if let Some(project_path) = project_path
+                    && &session.project_path != project_path
+                {
+                    return false;
                 }
 
                 if let Some(ref q) = query_lower {
@@ -114,7 +114,7 @@ impl SessionIndex {
             })
             .collect();
 
-        sessions.sort_by(|a, b| compare_sessions(*a, *b));
+        sessions.sort_by(|a, b| compare_sessions(a, b));
         sessions.into_iter().cloned().collect()
     }
 
@@ -143,9 +143,7 @@ impl SessionIndex {
         let has_more = filtered.len() > limit;
         let sessions: Vec<SessionInfo> = filtered.into_iter().take(limit).collect();
         let next_cursor = if has_more {
-            sessions
-                .last()
-                .map(|session| build_cursor(session))
+            sessions.last().map(build_cursor)
         } else {
             None
         };
@@ -409,10 +407,10 @@ async fn get_last_message_timestamp(session_file: &Path) -> Result<String, Sessi
 
     // Parse each line from the tail, looking for the last valid timestamp
     for line in content.lines() {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
-            if let Some(ts) = json.get("timestamp").and_then(|t| t.as_str()) {
-                last_timestamp = Some(ts.to_string());
-            }
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line)
+            && let Some(ts) = json.get("timestamp").and_then(|t| t.as_str())
+        {
+            last_timestamp = Some(ts.to_string());
         }
     }
 
@@ -443,10 +441,14 @@ async fn scan_project_sessions(
             })?;
 
     let mut jsonl_paths = Vec::new();
-    while let Some(entry) = entries.next_entry().await.map_err(|e| SessionError::IoError {
-        path: sessions_dir.to_path_buf(),
-        source: e,
-    })? {
+    while let Some(entry) = entries
+        .next_entry()
+        .await
+        .map_err(|e| SessionError::IoError {
+            path: sessions_dir.to_path_buf(),
+            source: e,
+        })?
+    {
         let path = entry.path();
         if path.is_dir() {
             continue;
@@ -519,7 +521,11 @@ fn parse_session_message_line(line: &str) -> Option<SessionMessage> {
 
         let text_parts: Vec<String> = content_array
             .iter()
-            .filter_map(|part| part.get("text").and_then(|t| t.as_str()).map(|s| s.to_string()))
+            .filter_map(|part| {
+                part.get("text")
+                    .and_then(|t| t.as_str())
+                    .map(|s| s.to_string())
+            })
             .collect();
 
         let mut all_parts = thinking_parts;
@@ -735,16 +741,18 @@ fn read_last_messages_reverse(
         let read_start = pos.saturating_sub(CHUNK_SIZE);
         let to_read = (pos - read_start) as usize;
 
-        file.seek(SeekFrom::Start(read_start)).map_err(|e| SessionError::IoError {
-            path: path.to_path_buf(),
-            source: e,
-        })?;
+        file.seek(SeekFrom::Start(read_start))
+            .map_err(|e| SessionError::IoError {
+                path: path.to_path_buf(),
+                source: e,
+            })?;
 
         let mut buf = vec![0u8; to_read];
-        file.read_exact(&mut buf).map_err(|e| SessionError::IoError {
-            path: path.to_path_buf(),
-            source: e,
-        })?;
+        file.read_exact(&mut buf)
+            .map_err(|e| SessionError::IoError {
+                path: path.to_path_buf(),
+                source: e,
+            })?;
 
         let chunk_str = String::from_utf8_lossy(&buf);
 
@@ -776,10 +784,11 @@ fn read_last_messages_reverse(
         pos = read_start;
     }
 
-    if messages.len() < limit && !trailing.is_empty() {
-        if let Some(msg) = parse_session_message_line(&trailing) {
-            messages.push(msg);
-        }
+    if messages.len() < limit
+        && !trailing.is_empty()
+        && let Some(msg) = parse_session_message_line(&trailing)
+    {
+        messages.push(msg);
     }
 
     Ok(messages)
@@ -831,8 +840,7 @@ pub fn get_session_messages_before(
     };
 
     if before.is_none() {
-        let mut messages =
-            read_last_messages_reverse(&session_file, limit)?;
+        let mut messages = read_last_messages_reverse(&session_file, limit)?;
         messages.reverse();
         return Ok(messages);
     }
@@ -898,14 +906,11 @@ pub struct StoredUserPromptWithImages {
 
 /// Get the path to the user prompts file for a session
 fn get_user_prompts_path(session_id: &str, project_path: &Path) -> Option<PathBuf> {
-    let pi_sessions_dir = dirs::home_dir()?
-        .join(".pi")
-        .join("agent")
-        .join("sessions");
-    
+    let pi_sessions_dir = dirs::home_dir()?.join(".pi").join("agent").join("sessions");
+
     let encoded_path = encode_project_path(project_path);
     let project_sessions_dir = pi_sessions_dir.join(&encoded_path);
-    
+
     Some(project_sessions_dir.join(format!(".user-prompts-{}.jsonl", session_id)))
 }
 
@@ -954,10 +959,7 @@ pub fn store_user_prompt_with_images(
 }
 
 /// Load stored user prompts for a session
-pub fn load_user_prompts(
-    session_id: &str,
-    project_path: &Path,
-) -> Vec<SessionMessage> {
+pub fn load_user_prompts(session_id: &str, project_path: &Path) -> Vec<SessionMessage> {
     let prompts_path = match get_user_prompts_path(session_id, project_path) {
         Some(p) => p,
         None => return Vec::new(),

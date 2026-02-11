@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { config } from "../config/env";
-import { getCredentials, encodeBasicAuth, clearCredentials } from "../lib/auth";
+import { clearAuthState } from "../lib/auth";
 import { AUTH_ERROR_EVENT } from "../lib/api";
 import type { WSEvent } from "../types";
 
@@ -21,10 +21,8 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
   const onErrorRef = useRef(onError);
   const hasConnectedOnceRef = useRef(false);
   const enabledRef = useRef(enabled);
-  const connectionStatusRef = useRef<ConnectionStatus>(
-    enabled ? "connecting" : "disconnected"
-  );
   const createConnectionRef = useRef<(() => void) | null>(null);
+  const authCheckInFlightRef = useRef(false);
 
   // Keep onMessageRef updated
   useEffect(() => {
@@ -45,30 +43,6 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
     enabled ? "connecting" : "disconnected"
   );
 
-  // Keep ref in sync with state
-  useEffect(() => {
-    connectionStatusRef.current = connectionStatus;
-  }, [connectionStatus]);
-
-  /**
-   * Build WebSocket URL with auth query params
-   * WebSocket doesn't support custom headers, so we use query params for auth
-   */
-  const buildWsUrl = useCallback(() => {
-    const credentials = getCredentials();
-    const baseUrl = config.WS_URL;
-
-    if (credentials) {
-      // Use subprotocol or query param for auth
-      // Query param approach: append encoded credentials
-      const url = new URL(baseUrl);
-      url.searchParams.set("auth", encodeBasicAuth(credentials));
-      return url.toString();
-    }
-
-    return baseUrl;
-  }, []);
-
   // Function to create WebSocket connection
   const createConnection = useCallback(() => {
     if (!enabledRef.current) return;
@@ -88,8 +62,7 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
     setConnectionStatus("connecting");
 
     try {
-      const wsUrl = buildWsUrl();
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(config.WS_URL);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -102,20 +75,12 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
         setConnectionStatus("disconnected");
         wsRef.current = null;
 
-        // Check for auth failure (code 4401 or close reason contains "unauthorized")
-        if (event.code === 4401 || event.reason?.toLowerCase().includes("unauthorized")) {
-          clearCredentials();
+        const triggerAuthFailure = () => {
+          clearAuthState();
           window.dispatchEvent(new CustomEvent(AUTH_ERROR_EVENT));
-          return; // Don't reconnect on auth failure
-        }
+        };
 
-        // Show error on unexpected disconnect if we've connected before
-        if (hasConnectedOnceRef.current && !event.wasClean) {
-          onErrorRef.current?.(event);
-        }
-
-        // Attempt to reconnect with exponential backoff if not explicitly closed
-        if (!event.wasClean && enabledRef.current) {
+        const scheduleReconnect = () => {
           const delay = Math.min(
             1000 * Math.pow(2, reconnectAttemptsRef.current),
             maxReconnectDelay
@@ -125,6 +90,72 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
           reconnectTimeoutRef.current = setTimeout(() => {
             createConnectionRef.current?.();
           }, delay);
+        };
+
+        const checkAuthStatus = async (): Promise<boolean> => {
+          if (authCheckInFlightRef.current) {
+            return false;
+          }
+
+          authCheckInFlightRef.current = true;
+          try {
+            const response = await fetch(`${config.API_URL}/api/auth/status`, {
+              credentials: "include",
+            });
+
+            if (response.status === 401) {
+              triggerAuthFailure();
+              return true;
+            }
+
+            if (!response.ok) {
+              return false;
+            }
+
+            const data = (await response.json()) as {
+              enabled: boolean;
+              authenticated: boolean;
+            };
+
+            if (data.enabled && !data.authenticated) {
+              triggerAuthFailure();
+              return true;
+            }
+          } catch {
+            // Network failures should continue retry behavior.
+          } finally {
+            authCheckInFlightRef.current = false;
+          }
+
+          return false;
+        };
+
+        // Check for explicit auth failure
+        if (event.code === 4401 || event.reason?.toLowerCase().includes("unauthorized")) {
+          triggerAuthFailure();
+          return;
+        }
+
+        // Show error on unexpected disconnect if we've connected before
+        if (hasConnectedOnceRef.current && !event.wasClean) {
+          onErrorRef.current?.(event);
+        }
+
+        // Attempt to reconnect with exponential backoff if not explicitly closed.
+        // For repeated failed handshakes (e.g. browser surfaces 1006), probe auth status.
+        if (!event.wasClean && enabledRef.current) {
+          const shouldProbeAuth = !hasConnectedOnceRef.current || reconnectAttemptsRef.current >= 2;
+
+          if (shouldProbeAuth) {
+            void checkAuthStatus().then((isAuthFailure) => {
+              if (!isAuthFailure && enabledRef.current) {
+                scheduleReconnect();
+              }
+            });
+            return;
+          }
+
+          scheduleReconnect();
         }
       };
 
@@ -144,7 +175,7 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
       console.error("Failed to create WebSocket connection:", error);
       setConnectionStatus("disconnected");
     }
-  }, [buildWsUrl, setConnectionStatus]);
+  }, [setConnectionStatus]);
 
   // Keep ref updated with latest createConnection
   useEffect(() => {
@@ -169,7 +200,6 @@ export function useWebSocket({ onMessage, onError, enabled = true }: UseWebSocke
   // Connect on mount and when enabled changes
   useEffect(() => {
     if (enabled) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       createConnection();
     }
 

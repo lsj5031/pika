@@ -4,17 +4,19 @@
 
 ## Quick Start
 
-Run the setup script to build and deploy everything:
+Use either command:
 
 ```bash
+make deploy
+# or
 ./deploy/setup-deployment.sh
 ```
 
-This will:
-1. Build the frontend (production)
-2. Build the backend (Rust release binary)
-3. Install and start the Cloudflare tunnel service
-4. Install and start the pika service
+Both workflows now:
+1. Build frontend + backend
+2. Create/prepare runtime layout (`/opt/pika`, `/etc/pika`, `/var/lib/pika`)
+3. Stage binary and frontend assets under `/opt/pika`
+4. Install/enable/start `cloudflared-pi` and `pika` systemd services
 
 After setup, your app will be available at: **https://your-domain.example**
 
@@ -25,85 +27,131 @@ After setup, your app will be available at: **https://your-domain.example**
 ### ✅ Production Features
 - **Session Management**: Full CRUD operations for Pika sessions
 - **Real-time Updates**: WebSocket connection for live status
-- **Authentication**: API key configuration via Settings dialog
+- **Authentication**: environment credentials + signed session cookies (cookie-only protected routes)
 - **Project Management**: Add/remove project folders
 - **Chat Interface**: Send prompts and view conversation history
 - **Code Diff Viewer**: View code changes with syntax highlighting
 - **Responsive Design**: Mobile-friendly interface
 - **Error Handling**: Comprehensive error messages and toast notifications
 
-### 🔧 Configuration
-- **Backend Port**: 7847 (configurable via `config.toml`)
-- **Frontend**: Static files served by Rust backend from `frontend-web/dist/`
-- **Tunnel**: Cloudflare Tunnel ID `TUNNEL_ID_REDACTED`
-- **Services**: `pika` and `cloudflared-pi` systemd services
+### ✅ Mobile Layout Status
+- **Mobile Overflow (<390px)**: fixed
+- See `docs/MOBILE_TEST_REPORT.md` for details
 
-### 📱 Known Issues
-- **Mobile Overflow**: Horizontal scroll on devices <390px viewport
-  - Affects ~60% of mobile users
-  - Fix documented in `MOBILE_TEST_REPORT.md`
-  - Quick fix: Change `gap-4` to `gap-2 md:gap-4` in header component
+### 🔧 Runtime Layout
+- **Backend Port**: 7847 (configurable)
+- **Runtime Root**: `/opt/pika`
+- **Backend Binary**: `/opt/pika/target/release/pika`
+- **Frontend Assets**: `/opt/pika/frontend-web/dist/`
+- **Service Config**: `/etc/pika/config.toml`
+- **Service Env File**: `/etc/pika/pika.env`
+- **Services**: `pika` and `cloudflared-pi`
 
 ## Overview
 
 - **Domain**: your-domain.example
 - **Local Port**: 7847
-- **Architecture**: Single Rust backend serves both API and static frontend files
+- **Architecture**: Single Rust backend serves API + static frontend files
 - **Tunnel ID**: TUNNEL_ID_REDACTED
 
-The Rust backend serves:
-- **API endpoints** at `/api/*`
-- **Static frontend files** from `frontend-web/dist/`
-- **WebSocket** at `/ws` for real-time updates
+All traffic goes through Cloudflare Tunnel.
 
-All traffic goes through the Cloudflare tunnel - that's it! No separate worker or deployment needed.
+## Edge Security Headers (HSTS at Cloudflare)
 
-## Setup Steps
+HSTS is enforced at the Cloudflare edge, not by the tunnel ingress config.
 
-### 1. Install Systemd Service (Run as root)
+### Configure HSTS in Cloudflare
 
-```bash
-sudo cp deploy/cloudflared-pi.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable cloudflared-pi.service
-sudo systemctl start cloudflared-pi.service
+1. Open Cloudflare Dashboard → your zone (`liu.nz`)
+2. Go to **SSL/TLS → Edge Certificates**
+3. Enable **Always Use HTTPS**
+4. Enable **HTTP Strict Transport Security (HSTS)** with:
+   - `max-age=31536000`
+   - `includeSubDomains` (only if all subdomains are HTTPS-ready)
+   - `preload` (only when ready for long-lived preload behavior)
+
+Recommended header value:
+
+```text
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 ```
 
-### 2. Verify Tunnel Status
+### Verify
 
 ```bash
-sudo systemctl status cloudflared-pi
+curl -I https://your-domain.example | grep -i strict-transport-security
 ```
 
-### 3. Build the Application
+## Setup Steps (Manual)
+
+### 1) Build Artifacts
 
 ```bash
 make build
 ```
 
-This will:
-- Build the frontend (production)
-- Build the backend (Rust release binary)
-
-### 4. Start the Backend Server
+### 2) Create Service User + Directories
 
 ```bash
-./target/release/pika
+sudo useradd --system --home /var/lib/pika --create-home --shell /usr/sbin/nologin pika
+sudo install -d -m 0755 -o pika -g pika /var/lib/pika /opt/pika /opt/pika/target /opt/pika/target/release /opt/pika/frontend-web
+sudo install -d -m 0750 -o root -g pika /etc/pika
 ```
 
-Or use systemd service (if created):
+### 3) Stage Runtime Artifacts
+
 ```bash
-sudo systemctl start pika
+sudo install -m 0755 -o pika -g pika target/release/pika /opt/pika/target/release/pika
+sudo rm -rf /opt/pika/frontend-web/dist
+sudo cp -r frontend-web/dist /opt/pika/frontend-web/
+sudo chown -R pika:pika /opt/pika/frontend-web/dist
 ```
 
-### 5. Build Frontend (Static Files)
-
-The Rust backend serves static files from `frontend-web/dist/`, so build the frontend:
+Initial config/env bootstrap (only if missing):
 
 ```bash
-cd frontend-web
-npm run build
-cd ..
+if [ ! -f /etc/pika/config.toml ]; then
+  sudo install -m 0640 -o root -g pika config.toml.example /etc/pika/config.toml
+fi
+[ -f /etc/pika/pika.env ] || sudo install -m 0640 -o root -g pika /dev/null /etc/pika/pika.env
+```
+
+### 4) Install Services
+
+```bash
+sudo cp deploy/cloudflared-pi.service /etc/systemd/system/
+sudo cp deploy/pika.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable cloudflared-pi.service
+sudo systemctl enable pika.service
+```
+
+### 5) Start Services
+
+```bash
+sudo systemctl start cloudflared-pi.service
+sudo systemctl restart pika.service
+```
+
+### 6) Configure Environment
+
+Edit `/etc/pika/pika.env` with at least:
+
+```bash
+AUTH_USERNAME=your-user
+AUTH_PASSWORD=your-password
+AUTH_SESSION_SECRET=32+bytes-random-secret
+BIND_ADDRESS=127.0.0.1
+CORS_ALLOWED_ORIGINS=https://your-domain.example
+TRUSTED_PROXY_CIDRS=127.0.0.1/32
+```
+
+`TRUSTED_PROXY_CIDRS=127.0.0.1/32` is recommended for Cloudflare Tunnel on localhost. Without it, login/WS rate limiting can treat all users as the proxy peer IP.
+
+Then restart:
+
+```bash
+sudo systemctl restart pika
 ```
 
 ## Architecture
@@ -111,92 +159,83 @@ cd ..
 ```
 User Browser
     ↓
-pi-ayour-domain.example (Cloudflare)
+your-domain.example (Cloudflare)
     ↓
 Cloudflare Tunnel (TUNNEL_ID_REDACTED)
     ↓
-localhost:7847 (Rust Backend)
-    ↓
+localhost:7847 (Rust backend)
     ├─→ /api/* → API endpoints
-    ├─→ /ws → WebSocket (real-time updates)
-    └─→ /* → Static frontend files (from frontend-web/dist/)
+    ├─→ /ws → WebSocket
+    └─→ /* → Static frontend files (from /opt/pika/frontend-web/dist/)
 ```
 
 ## Configuration Files
 
 - **Tunnel Config**: `~/.cloudflared/config-pi.yml`
-- **Systemd Service**: `/etc/systemd/system/cloudflared-pi.service`
-- **Project Config**: `config.toml` (in project root)
-- **Frontend Env**: `frontend-web/.env`
+- **Tunnel Service**: `/etc/systemd/system/cloudflared-pi.service`
+- **Pika Service**: `/etc/systemd/system/pika.service`
+- **Pika Config**: `/etc/pika/config.toml`
+- **Pika Env**: `/etc/pika/pika.env`
 
-## Management Commands
+## `ProtectHome=true` Notes
 
-### Check Tunnel Status
+`pika.service` uses `ProtectHome=true` and a tight filesystem policy. If project roots are outside default readable paths, add a scoped drop-in override.
+
+Example:
+
 ```bash
-sudo systemctl status cloudflared-pi
+sudo systemctl edit pika
 ```
 
-### Restart Tunnel
-```bash
-sudo systemctl restart cloudflared-pi
+```ini
+[Service]
+BindReadOnlyPaths=/srv/projects
+ReadWritePaths=/var/lib/pika /run/pika /srv/projects/repo-a
 ```
 
-### View Tunnel Logs
-```bash
-sudo journalctl -u cloudflared-pi -f
-```
+Apply changes:
 
-### Update Frontend
 ```bash
-cd frontend-web
-npm run build
-# No deployment needed - Rust backend serves static files directly
-```
-
-### Update Backend
-```bash
-cargo build --release
+sudo systemctl daemon-reload
 sudo systemctl restart pika
 ```
 
-## Environment Variables
+## Management Commands
 
-Frontend (`.env`):
-```
-VITE_API_URL=https://your-domain.example/api
-VITE_WS_URL=wss://your-domain.example/ws
-```
+```bash
+# status
+sudo systemctl status cloudflared-pi --no-pager -l
+sudo systemctl status pika --no-pager -l
 
-Backend will automatically use the tunnel endpoint.
+# logs
+sudo journalctl -u cloudflared-pi -f
+sudo journalctl -u pika -f
+
+# restart
+sudo systemctl restart cloudflared-pi
+sudo systemctl restart pika
+```
 
 ## Troubleshooting
 
 ### Tunnel not working
+
 ```bash
-# Check if cloudflared is running
 sudo systemctl status cloudflared-pi
-
-# Check DNS
 nslookup your-domain.example
-
-# Test local connection
-curl http://localhost:7847
+curl http://localhost:7847/health
 ```
 
 ### Frontend not updating
+
 ```bash
-# Ensure frontend is built
-cd frontend-web
-npm run build
-
-# Check that dist/ directory exists and has files
-ls -la dist/
-
-# Restart backend to pick up new static files
+make frontend
+make stage-runtime
 sudo systemctl restart pika
 ```
 
 ### Frontend not connecting to API
-- Verify the tunnel is running
+
+- Verify tunnel is running
 - Check browser console for CORS errors
-- Ensure `VITE_API_BASE_URL` is set correctly
+- Verify `CORS_ALLOWED_ORIGINS=https://your-domain.example`

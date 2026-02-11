@@ -17,6 +17,8 @@
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@fontsource/kalam": "^5.2.8",
+    "@fontsource/patrick-hand": "^5.2.8",
     "@pierre/diffs": "^1.0.10",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",

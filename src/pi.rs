@@ -261,15 +261,15 @@ impl PiProcess {
         }
     }
 
-    /// Read stderr and log (for debugging)
+    /// Read stderr without logging raw payload content.
     async fn read_stderr(stderr: tokio::process::ChildStderr) {
         use tokio::io::{AsyncBufReadExt, BufReader};
 
         let reader = BufReader::new(stderr);
         let mut lines = reader.lines();
 
-        while let Ok(Some(line)) = lines.next_line().await {
-            eprintln!("pi stderr: {}", line);
+        while let Ok(Some(_line)) = lines.next_line().await {
+            // Intentionally suppress raw stderr content to avoid leaking prompts/secrets.
         }
     }
 }

@@ -1,4 +1,9 @@
-.PHONY: all build frontend-backend frontend backend clean dev-frontend dev-backend run test test-mobile test-install deploy deploy-user install-service install-service-user restart-service restart-service-user status status-user help
+.PHONY: all build frontend-backend frontend backend clean dev-frontend dev-backend run test test-mobile test-install deploy deploy-user stage-runtime install-service install-service-user restart-service restart-service-user status status-user help
+
+PIKA_USER ?= pika
+PIKA_GROUP ?= pika
+PIKA_OPT_DIR ?= /opt/pika
+PIKA_ETC_DIR ?= /etc/pika
 
 # Default target
 all: build
@@ -66,25 +71,65 @@ test-mobile:
 	@echo "Make sure the server is running on port 7847"
 	cd /tmp/pika-test && npx playwright test --project=mobile --headed
 
-# Deploy: Build everything and install systemd services
-deploy: build
-	@echo "🚀 Deploying your-domain.example..."
+# Stage production runtime artifacts under /opt/pika and /etc/pika
+stage-runtime:
+	@echo "📦 Preparing runtime layout..."
+	@if [ ! -f target/release/pika ]; then \
+		echo "❌ Missing backend binary target/release/pika. Run 'make build' first."; \
+		exit 1; \
+	fi
+	@if [ ! -d frontend-web/dist ]; then \
+		echo "❌ Missing frontend build frontend-web/dist. Run 'make build' first."; \
+		exit 1; \
+	fi
+	@if ! id -u $(PIKA_USER) >/dev/null 2>&1; then \
+		echo "Creating service user $(PIKA_USER)..."; \
+		sudo useradd --system --home /var/lib/pika --create-home --shell /usr/sbin/nologin $(PIKA_USER); \
+	fi
+	sudo install -d -m 0755 -o $(PIKA_USER) -g $(PIKA_GROUP) /var/lib/pika $(PIKA_OPT_DIR) $(PIKA_OPT_DIR)/target $(PIKA_OPT_DIR)/target/release $(PIKA_OPT_DIR)/frontend-web
+	sudo install -d -m 0750 -o root -g $(PIKA_GROUP) $(PIKA_ETC_DIR)
+	sudo install -m 0755 -o $(PIKA_USER) -g $(PIKA_GROUP) target/release/pika $(PIKA_OPT_DIR)/target/release/pika
+	sudo rm -rf $(PIKA_OPT_DIR)/frontend-web/dist
+	sudo cp -r frontend-web/dist $(PIKA_OPT_DIR)/frontend-web/
+	sudo chown -R $(PIKA_USER):$(PIKA_GROUP) $(PIKA_OPT_DIR)/frontend-web/dist
+	@if [ ! -f $(PIKA_ETC_DIR)/config.toml ]; then \
+		if [ -f config.toml ]; then \
+			sudo install -m 0640 -o root -g $(PIKA_GROUP) config.toml $(PIKA_ETC_DIR)/config.toml; \
+		else \
+			sudo install -m 0640 -o root -g $(PIKA_GROUP) config.toml.example $(PIKA_ETC_DIR)/config.toml; \
+		fi; \
+	fi
+	@if [ ! -f $(PIKA_ETC_DIR)/pika.env ]; then \
+		sudo install -m 0640 -o root -g $(PIKA_GROUP) /dev/null $(PIKA_ETC_DIR)/pika.env; \
+	fi
+	@echo "✅ Runtime artifacts staged"
+
+# Install systemd services (requires artifacts from stage-runtime)
+install-service: stage-runtime
 	@echo "Installing systemd services (requires sudo)..."
 	sudo cp cloudflared-pi.service /etc/systemd/system/
 	sudo cp pika.service /etc/systemd/system/
 	sudo systemctl daemon-reload
-	@echo "Stopping any existing pika process on port 7847..."
-	-pkill -f pika || true
-	@echo "Waiting for port to be released..."
-	@sleep 1
-	@echo "Enabling and starting services..."
 	sudo systemctl enable cloudflared-pi.service
-	sudo systemctl start cloudflared-pi.service
 	sudo systemctl enable pika.service
-	sudo systemctl start pika.service
-	sudo systemctl enable pika.service
+	@echo "✅ Systemd services installed"
+
+# Restart system services
+restart-service:
+	@echo "Restarting systemd services..."
+	sudo systemctl restart cloudflared-pi.service
 	sudo systemctl restart pika.service
 	@echo "✅ Services restarted"
+
+# Deploy: Build everything, stage runtime artifacts, install and start services
+deploy: build install-service
+	@echo "🚀 Deploying your-domain.example..."
+	@echo "Stopping any existing unmanaged pika process..."
+	-pkill -f "target/release/pika|/opt/pika/target/release/pika" || true
+	@sleep 1
+	sudo systemctl start cloudflared-pi.service
+	sudo systemctl restart pika.service
+	@echo "✅ Deployment complete"
 
 # Deploy without sudo using user-level systemd services
 deploy-user: build
@@ -152,9 +197,10 @@ help:
 	@echo "  make test-install    - Install E2E test dependencies"
 	@echo "  make test            - Run all E2E tests (server must be running)"
 	@echo "  make test-mobile     - Run mobile E2E tests with visible browser"
-	@echo "  make deploy          - Build and deploy to production (your-domain.example)"
+	@echo "  make deploy          - Build, stage runtime layout, and deploy to production"
 	@echo "  make deploy-user     - Build and deploy using user systemd services (no sudo)"
-	@echo "  make install-service - Install systemd services only"
+	@echo "  make stage-runtime   - Stage binary/frontend/config under /opt/pika + /etc/pika"
+	@echo "  make install-service - Install systemd services (expects built artifacts)"
 	@echo "  make install-service-user - Install user systemd services only"
 	@echo "  make restart-service - Restart systemd services"
 	@echo "  make restart-service-user - Restart user systemd services"
