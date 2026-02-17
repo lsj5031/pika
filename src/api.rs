@@ -810,7 +810,7 @@ pub async fn get_session_messages(
     };
 
     // Load stored user prompts that we sent via our API
-    let stored_prompts = load_user_prompts(&session.id, &session.project_path);
+    let stored_prompts = load_user_prompts(&session.id, &session.project_path).await;
 
     let requested_limit = query.limit;
     if let Some(0) = requested_limit {
@@ -860,6 +860,7 @@ pub async fn get_session_messages_paged(
         .min(MAX_PAGE_LIMIT);
 
     let stored_prompts = load_user_prompts(&session.id, &session.project_path)
+        .await
         .into_iter()
         .filter(|prompt| match query.before.as_deref() {
             Some(before) => prompt
@@ -1048,7 +1049,9 @@ pub async fn send_prompt_to_session(
         } else {
             Some(images_to_store)
         },
-    ) {
+    )
+    .await
+    {
         eprintln!("Failed to store user prompt: {}", e);
     }
 
@@ -1519,7 +1522,6 @@ pub struct UpdatePiSettingsRequest {
 pub async fn get_pi_settings(
     State(_state): State<AppState>,
 ) -> Result<Json<PiSettingsResponse>, ErrorResponse> {
-    use std::fs;
     use std::path::PathBuf;
 
     let pi_agent_dir = dirs::home_dir()
@@ -1531,8 +1533,9 @@ pub async fn get_pi_settings(
     let models_path = pi_agent_dir.join("models.json");
 
     // Read settings
-    let settings = if settings_path.exists() {
-        fs::read_to_string(&settings_path)
+    let settings = if tokio::fs::try_exists(&settings_path).await.unwrap_or(false) {
+        tokio::fs::read_to_string(&settings_path)
+            .await
             .ok()
             .and_then(|content| serde_json::from_str(&content).ok())
             .unwrap_or(serde_json::json!({}))
@@ -1541,8 +1544,9 @@ pub async fn get_pi_settings(
     };
 
     // Read models
-    let models = if models_path.exists() {
-        fs::read_to_string(&models_path)
+    let models = if tokio::fs::try_exists(&models_path).await.unwrap_or(false) {
+        tokio::fs::read_to_string(&models_path)
+            .await
             .ok()
             .and_then(|content| serde_json::from_str(&content).ok())
             .and_then(|value: serde_json::Value| {
@@ -1616,7 +1620,6 @@ pub async fn update_pi_settings(
     State(_state): State<AppState>,
     Json(request): Json<UpdatePiSettingsRequest>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    use std::fs;
     use std::path::PathBuf;
 
     let pi_agent_dir = dirs::home_dir()
@@ -1627,8 +1630,9 @@ pub async fn update_pi_settings(
     let settings_path = pi_agent_dir.join("settings.json");
 
     // Read existing settings
-    let mut settings = if settings_path.exists() {
-        fs::read_to_string(&settings_path)
+    let mut settings = if tokio::fs::try_exists(&settings_path).await.unwrap_or(false) {
+        tokio::fs::read_to_string(&settings_path)
+            .await
             .ok()
             .and_then(|content| serde_json::from_str(&content).ok())
             .unwrap_or(serde_json::json!({}))
@@ -1652,17 +1656,18 @@ pub async fn update_pi_settings(
 
     // Ensure directory exists
     if let Some(parent) = settings_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| ErrorResponse {
+        tokio::fs::create_dir_all(parent).await.map_err(|e| ErrorResponse {
             error: "INTERNAL_ERROR".to_string(),
             message: format!("Failed to create settings directory: {}", e),
         })?;
     }
 
     // Write settings
-    fs::write(
+    tokio::fs::write(
         &settings_path,
         serde_json::to_string_pretty(&settings).unwrap(),
     )
+    .await
     .map_err(|e| ErrorResponse {
         error: "INTERNAL_ERROR".to_string(),
         message: format!("Failed to write settings: {}", e),
