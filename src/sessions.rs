@@ -3,8 +3,8 @@ use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
-use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Read as _, Seek, SeekFrom, Write};
+use std::fs;
+use std::io::{BufRead, BufReader, Read as _, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
@@ -915,7 +915,7 @@ fn get_user_prompts_path(session_id: &str, project_path: &Path) -> Option<PathBu
 }
 
 /// Store a user prompt with optional image attachments for later retrieval
-pub fn store_user_prompt_with_images(
+pub async fn store_user_prompt_with_images(
     session_id: &str,
     project_path: &Path,
     prompt: &str,
@@ -927,10 +927,12 @@ pub fn store_user_prompt_with_images(
     };
 
     if let Some(parent) = prompts_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| SessionError::IoError {
-            path: parent.to_path_buf(),
-            source: e,
-        })?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| SessionError::IoError {
+                path: parent.to_path_buf(),
+                source: e,
+            })?;
     }
 
     let stored_prompt = StoredUserPromptWithImages {
@@ -941,25 +943,37 @@ pub fn store_user_prompt_with_images(
 
     let line = serde_json::to_string(&stored_prompt).unwrap_or_default();
 
-    let mut file = OpenOptions::new()
+    let mut file = tokio::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&prompts_path)
+        .await
         .map_err(|e| SessionError::IoError {
             path: prompts_path.clone(),
             source: e,
         })?;
 
-    writeln!(file, "{}", line).map_err(|e| SessionError::IoError {
-        path: prompts_path,
-        source: e,
-    })?;
+    use tokio::io::AsyncWriteExt;
+    file.write_all(format!("{}\n", line).as_bytes())
+        .await
+        .map_err(|e| SessionError::IoError {
+            path: prompts_path,
+            source: e,
+        })?;
 
     Ok(())
 }
 
 /// Load stored user prompts for a session
-pub fn load_user_prompts(session_id: &str, project_path: &Path) -> Vec<SessionMessage> {
+pub async fn load_user_prompts(session_id: &str, project_path: &Path) -> Vec<SessionMessage> {
+    let session_id = session_id.to_string();
+    let project_path = project_path.to_path_buf();
+    tokio::task::spawn_blocking(move || load_user_prompts_sync(&session_id, &project_path))
+        .await
+        .unwrap_or_default()
+}
+
+fn load_user_prompts_sync(session_id: &str, project_path: &Path) -> Vec<SessionMessage> {
     let prompts_path = match get_user_prompts_path(session_id, project_path) {
         Some(p) => p,
         None => return Vec::new(),
