@@ -74,6 +74,8 @@ function App() {
   } = useCommandPalette();
 
   const { data: sessions } = useSessions(!needsAuth, { resolveNames: commandPaletteOpen });
+  const sessionsRef = useRef(sessions);
+  useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
   const sendPromptMutation = useSendPrompt();
   const stopSessionMutation = useStopSession();
   const queryClient = useQueryClient();
@@ -210,6 +212,23 @@ function App() {
           // Mark as unread if not current session
           if (currentSessionId !== event.data.session_id) {
             useAppStore.getState().incrementUnreadCount(event.data.session_id);
+
+            if (document.hidden) {
+              const sessionName = sessionsRef.current?.find(s => s.id === event.data.session_id)?.name;
+              const displayName = sessionName && !/^\d{4}-\d{2}-\d{2}T/.test(sessionName)
+                ? sessionName
+                : `Session ${event.data.session_id.substring(0, 8)}`;
+
+              if (Notification.permission === "granted") {
+                new Notification(`Pika — ${displayName}`, {
+                  body: event.data.content.substring(0, 100),
+                  tag: `pika-${event.data.session_id}`,
+                  icon: "/logo.png",
+                });
+              } else if (Notification.permission === "default") {
+                Notification.requestPermission();
+              }
+            }
           }
           // Clear thinking state when message is added
           useAppStore.getState().setThinkingSession(event.data.session_id, false);
@@ -282,8 +301,26 @@ function App() {
         prompt: content,
         images,
       });
+
+      // Optimistic: immediately show user message in chat
+      const optimisticMessage: Message = {
+        role: "user",
+        content,
+        timestamp: new Date().toISOString(),
+      };
+      queryClient.setQueryData<InfiniteData<Message[]>>(
+        ["sessions", currentSessionId, "messages", "paged"],
+        (old) => {
+          if (!old) {
+            return { pages: [[optimisticMessage]], pageParams: [undefined] };
+          }
+          const pages = [...old.pages];
+          pages[0] = [...pages[0], optimisticMessage];
+          return { ...old, pages };
+        }
+      );
     },
-    [currentSessionId, sendPromptMutation]
+    [currentSessionId, sendPromptMutation, queryClient]
   );
 
   // Handle stopping the current session

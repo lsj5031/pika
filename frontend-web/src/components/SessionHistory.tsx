@@ -1,17 +1,17 @@
-import { useEffect, useRef, useState, memo, useCallback, useMemo } from "react";
-import ReactMarkdown from "react-markdown";
+import { useEffect, useRef, useState, memo, useCallback, useMemo, lazy, Suspense } from "react";
 import { useSessionHistory } from "../hooks/useSessionHistory";
 import { useAppStore } from "../store/appStore";
 import { useThinkingStore } from "../store/thinkingStore";
 import { Card } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { ThinkingIndicator } from "./ThinkingIndicator";
-import { DiffViewer } from "./DiffViewer";
+const LazyDiffViewer = lazy(() => import("./DiffViewer").then(module => ({ default: module.DiffViewer })));
+const LazyReactMarkdown = lazy(() => import("react-markdown"));
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import { parseDiffFromMessage } from "../lib/diff-parser";
 import type { Message } from "../types";
-import { Bot, User, Wrench, ChevronDown, ChevronUp, Download, Loader2 } from "lucide-react";
+import { Bot, User, Wrench, ChevronDown, ChevronUp, Download, Loader2, MessageSquare } from "lucide-react";
 
 interface SessionHistoryProps {
   sessionId: string | null;
@@ -249,32 +249,34 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
                 {formattedJson || displayResponse}
               </pre>
             ) : (
-              <ReactMarkdown
-                components={{
-                  p: ({ children }) => <p className="mb-2 last:mb-0 break-words">{children}</p>,
-                  strong: ({ children }) => <strong className="font-bold">{children}</strong>,
-                  em: ({ children }) => <em className="italic">{children}</em>,
-                  ul: ({ children }) => <ul className="list-disc list-inside mb-2">{children}</ul>,
-                  ol: ({ children }) => <ol className="list-decimal list-inside mb-2">{children}</ol>,
-                  li: ({ children }) => <li className="mb-1">{children}</li>,
-                  code: ({ children }) => (
-                    <code className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded text-xs font-mono break-words">
-                      {children}
-                    </code>
-                  ),
-                  pre: ({ children }) => (
-                    <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-xs font-mono my-2 whitespace-pre-wrap break-words max-w-full">
-                      {children}
-                    </pre>
-                  ),
-                  h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                  h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                  h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                  hr: () => <hr className="my-3 border-current/20" />,
-                }}
-              >
-                {displayResponse}
-              </ReactMarkdown>
+              <Suspense fallback={<span>{displayResponse}</span>}>
+                <LazyReactMarkdown
+                  components={{
+                    p: ({ children }) => <p className="mb-2 last:mb-0 break-words">{children}</p>,
+                    strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    ul: ({ children }) => <ul className="list-disc list-inside mb-2">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal list-inside mb-2">{children}</ol>,
+                    li: ({ children }) => <li className="mb-1">{children}</li>,
+                    code: ({ children }) => (
+                      <code className="bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded text-xs font-mono break-words">
+                        {children}
+                      </code>
+                    ),
+                    pre: ({ children }) => (
+                      <pre className="bg-black/5 dark:bg-black/20 p-2 rounded border border-current/10 overflow-x-auto text-xs font-mono my-2 whitespace-pre-wrap break-words max-w-full">
+                        {children}
+                      </pre>
+                    ),
+                    h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                    hr: () => <hr className="my-3 border-current/20" />,
+                  }}
+                >
+                  {displayResponse}
+                </LazyReactMarkdown>
+              </Suspense>
             )}
 
             {/* Expand/Collapse button */}
@@ -333,10 +335,12 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
 
       {/* Show diff viewer if code changes detected */}
       {diff && (
-        <DiffViewer
-          diff={diff}
-          className="max-w-[92%] md:max-w-[85%]"
-        />
+        <Suspense fallback={<div className="text-xs text-muted-foreground p-2">Loading diff...</div>}>
+          <LazyDiffViewer
+            diff={diff}
+            className="max-w-[92%] md:max-w-[85%]"
+          />
+        </Suspense>
       )}
     </div>
   );
@@ -478,13 +482,21 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
 
   if (!sessionId) {
     return (
-      <div
-        className={cn(
-          "flex items-center justify-center h-full text-muted-foreground",
-          className
-        )}
-      >
-        <p>Select a session to view history</p>
+      <div className={cn("flex items-center justify-center h-full", className)}>
+        <div className="flex flex-col items-center gap-4 text-center px-6">
+          <div className="rounded-full bg-muted p-4">
+            <MessageSquare className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-semibold">No session selected</h3>
+            <p className="text-sm text-muted-foreground max-w-[280px]">
+              Open the command palette to switch sessions or create a new one.
+            </p>
+          </div>
+          <kbd className="inline-flex items-center gap-1 rounded-lg border bg-muted px-3 py-1.5 font-mono text-sm text-muted-foreground">
+            ⌘K
+          </kbd>
+        </div>
       </div>
     );
   }
@@ -560,7 +572,7 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
             </div>
           )}
           {messages.map((message, index) => (
-            <MessageBubble key={index} message={message} />
+            <MessageBubble key={`${message.timestamp || ''}-${message.role}-${index}`} message={message} />
           ))}
           {thinkingState.isThinking && (
             <ThinkingIndicator content={thinkingState.content} />
