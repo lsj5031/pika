@@ -55,21 +55,21 @@ run: build
 # Install test dependencies
 test-install:
 	@echo "Installing test dependencies..."
-	cd /tmp/pika-test && npm install
-	cd /tmp/pika-test && npx playwright install chromium
+	cd frontend-web && npm install
+	cd frontend-web && npx playwright install chromium
 	@echo "Test dependencies installed"
 
 # Run all E2E tests (requires server to be running)
 test:
 	@echo "Running E2E tests..."
-	@echo "Make sure the server is running on port 7847"
-	cd /tmp/pika-test && npx playwright test
+	@echo "Make sure backend is running on port 7847 (e.g., make dev-backend)"
+	cd frontend-web && npm run test:e2e
 
 # Run mobile E2E tests with visible browser (requires server to be running)
 test-mobile:
 	@echo "Running mobile E2E tests with visible browser..."
-	@echo "Make sure the server is running on port 7847"
-	cd /tmp/pika-test && npx playwright test --project=mobile --headed
+	@echo "Make sure backend is running on port 7847 (e.g., make dev-backend)"
+	cd frontend-web && npm run test:e2e -- --project="Mobile Chrome" --project="Mobile Safari" --headed
 
 # Stage production runtime artifacts under /opt/pika and /etc/pika
 stage-runtime:

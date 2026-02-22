@@ -1,12 +1,16 @@
+mod routes;
+mod settings;
+mod types;
+
+pub use routes::{create_api_router, create_auth_router};
+pub use types::*;
+
 use axum::{
-    Router,
     extract::{ConnectInfo, Path, Query, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, header},
     response::{IntoResponse, Json, Response},
-    routing::{delete, get, post},
 };
 use base64::Engine;
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -15,12 +19,13 @@ use crate::auth::is_request_authenticated;
 use crate::config::ProjectConfig;
 use crate::pi::ImageUpload;
 use crate::sessions::{
-    CreateSessionRequest, SessionMessage, build_session_index, create_session,
-    get_session_messages_before, get_session_messages_limited, load_user_prompts,
+    CreateSessionRequest, SessionMessage, build_encoded_project_map, build_session_index,
+    create_session, get_session_messages_before, get_session_messages_limited, load_user_prompts,
 };
 use crate::{AppState, extract_client_ip};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::warn;
 
 /// API state shared across all handlers
 #[derive(Clone)]
@@ -36,198 +41,6 @@ impl ApiState {
             config_path,
         }
     }
-}
-
-/// Project information response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectResponse {
-    /// Unique project ID (based on path hash for now)
-    pub id: String,
-    /// Project root path
-    pub path: PathBuf,
-    /// Project name (extracted from path)
-    pub name: String,
-    /// Number of sessions found in this project
-    pub session_count: usize,
-}
-
-/// Session details response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionResponse {
-    /// Unique session identifier
-    pub id: String,
-    /// Session name
-    pub name: String,
-    /// Project ID containing this session
-    pub project_id: String,
-    /// Project path containing this session
-    pub project_path: PathBuf,
-    /// Session creation timestamp
-    pub created_at: String,
-    /// Whether the session is currently active
-    pub is_active: bool,
-}
-
-/// Message in a session
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MessageResponse {
-    /// Message role ("user" or "assistant")
-    pub role: String,
-    /// Message content
-    pub content: String,
-    /// Message timestamp (optional)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub timestamp: Option<String>,
-    /// Image attachments (for user messages with images)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub images: Option<Vec<ImageAttachmentResponse>>,
-}
-
-/// Image attachment in a message response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImageAttachmentResponse {
-    /// Unique image ID
-    pub id: String,
-    /// Original filename
-    pub filename: String,
-    /// MIME type
-    pub content_type: String,
-    /// Image size in bytes
-    pub size: usize,
-    /// URL to access the image (data URL format)
-    pub url: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SessionMessagesQuery {
-    pub limit: Option<usize>,
-    pub direction: Option<String>,
-}
-
-/// Image attachment in a prompt request
-#[derive(Debug, Deserialize)]
-pub struct ImageAttachment {
-    /// Original filename
-    pub filename: String,
-    /// MIME type (e.g., "image/png", "image/jpeg")
-    pub content_type: String,
-    /// Base64 encoded image data (without data URL prefix)
-    pub data: String,
-}
-
-/// Request to send a prompt to a session
-#[derive(Debug, Deserialize)]
-pub struct PromptRequest {
-    /// The prompt text to send
-    pub prompt: String,
-    /// Optional image attachments (base64 encoded)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub images: Option<Vec<ImageAttachment>>,
-}
-
-/// Response when starting a session
-#[derive(Debug, Serialize)]
-pub struct StartSessionResponse {
-    /// The process ID that was started (or already running)
-    pub process_id: String,
-    /// Whether the process was newly spawned (false if already running)
-    pub newly_spawned: bool,
-}
-
-/// Response for session status
-#[derive(Debug, Serialize)]
-pub struct SessionStatusResponse {
-    /// The session ID
-    pub session_id: String,
-    /// Whether the session process is currently running
-    pub is_running: bool,
-    /// The process ID (if running)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub process_id: Option<String>,
-}
-
-/// Response when stopping a session
-#[derive(Debug, Serialize)]
-pub struct StopSessionResponse {
-    /// The session ID that was stopped
-    pub session_id: String,
-    /// The process ID that was killed
-    pub process_id: Option<String>,
-    /// Whether the process was running and was stopped
-    pub was_running: bool,
-}
-
-/// Auth status response
-#[derive(Debug, Serialize)]
-pub struct AuthStatusResponse {
-    /// Whether auth is enabled
-    pub enabled: bool,
-    /// Whether the current request is already authenticated (session cookie)
-    pub authenticated: bool,
-}
-
-/// Login request body
-#[derive(Debug, Deserialize)]
-pub struct LoginRequest {
-    pub username: String,
-    pub password: String,
-}
-
-/// Login response body
-#[derive(Debug, Serialize)]
-pub struct LoginResponse {
-    pub success: bool,
-    pub expires_in_seconds: u64,
-}
-
-/// API error response
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-    pub message: String,
-}
-
-impl IntoResponse for ErrorResponse {
-    fn into_response(self) -> Response {
-        let status = match self.error.as_str() {
-            "NOT_FOUND" | "PROJECT_NOT_FOUND" => StatusCode::NOT_FOUND,
-            "BAD_REQUEST" | "INVALID_PATH" | "PROJECT_EXISTS" | "NOT_RUNNING"
-            | "VALIDATION_ERROR" => StatusCode::BAD_REQUEST,
-            "UNAUTHORIZED" => StatusCode::UNAUTHORIZED,
-            "TOO_MANY_REQUESTS" => StatusCode::TOO_MANY_REQUESTS,
-            "PAYLOAD_TOO_LARGE" => StatusCode::PAYLOAD_TOO_LARGE,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        (status, Json(self)).into_response()
-    }
-}
-
-/// Generic paged response wrapper
-#[derive(Debug, Serialize)]
-pub struct PagedResponse<T> {
-    pub data: Vec<T>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub next_cursor: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub total: Option<usize>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct PagedSessionsQuery {
-    pub limit: Option<usize>,
-    pub cursor: Option<String>,
-    pub q: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SessionMessagesPagedQuery {
-    pub limit: Option<usize>,
-    pub before: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SessionsLookupRequest {
-    pub ids: Vec<String>,
 }
 
 const DEFAULT_PAGE_LIMIT: usize = 50;
@@ -473,24 +286,6 @@ pub async fn logout(State(state): State<AppState>) -> Result<Response, ErrorResp
         .into_response())
 }
 
-/// Request to add a new project
-#[derive(Debug, Deserialize)]
-pub struct AddProjectRequest {
-    /// Path to the project root
-    pub path: String,
-}
-
-/// Response when adding a project
-#[derive(Debug, Serialize)]
-pub struct AddProjectResponse {
-    /// The project ID
-    pub id: String,
-    /// The project name
-    pub name: String,
-    /// The project path
-    pub path: PathBuf,
-}
-
 /// POST /api/projects - add a new project to config
 pub async fn add_project(
     State(state): State<AppState>,
@@ -512,7 +307,7 @@ pub async fn add_project(
 
     // Update config
     let config_path = state.api_state.config_path.clone();
-    {
+    let updated_encoded_map = {
         let mut config = state.api_state.config.write().await;
 
         // Check if project already exists
@@ -533,6 +328,13 @@ pub async fn add_project(
                 message: format!("Failed to save config: {}", e),
             });
         }
+        build_encoded_project_map(&config)
+    };
+
+    if let Ok(mut map) = state.encoded_project_map.write() {
+        *map = updated_encoded_map;
+    } else {
+        warn!("Encoded project map lock poisoned after add_project");
     }
 
     let config = state.api_state.config.read().await;
@@ -554,7 +356,7 @@ pub async fn remove_project(
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
     // Update config
     let config_path = state.api_state.config_path.clone();
-    {
+    let updated_encoded_map = {
         let mut config = state.api_state.config.write().await;
 
         // Find and remove the project
@@ -577,6 +379,13 @@ pub async fn remove_project(
                 message: format!("Failed to save config: {}", e),
             });
         }
+        build_encoded_project_map(&config)
+    };
+
+    if let Ok(mut map) = state.encoded_project_map.write() {
+        *map = updated_encoded_map;
+    } else {
+        warn!("Encoded project map lock poisoned after remove_project");
     }
 
     let config = state.api_state.config.read().await;
@@ -1052,7 +861,7 @@ pub async fn send_prompt_to_session(
     )
     .await
     {
-        eprintln!("Failed to store user prompt: {}", e);
+        warn!(error = %e, session_id = %session_id, "Failed to store user prompt");
     }
 
     Ok(Json(serde_json::json!({
@@ -1238,62 +1047,6 @@ pub async fn set_thinking_level(
     })))
 }
 
-#[derive(Debug, Deserialize)]
-pub struct SetThinkingLevelRequest {
-    pub level: String,
-}
-
-/// Request to create a new session in a project
-#[derive(Debug, Deserialize)]
-pub struct CreateSessionInProjectRequest {
-    /// Optional session name (defaults to timestamp if not provided)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-}
-
-/// Response when creating a new session in a project
-#[derive(Debug, Serialize)]
-pub struct CreateSessionInProjectResponse {
-    /// The newly created session ID
-    pub session_id: String,
-    /// The session name
-    pub name: String,
-    /// The project ID where the session was created
-    pub project_id: String,
-    /// The project path where the session was created
-    pub project_path: PathBuf,
-    /// The session creation timestamp
-    pub created_at: String,
-    /// Whether the process was newly spawned
-    pub newly_spawned: bool,
-    /// The process ID (if spawned)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub process_id: Option<String>,
-}
-
-/// Request to create a standalone session in any folder
-#[derive(Debug, Deserialize)]
-pub struct CreateStandaloneSessionRequest {
-    /// Path to the folder where the session should be created
-    pub path: String,
-    /// Optional session name
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-}
-
-/// Response when creating a standalone session
-#[derive(Debug, Serialize)]
-pub struct CreateStandaloneSessionResponse {
-    /// The newly created session ID
-    pub session_id: String,
-    /// The session name
-    pub name: String,
-    /// The path where the session was created
-    pub path: PathBuf,
-    /// The session creation timestamp
-    pub created_at: String,
-}
-
 /// POST /api/sessions/create - create a new session in any folder
 pub async fn create_standalone_session(
     State(state): State<AppState>,
@@ -1324,7 +1077,7 @@ pub async fn create_standalone_session(
     // Register the folder path in project_root_paths for discoverability
     // This ensures the session shows up in the session list
     let config_path = state.api_state.config_path.clone();
-    {
+    let updated_encoded_map = {
         let mut config = state.api_state.config.write().await;
         // Only add if not already present
         if !config.project_root_paths.contains(&canonical_path) {
@@ -1337,7 +1090,19 @@ pub async fn create_standalone_session(
                 });
             }
         }
+        build_encoded_project_map(&config)
+    };
+
+    if let Ok(mut map) = state.encoded_project_map.write() {
+        *map = updated_encoded_map;
+    } else {
+        warn!("Encoded project map lock poisoned after create_standalone_session");
     }
+
+    let config = state.api_state.config.read().await;
+    let rebuilt = build_session_index(&config).await;
+    let mut index = state.session_index.write().await;
+    *index = rebuilt;
 
     Ok(Json(CreateStandaloneSessionResponse {
         session_id: result.session_id,
@@ -1406,274 +1171,6 @@ pub async fn create_session_in_project(
         newly_spawned: true,
         process_id: Some(process_id),
     }))
-}
-
-/// Public auth router (unprotected endpoints)
-pub fn create_auth_router() -> Router<AppState> {
-    Router::new()
-        .route("/api/auth/status", get(get_auth_status))
-        .route("/api/auth/login", post(login))
-        .route("/api/auth/logout", post(logout))
-}
-
-/// Create the protected API router with all endpoints
-pub fn create_api_router() -> Router<AppState> {
-    Router::new()
-        .route("/api/projects", get(get_projects).post(add_project))
-        .route("/api/projects/{id}", delete(remove_project))
-        .route("/api/projects/{id}/sessions", get(get_project_sessions))
-        .route(
-            "/api/projects/{id}/sessions/paged",
-            get(get_project_sessions_paged),
-        )
-        .route(
-            "/api/projects/{id}/sessions",
-            post(create_session_in_project),
-        )
-        .route("/api/sessions", get(get_sessions))
-        .route("/api/sessions/paged", get(get_sessions_paged))
-        .route("/api/sessions/lookup", post(lookup_sessions))
-        .route("/api/sessions/create", post(create_standalone_session))
-        .route("/api/sessions/{id}", get(get_session))
-        .route("/api/sessions/{id}/messages", get(get_session_messages))
-        .route(
-            "/api/sessions/{id}/messages/paged",
-            get(get_session_messages_paged),
-        )
-        .route("/api/sessions/{id}/prompt", post(send_prompt_to_session))
-        .route("/api/sessions/{id}/status", get(get_session_status))
-        .route("/api/sessions/{id}/start", post(start_session))
-        .route("/api/sessions/{id}/stop", post(stop_session))
-        .route(
-            "/api/sessions/{id}/cycle-thinking-level",
-            post(cycle_thinking_level),
-        )
-        .route(
-            "/api/sessions/{id}/set-thinking-level",
-            post(set_thinking_level),
-        )
-        .route(
-            "/api/settings",
-            get(get_pi_settings).post(update_pi_settings),
-        )
-}
-
-/// PI settings response
-#[derive(Debug, Serialize)]
-pub struct PiSettingsResponse {
-    /// Default provider
-    #[serde(rename = "defaultProvider")]
-    pub default_provider: Option<String>,
-    /// Default model
-    #[serde(rename = "defaultModel")]
-    pub default_model: Option<String>,
-    /// Default thinking level
-    #[serde(rename = "defaultThinkingLevel")]
-    pub default_thinking_level: Option<String>,
-    /// Theme
-    #[serde(rename = "theme")]
-    pub theme: Option<String>,
-    /// Hide thinking block
-    #[serde(rename = "hideThinkingBlock")]
-    pub hide_thinking_block: Option<bool>,
-    /// Available models
-    #[serde(rename = "availableModels")]
-    pub available_models: Vec<ModelInfo>,
-}
-
-/// Model information
-#[derive(Debug, Serialize)]
-pub struct ModelInfo {
-    /// Model ID
-    pub id: String,
-    /// Model name
-    pub name: String,
-    /// Provider
-    pub provider: String,
-    /// Context window
-    pub context_window: Option<usize>,
-    /// Max tokens
-    pub max_tokens: Option<usize>,
-    /// Reasoning capability
-    pub reasoning: bool,
-}
-
-/// Request to update PI settings
-#[derive(Debug, Deserialize)]
-pub struct UpdatePiSettingsRequest {
-    /// Default model
-    #[serde(rename = "defaultModel", skip_serializing_if = "Option::is_none")]
-    pub default_model: Option<String>,
-    /// Default thinking level
-    #[serde(
-        rename = "defaultThinkingLevel",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub default_thinking_level: Option<String>,
-    /// Default provider
-    #[serde(rename = "defaultProvider", skip_serializing_if = "Option::is_none")]
-    pub default_provider: Option<String>,
-    /// Hide thinking block
-    #[serde(rename = "hideThinkingBlock", skip_serializing_if = "Option::is_none")]
-    pub hide_thinking_block: Option<bool>,
-}
-
-/// GET /api/settings - get PI settings
-pub async fn get_pi_settings(
-    State(_state): State<AppState>,
-) -> Result<Json<PiSettingsResponse>, ErrorResponse> {
-    use std::path::PathBuf;
-
-    let pi_agent_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pi")
-        .join("agent");
-
-    let settings_path = pi_agent_dir.join("settings.json");
-    let models_path = pi_agent_dir.join("models.json");
-
-    // Read settings
-    let settings = if tokio::fs::try_exists(&settings_path).await.unwrap_or(false) {
-        tokio::fs::read_to_string(&settings_path)
-            .await
-            .ok()
-            .and_then(|content| serde_json::from_str(&content).ok())
-            .unwrap_or(serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-
-    // Read models
-    let models = if tokio::fs::try_exists(&models_path).await.unwrap_or(false) {
-        tokio::fs::read_to_string(&models_path)
-            .await
-            .ok()
-            .and_then(|content| serde_json::from_str(&content).ok())
-            .and_then(|value: serde_json::Value| {
-                value
-                    .get("providers")
-                    .and_then(|p| p.as_object())
-                    .map(|providers| {
-                        providers
-                            .iter()
-                            .flat_map(|(provider_name, provider_data)| {
-                                provider_data
-                                    .get("models")
-                                    .and_then(|m| m.as_array())
-                                    .unwrap_or(&vec![])
-                                    .iter()
-                                    .filter_map(|model| {
-                                        Some(ModelInfo {
-                                            id: model.get("id")?.as_str()?.to_string(),
-                                            name: model.get("name")?.as_str()?.to_string(),
-                                            provider: provider_name.clone(),
-                                            context_window: model
-                                                .get("contextWindow")
-                                                .and_then(|c| c.as_u64())
-                                                .map(|c| c as usize),
-                                            max_tokens: model
-                                                .get("maxTokens")
-                                                .and_then(|m| m.as_u64())
-                                                .map(|m| m as usize),
-                                            reasoning: model
-                                                .get("reasoning")
-                                                .and_then(|r| r.as_bool())
-                                                .unwrap_or(false),
-                                        })
-                                    })
-                                    .collect::<Vec<_>>()
-                            })
-                            .collect::<Vec<_>>()
-                    })
-            })
-            .unwrap_or_default()
-    } else {
-        vec![]
-    };
-
-    let response = PiSettingsResponse {
-        default_provider: settings
-            .get("defaultProvider")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        default_model: settings
-            .get("defaultModel")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        default_thinking_level: settings
-            .get("defaultThinkingLevel")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        theme: settings
-            .get("theme")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        hide_thinking_block: settings.get("hideThinkingBlock").and_then(|v| v.as_bool()),
-        available_models: models,
-    };
-
-    Ok(Json(response))
-}
-
-/// POST /api/settings - update PI settings
-pub async fn update_pi_settings(
-    State(_state): State<AppState>,
-    Json(request): Json<UpdatePiSettingsRequest>,
-) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    use std::path::PathBuf;
-
-    let pi_agent_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pi")
-        .join("agent");
-
-    let settings_path = pi_agent_dir.join("settings.json");
-
-    // Read existing settings
-    let mut settings = if tokio::fs::try_exists(&settings_path).await.unwrap_or(false) {
-        tokio::fs::read_to_string(&settings_path)
-            .await
-            .ok()
-            .and_then(|content| serde_json::from_str(&content).ok())
-            .unwrap_or(serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-
-    // Update settings
-    if let Some(default_model) = request.default_model {
-        settings["defaultModel"] = serde_json::json!(default_model);
-    }
-    if let Some(default_thinking_level) = request.default_thinking_level {
-        settings["defaultThinkingLevel"] = serde_json::json!(default_thinking_level);
-    }
-    if let Some(default_provider) = request.default_provider {
-        settings["defaultProvider"] = serde_json::json!(default_provider);
-    }
-    if let Some(hide_thinking_block) = request.hide_thinking_block {
-        settings["hideThinkingBlock"] = serde_json::json!(hide_thinking_block);
-    }
-
-    // Ensure directory exists
-    if let Some(parent) = settings_path.parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(|e| ErrorResponse {
-            error: "INTERNAL_ERROR".to_string(),
-            message: format!("Failed to create settings directory: {}", e),
-        })?;
-    }
-
-    // Write settings
-    tokio::fs::write(
-        &settings_path,
-        serde_json::to_string_pretty(&settings).unwrap(),
-    )
-    .await
-    .map_err(|e| ErrorResponse {
-        error: "INTERNAL_ERROR".to_string(),
-        message: format!("Failed to write settings: {}", e),
-    })?;
-
-    Ok(Json(serde_json::json!({ "success": true })))
 }
 
 #[cfg(test)]

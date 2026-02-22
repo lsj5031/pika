@@ -6,8 +6,9 @@
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::mpsc;
+use std::sync::{Arc, RwLock, mpsc};
 use tokio::sync::broadcast;
+use tracing::{error, info, warn};
 
 /// Events from the file watcher
 #[derive(Debug, Clone)]
@@ -37,14 +38,16 @@ pub struct SessionFileWatcher {
     _watcher: RecommendedWatcher,
     event_tx: broadcast::Sender<SessionFileEvent>,
     /// Map of encoded project names to their original paths (for lossless decoding)
-    _encoded_project_map: HashMap<String, PathBuf>,
+    _encoded_project_map: Arc<RwLock<HashMap<String, PathBuf>>>,
 }
 
 impl SessionFileWatcher {
     /// Create a new session file watcher
     /// Watches ~/.pi/agent/sessions/ for changes
-    /// Takes a map of encoded project names to their original paths for lossless path resolution
-    pub fn new(encoded_project_map: HashMap<String, PathBuf>) -> Result<Self, notify::Error> {
+    /// Takes a shared map of encoded project names to original paths for lossless path resolution.
+    pub fn new(
+        encoded_project_map: Arc<RwLock<HashMap<String, PathBuf>>>,
+    ) -> Result<Self, notify::Error> {
         let (event_tx, _) = broadcast::channel(1000);
         let event_tx_clone = event_tx.clone();
 
@@ -60,15 +63,11 @@ impl SessionFileWatcher {
         )?;
 
         // Get the sessions directory
-        let sessions_dir = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".pi")
-            .join("agent")
-            .join("sessions");
+        let sessions_dir = crate::sessions::pi_sessions_base_dir();
 
         // Start a thread to process file events and forward to async channel
         let sessions_dir_clone = sessions_dir.clone();
-        let encoded_project_map_clone = encoded_project_map.clone();
+        let encoded_project_map_clone = Arc::clone(&encoded_project_map);
         std::thread::spawn(move || {
             Self::process_events(
                 sync_rx,
@@ -87,28 +86,21 @@ impl SessionFileWatcher {
 
     /// Start watching the sessions directory
     pub fn start_watching(&mut self) -> Result<(), notify::Error> {
-        let sessions_dir = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".pi")
-            .join("agent")
-            .join("sessions");
+        let sessions_dir = crate::sessions::pi_sessions_base_dir();
 
         // Create directory if it doesn't exist
         if !sessions_dir.exists()
             && let Err(e) = std::fs::create_dir_all(&sessions_dir)
         {
-            eprintln!(
-                "Failed to create sessions directory {:?}: {}",
-                sessions_dir, e
-            );
+            error!(path = ?sessions_dir, error = %e, "Failed to create sessions directory");
         }
 
         if sessions_dir.exists() {
             self._watcher
                 .watch(&sessions_dir, RecursiveMode::Recursive)?;
-            println!("👀 Watching sessions directory: {:?}", sessions_dir);
+            info!(path = ?sessions_dir, "Watching sessions directory");
         } else {
-            println!("⚠️ Sessions directory does not exist: {:?}", sessions_dir);
+            warn!(path = ?sessions_dir, "Sessions directory does not exist");
         }
 
         Ok(())
@@ -124,7 +116,7 @@ impl SessionFileWatcher {
         rx: mpsc::Receiver<Result<Event, notify::Error>>,
         tx: broadcast::Sender<SessionFileEvent>,
         sessions_dir: PathBuf,
-        encoded_project_map: HashMap<String, PathBuf>,
+        encoded_project_map: Arc<RwLock<HashMap<String, PathBuf>>>,
     ) {
         for result in rx {
             match result {
@@ -137,8 +129,16 @@ impl SessionFileWatcher {
 
                         // Extract project path and session ID from the file path
                         // Path format: ~/.pi/agent/sessions/--{encoded-project-path}--/{timestamp}_{session_id}.jsonl
+                        let map = match encoded_project_map.read() {
+                            Ok(map) => map,
+                            Err(_) => {
+                                warn!("Encoded project map lock poisoned, skipping file event");
+                                continue;
+                            }
+                        };
+
                         if let Some((project_path, session_id)) =
-                            Self::parse_session_path(path, &sessions_dir, &encoded_project_map)
+                            Self::parse_session_path(path, &sessions_dir, &map)
                         {
                             let file_event = match event.kind {
                                 EventKind::Create(_) => {
@@ -172,7 +172,7 @@ impl SessionFileWatcher {
                     }
                 }
                 Err(e) => {
-                    eprintln!("File watcher error: {}", e);
+                    error!(error = %e, "File watcher error");
                 }
             }
         }

@@ -7,6 +7,7 @@ import { usePiSettings, type PiModel } from "../hooks/usePiSettings";
 import { useThinkingLevel } from "../hooks/useThinkingLevel";
 import { useAppStore } from "../store/appStore";
 import type { ImageUploadRequest } from "../types/api";
+import { toast } from "sonner";
 
 interface ChatInputProps {
   sessionId: string | null;
@@ -81,7 +82,7 @@ export function ChatInput({
     for (const file of files) {
       const error = validateFile(file);
       if (error) {
-        alert(error);
+        toast.error("Image validation failed", { description: error });
         continue;
       }
       validFiles.push(file);
@@ -108,7 +109,7 @@ export function ChatInput({
           if (!file) return false;
           const error = validateFile(file);
           if (error) {
-            alert(error);
+            toast.error("Image validation failed", { description: error });
             return false;
           }
           return true;

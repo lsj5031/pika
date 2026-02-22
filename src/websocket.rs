@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
+use tracing::info;
 
 use crate::auth::is_request_authenticated;
 use crate::{AppState, extract_client_ip};
@@ -145,10 +146,8 @@ async fn handle_socket(socket: WebSocket, state: WSState) {
         clients.insert(client_id.clone());
     }
 
-    println!(
-        "📡 WebSocket client connected (total: {})",
-        state.client_count().await
-    );
+    let connected_clients = state.client_count().await;
+    info!(clients = connected_clients, "WebSocket client connected");
 
     // Subscribe to the broadcast channel
     let mut rx = state.tx.subscribe();
@@ -195,10 +194,8 @@ async fn handle_socket(socket: WebSocket, state: WSState) {
         clients.remove(&client_id);
     }
 
-    println!(
-        "📡 WebSocket client disconnected (total: {})",
-        state.client_count().await
-    );
+    let connected_clients = state.client_count().await;
+    info!(clients = connected_clients, "WebSocket client disconnected");
 }
 
 #[cfg(test)]
