@@ -144,6 +144,8 @@ AUTH_SESSION_SECRET=32+bytes-random-secret
 BIND_ADDRESS=127.0.0.1
 CORS_ALLOWED_ORIGINS=https://your-domain.example
 TRUSTED_PROXY_CIDRS=127.0.0.1/32
+# Optional: force npx path when Node is installed via nvm
+# PIKA_NPX_PATH=/home/youruser/.nvm/versions/node/vX.X.X/bin/npx
 ```
 
 `TRUSTED_PROXY_CIDRS=127.0.0.1/32` is recommended for Cloudflare Tunnel on localhost. Without it, login/WS rate limiting can treat all users as the proxy peer IP.

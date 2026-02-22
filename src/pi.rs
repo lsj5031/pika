@@ -1,15 +1,82 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
+use tracing::info;
 
 /// Maximum number of concurrent pi processes allowed
 const MAX_CONCURRENT_PROCESSES: usize = 50;
+
+#[cfg(windows)]
+const NPX_CANDIDATES: &[&str] = &["npx.cmd", "npx.exe", "npx"];
+#[cfg(not(windows))]
+const NPX_CANDIDATES: &[&str] = &["npx"];
+
+fn find_executable_in_path(names: &[&str]) -> Option<PathBuf> {
+    let path_var = env::var_os("PATH")?;
+
+    for dir in env::split_paths(&path_var) {
+        for name in names {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    None
+}
+
+fn find_nvm_npx() -> Option<PathBuf> {
+    let home = env::var_os("HOME")?;
+    let versions_root = PathBuf::from(home).join(".nvm/versions/node");
+    find_nvm_npx_under(&versions_root)
+}
+
+fn find_nvm_npx_under(versions_root: &Path) -> Option<PathBuf> {
+    let mut version_dirs: Vec<PathBuf> = fs::read_dir(versions_root)
+        .ok()?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let file_type = entry.file_type().ok()?;
+            file_type.is_dir().then_some(entry.path())
+        })
+        .collect();
+
+    // Prefer newest semver-like directory names first (e.g. v22 > v20 > v18).
+    version_dirs.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+
+    for version_dir in version_dirs {
+        for name in NPX_CANDIDATES {
+            let candidate = version_dir.join("bin").join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    None
+}
+
+fn resolve_npx_executable() -> PathBuf {
+    if let Ok(path) = env::var("PIKA_NPX_PATH") {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+
+    find_executable_in_path(NPX_CANDIDATES)
+        .or_else(find_nvm_npx)
+        .unwrap_or_else(|| PathBuf::from("npx"))
+}
 
 /// JSON-RPC event emitted by pi process
 /// Pika uses events with "type" field, not standard JSON-RPC
@@ -79,9 +146,11 @@ impl PiProcess {
             args.push(session_path.to_string_lossy().to_string());
         }
 
+        let npx_executable = resolve_npx_executable();
+
         // Spawn pi process with environment variables inherited
         let mut process =
-            Command::new("npx")
+            Command::new(&npx_executable)
                 .args(&args)
                 .current_dir(project_path.canonicalize().map_err(|_e| {
                     PiProcessError::InvalidPath {
@@ -91,12 +160,17 @@ impl PiProcess {
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
-                .env_clear()
-                .envs(std::env::vars())
                 .spawn()
-                .map_err(|e| PiProcessError::SpawnFailed {
-                    path: project_path.clone(),
-                    source: e,
+                .map_err(|e| match e.kind() {
+                    std::io::ErrorKind::NotFound => PiProcessError::NpxNotFound {
+                        path: project_path.clone(),
+                        executable: npx_executable.to_string_lossy().to_string(),
+                        source: e,
+                    },
+                    _ => PiProcessError::SpawnFailed {
+                        path: project_path.clone(),
+                        source: e,
+                    },
                 })?;
 
         // Get stdin, stdout and stderr handles
@@ -292,7 +366,10 @@ pub enum ProcessManagerEvent {
     /// A process was spawned
     ProcessSpawned { id: String, project_path: PathBuf },
     /// A process was killed
-    ProcessKilled { id: String },
+    ProcessKilled {
+        id: String,
+        session_id: Option<String>,
+    },
     /// A JSON-RPC event from a process
     JsonRpc { id: String, event: JsonRpcEvent },
     /// A session was started
@@ -309,6 +386,35 @@ impl Default for ProcessManager {
 }
 
 impl ProcessManager {
+    fn remove_process_mappings(&mut self, id: &str) -> Option<String> {
+        let session_id = self.process_to_session.remove(id);
+
+        if let Some(session_id) = session_id.as_ref() {
+            self.session_to_process.remove(session_id);
+        } else {
+            self.session_to_process
+                .retain(|_session, process_id| process_id != id);
+        }
+
+        session_id
+    }
+
+    fn cleanup_exited_processes(&mut self) {
+        let exited_ids: Vec<String> = self
+            .processes
+            .iter_mut()
+            .filter_map(|(id, process)| (!process.is_running()).then_some(id.clone()))
+            .collect();
+
+        for id in exited_ids {
+            self.processes.remove(&id);
+            let session_id = self.remove_process_mappings(&id);
+            let _ = self
+                .event_tx
+                .send(ProcessManagerEvent::ProcessKilled { id, session_id });
+        }
+    }
+
     /// Create a new process manager
     pub fn new() -> Self {
         let (event_tx, _) = broadcast::channel(1000);
@@ -332,6 +438,8 @@ impl ProcessManager {
         project_path: PathBuf,
         session_file: Option<PathBuf>,
     ) -> Result<String, PiProcessError> {
+        self.cleanup_exited_processes();
+
         // Check concurrent limit
         if self.processes.len() >= MAX_CONCURRENT_PROCESSES {
             return Err(PiProcessError::TooManyProcesses {
@@ -377,19 +485,15 @@ impl ProcessManager {
             .remove(id)
             .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
 
+        let session_id = self.remove_process_mappings(id);
+
         process.kill().await?;
 
-        // Remove session-to-process mapping for this process
-        self.session_to_process
-            .retain(|_session, process_id| process_id != id);
-
-        // Remove process-to-session mapping for this process
-        self.process_to_session.remove(id);
-
         // Emit ProcessKilled event
-        let _ = self
-            .event_tx
-            .send(ProcessManagerEvent::ProcessKilled { id: id.to_string() });
+        let _ = self.event_tx.send(ProcessManagerEvent::ProcessKilled {
+            id: id.to_string(),
+            session_id,
+        });
 
         Ok(())
     }
@@ -411,10 +515,21 @@ impl ProcessManager {
 
     /// Check if a process is running
     pub fn is_running(&mut self, id: &str) -> bool {
-        self.processes
-            .get_mut(id)
-            .map(|p| p.is_running())
-            .unwrap_or(false)
+        let Some(process) = self.processes.get_mut(id) else {
+            return false;
+        };
+
+        if process.is_running() {
+            true
+        } else {
+            self.processes.remove(id);
+            let session_id = self.remove_process_mappings(id);
+            let _ = self.event_tx.send(ProcessManagerEvent::ProcessKilled {
+                id: id.to_string(),
+                session_id,
+            });
+            false
+        }
     }
 
     /// Get number of active processes
@@ -464,15 +579,13 @@ impl ProcessManager {
         session_id: &str,
         project_path: PathBuf,
     ) -> Result<String, PiProcessError> {
+        self.cleanup_exited_processes();
+
         // Check if this session already has a running process
         if let Some(process_id) = self.session_to_process.get(session_id).cloned() {
             // Check if the process is still running
             if self.is_running(&process_id) {
                 return Ok(process_id);
-            } else {
-                // Process is dead, remove the mapping
-                self.session_to_process.remove(session_id);
-                self.processes.remove(&process_id);
             }
         }
 
@@ -488,12 +601,9 @@ impl ProcessManager {
         let session_file = crate::sessions::get_session_file_path(session_id, &project_path);
 
         if let Some(ref path) = session_file {
-            println!("📂 Resuming session {} from {:?}", session_id, path);
+            info!(session_id = %session_id, path = ?path, "Resuming existing session");
         } else {
-            println!(
-                "📂 Starting new session {} (no existing session file found)",
-                session_id
-            );
+            info!(session_id = %session_id, "Starting new session without existing session file");
         }
 
         // Create process with session file if available
@@ -577,6 +687,16 @@ pub enum PiProcessError {
         source: std::io::Error,
     },
 
+    #[error(
+        "Failed to spawn pi process for {path}: unable to execute '{executable}'. Install Node.js and ensure npx is on PATH, or set PIKA_NPX_PATH to the full npx path"
+    )]
+    NpxNotFound {
+        path: PathBuf,
+        executable: String,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("Failed to get pipe from pi process")]
     PipeFailed,
 
@@ -604,6 +724,16 @@ pub enum PiProcessError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::{self, File};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("{}_{}", prefix, nanos))
+    }
 
     #[test]
     fn test_json_rpc_event_parsing() {
@@ -629,5 +759,21 @@ mod tests {
         let manager = ProcessManager::new();
         assert_eq!(manager.count(), 0);
         assert!(manager.list().is_empty());
+    }
+
+    #[test]
+    fn test_find_nvm_npx_under_prefers_latest_version_dir() {
+        let root = unique_temp_dir("pika_nvm_test");
+        let old_bin = root.join("v20.1.0").join("bin");
+        let new_bin = root.join("v22.2.0").join("bin");
+        fs::create_dir_all(&old_bin).unwrap();
+        fs::create_dir_all(&new_bin).unwrap();
+        File::create(old_bin.join(NPX_CANDIDATES[0])).unwrap();
+        File::create(new_bin.join(NPX_CANDIDATES[0])).unwrap();
+
+        let resolved = find_nvm_npx_under(&root).unwrap();
+        assert!(resolved.starts_with(root.join("v22.2.0")));
+
+        fs::remove_dir_all(root).unwrap();
     }
 }

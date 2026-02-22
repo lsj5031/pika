@@ -9,9 +9,6 @@ mod sessions;
 mod static_files;
 mod websocket;
 
-use axum::response::Json;
-use serde_json::Value;
-
 pub use api::{ApiState, create_api_router, create_auth_router};
 pub use auth::{
     AuthContext, AuthCredentials, SessionCookieManager, auth_middleware, is_request_authenticated,
@@ -22,11 +19,14 @@ use ipnet::IpNet;
 pub use pi::{ProcessManager, ProcessManagerEvent};
 pub use rate_limit::{RateLimitState, extract_client_ip};
 pub use sessions::{
-    SessionIndex, build_encoded_project_map, build_session_index, load_session_info_from_file,
+    SessionIndex, build_encoded_project_map, build_session_index, extract_message_content,
+    load_session_info_from_file, pi_sessions_base_dir,
 };
 pub use static_files::serve_static_files;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::RwLock as StdRwLock;
 use tokio::sync::{Mutex, RwLock};
 pub use websocket::{WSEvent, WSState, ws_handler};
 
@@ -37,6 +37,7 @@ pub struct AppState {
     pub api_state: ApiState,
     pub process_manager: Arc<Mutex<ProcessManager>>,
     pub session_index: Arc<RwLock<SessionIndex>>,
+    pub encoded_project_map: Arc<StdRwLock<HashMap<String, PathBuf>>>,
     pub auth_context: AuthContext,
     pub rate_limits: RateLimitState,
     pub trusted_proxy_cidrs: Arc<Vec<IpNet>>,
@@ -49,6 +50,7 @@ impl AppState {
         auth_context: AuthContext,
         rate_limits: RateLimitState,
     ) -> Self {
+        let encoded_project_map = build_encoded_project_map(&config);
         let trusted_proxy_cidrs = Arc::new(rate_limit::parse_trusted_proxy_cidrs(
             &config.get_trusted_proxy_cidrs(),
         ));
@@ -58,6 +60,7 @@ impl AppState {
             api_state: ApiState::new(config, config_path),
             process_manager: Arc::new(Mutex::new(ProcessManager::new())),
             session_index: Arc::new(RwLock::new(SessionIndex::empty())),
+            encoded_project_map: Arc::new(StdRwLock::new(encoded_project_map)),
             auth_context,
             rate_limits,
             trusted_proxy_cidrs,
@@ -65,9 +68,8 @@ impl AppState {
     }
 }
 
-#[allow(dead_code)]
-async fn health_check() -> Json<Value> {
-    Json(serde_json::json!({
+pub async fn health_check() -> axum::response::Json<serde_json::Value> {
+    axum::response::Json(serde_json::json!({
         "status": "ok",
         "service": "pika",
         "version": "0.1.0"

@@ -10,6 +10,15 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use uuid::Uuid;
 
+/// Returns the base directory for pi agent sessions: ~/.pi/agent/sessions/
+pub fn pi_sessions_base_dir() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".pi")
+        .join("agent")
+        .join("sessions")
+}
+
 /// Session information extracted from session.jsonl files
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
@@ -285,11 +294,7 @@ pub async fn scan_sessions(config: &ProjectConfig) -> Vec<SessionInfo> {
     let mut sessions = Vec::new();
 
     // Get the pi sessions directory
-    let pi_sessions_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pi")
-        .join("agent")
-        .join("sessions");
+    let pi_sessions_dir = pi_sessions_base_dir();
 
     // If pi sessions directory doesn't exist, return empty list
     if !pi_sessions_dir.exists() {
@@ -335,14 +340,8 @@ pub fn build_encoded_project_map(config: &ProjectConfig) -> HashMap<String, Path
 /// Get the pi sessions directory for a project path
 /// Uses the standard ~/.pi/agent/sessions/{encoded-path}/ structure
 pub fn get_pi_sessions_dir(project_path: &Path) -> PathBuf {
-    let pi_sessions_base = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pi")
-        .join("agent")
-        .join("sessions");
-
     let encoded_path = encode_project_path(project_path);
-    pi_sessions_base.join(encoded_path)
+    pi_sessions_base_dir().join(encoded_path)
 }
 
 /// Get the full path to a session file
@@ -485,26 +484,12 @@ pub fn get_session_messages(
     get_session_messages_limited(session_id, project_path, None, false)
 }
 
-fn parse_session_message_line(line: &str) -> Option<SessionMessage> {
-    if line.trim().is_empty() {
-        return None;
-    }
-
-    let value = serde_json::from_str::<serde_json::Value>(line).ok()?;
-    if value.get("type").and_then(|t| t.as_str()) != Some("message") {
-        return None;
-    }
-
-    let message_obj = value.get("message").and_then(|m| m.as_object())?;
-
-    let role = message_obj
-        .get("role")
-        .and_then(|r| r.as_str())
-        .unwrap_or("unknown")
-        .to_string();
-
-    let content = if let Some(content_array) = message_obj.get("content").and_then(|c| c.as_array())
-    {
+/// Extract text content from a message's `content` field (array or string).
+///
+/// Handles thinking blocks, text parts, tool_use, and tool_result patterns.
+/// Used both when parsing JSONL session files and when processing live RPC events.
+pub fn extract_message_content(message: &serde_json::Value) -> String {
+    if let Some(content_array) = message.get("content").and_then(|c| c.as_array()) {
         let thinking_parts: Vec<String> = content_array
             .iter()
             .filter_map(|part| {
@@ -547,10 +532,8 @@ fn parse_session_message_line(line: &str) -> Option<SessionMessage> {
                             .map(|i| {
                                 if i.is_string() {
                                     i.as_str().unwrap_or("").to_string()
-                                } else if i.is_object() {
-                                    serde_json::to_string(i).unwrap_or_default()
                                 } else {
-                                    String::new()
+                                    serde_json::to_string(i).unwrap_or_default()
                                 }
                             })
                             .unwrap_or_default();
@@ -567,10 +550,8 @@ fn parse_session_message_line(line: &str) -> Option<SessionMessage> {
                             .map(|c| {
                                 if c.is_string() {
                                     c.as_str().unwrap_or("").to_string()
-                                } else if c.is_array() {
-                                    serde_json::to_string(c).unwrap_or_default()
                                 } else {
-                                    String::new()
+                                    serde_json::to_string(c).unwrap_or_default()
                                 }
                             })
                             .unwrap_or_default();
@@ -594,18 +575,40 @@ fn parse_session_message_line(line: &str) -> Option<SessionMessage> {
                 )
             }
         }
-    } else if let Some(content_str) = message_obj.get("content").and_then(|c| c.as_str()) {
+    } else if let Some(content_str) = message.get("content").and_then(|c| c.as_str()) {
         content_str.to_string()
     } else {
         String::from("[Tool call or system message - no text content]")
-    };
+    }
+}
+
+fn parse_session_message_line(line: &str) -> Option<SessionMessage> {
+    if line.trim().is_empty() {
+        return None;
+    }
+
+    let value = serde_json::from_str::<serde_json::Value>(line).ok()?;
+    if value.get("type").and_then(|t| t.as_str()) != Some("message") {
+        return None;
+    }
+
+    let message_obj = value.get("message")?;
+    let message_map = message_obj.as_object()?;
+
+    let role = message_map
+        .get("role")
+        .and_then(|r| r.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let content = extract_message_content(message_obj);
 
     let timestamp = value
         .get("timestamp")
         .and_then(|t| t.as_str())
         .map(|s| s.to_string())
         .unwrap_or_else(|| {
-            message_obj
+            message_map
                 .get("timestamp")
                 .and_then(|t| t.as_i64())
                 .map(|ts| {
@@ -634,11 +637,7 @@ pub fn get_session_messages_limited(
         return Ok(Vec::new());
     }
     // Get the pi sessions directory
-    let pi_sessions_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pi")
-        .join("agent")
-        .join("sessions");
+    let pi_sessions_dir = pi_sessions_base_dir();
 
     // Encode the project path to match Pika's naming convention
     let encoded_path = encode_project_path(project_path);
@@ -805,11 +804,7 @@ pub fn get_session_messages_before(
         return Ok(Vec::new());
     }
 
-    let pi_sessions_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pi")
-        .join("agent")
-        .join("sessions");
+    let pi_sessions_dir = pi_sessions_base_dir();
 
     let encoded_path = encode_project_path(project_path);
     let project_sessions_dir = pi_sessions_dir.join(&encoded_path);
@@ -906,10 +901,8 @@ pub struct StoredUserPromptWithImages {
 
 /// Get the path to the user prompts file for a session
 fn get_user_prompts_path(session_id: &str, project_path: &Path) -> Option<PathBuf> {
-    let pi_sessions_dir = dirs::home_dir()?.join(".pi").join("agent").join("sessions");
-
     let encoded_path = encode_project_path(project_path);
-    let project_sessions_dir = pi_sessions_dir.join(&encoded_path);
+    let project_sessions_dir = pi_sessions_base_dir().join(&encoded_path);
 
     Some(project_sessions_dir.join(format!(".user-prompts-{}.jsonl", session_id)))
 }

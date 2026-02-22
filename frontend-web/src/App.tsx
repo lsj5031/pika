@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { AUTH_ERROR_EVENT } from "./lib/api";
 import { clearAuthState, markAuthenticated } from "./lib/auth";
 import { config } from "./config/env";
-import type { WSEvent, Message } from "./types";
+import type { WSEvent, Message, Session } from "./types";
 
 // Lazy load heavy components
 const SessionHistory = lazy(() => import("./components/SessionHistory").then(module => ({ default: module.SessionHistory })));
@@ -192,14 +192,36 @@ function App() {
         case "SessionStarted": {
           // Update session active status
           useAppStore.getState().setActiveSession(event.data.session_id, true);
-          queryClient.invalidateQueries({ queryKey: ["sessions"] });
+          const sessions = queryClient.getQueryData<Session[]>(["sessions"]);
+          if (sessions?.some((session) => session.id === event.data.session_id)) {
+            queryClient.setQueryData<Session[]>(["sessions"], (current) =>
+              current?.map((session) =>
+                session.id === event.data.session_id
+                  ? { ...session, is_active: true }
+                  : session
+              ) ?? current
+            );
+          } else {
+            queryClient.invalidateQueries({ queryKey: ["sessions"] });
+          }
           break;
         }
         case "SessionStopped": {
           // Clear thinking state and active status
           clearThinking(event.data.session_id);
           useAppStore.getState().setActiveSession(event.data.session_id, false);
-          queryClient.invalidateQueries({ queryKey: ["sessions"] });
+          const sessions = queryClient.getQueryData<Session[]>(["sessions"]);
+          if (sessions?.some((session) => session.id === event.data.session_id)) {
+            queryClient.setQueryData<Session[]>(["sessions"], (current) =>
+              current?.map((session) =>
+                session.id === event.data.session_id
+                  ? { ...session, is_active: false }
+                  : session
+              ) ?? current
+            );
+          } else {
+            queryClient.invalidateQueries({ queryKey: ["sessions"] });
+          }
           break;
         }
         case "ThinkingDelta": {

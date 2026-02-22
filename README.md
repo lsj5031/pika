@@ -66,6 +66,23 @@ cargo build      # Build for development
 cargo build --release    # Build for production
 ```
 
+### Testing
+
+```bash
+# Backend integration/unit tests
+cargo test
+
+# Frontend unit tests
+cd frontend-web && npm test
+
+# Frontend lint
+cd frontend-web && npm run lint
+
+# E2E tests (requires backend on :7847)
+make dev-backend
+cd frontend-web && npm run test:e2e
+```
+
 ### Environment Variables
 
 For frontend development, create `frontend-web/.env`:
@@ -87,6 +104,7 @@ BIND_ADDRESS=127.0.0.1
 # TRUSTED_PROXY_CIDRS=127.0.0.1/32
 # ALLOW_INSECURE_REMOTE=false
 # ALLOWED_PROJECT_ROOTS=/srv/projects:/opt/work
+# PIKA_NPX_PATH=/home/your-user/.nvm/versions/node/v22.18.0/bin/npx
 ```
 
 Notes:

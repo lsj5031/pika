@@ -4,21 +4,22 @@ use axum::{
     extract::DefaultBodyLimit,
     http::{HeaderValue, Method, Request, Uri, header},
     middleware::{self, Next},
-    response::{Json, Response},
+    response::Response,
     routing::get,
 };
 use clap::Parser;
 use pika::{
     AppState, AuthContext, AuthCredentials, ProcessManagerEvent, ProjectConfig, RateLimitState,
     SessionCookieManager, SessionFileEvent, SessionFileWatcher, WSEvent, auth_middleware,
-    build_encoded_project_map, build_session_index, create_api_router, create_auth_router,
-    load_session_info_from_file, serve_static_files, ws_handler,
+    build_session_index, create_api_router, create_auth_router, extract_message_content,
+    health_check, load_session_info_from_file, serve_static_files, ws_handler,
 };
-use serde_json::Value;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use tokio::net::TcpListener;
 use tower_http::cors::{AllowOrigin, CorsLayer};
+use tracing::{info, warn};
+use tracing_subscriber::EnvFilter;
 
 /// Pika - Manages multiple agent sessions and their execution contexts
 #[derive(Parser, Debug)]
@@ -33,8 +34,21 @@ struct Cli {
     port: Option<u16>,
 }
 
+fn init_tracing() {
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("pika=info,info"));
+
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_target(false)
+        .compact()
+        .try_init();
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    init_tracing();
+
     // Parse CLI arguments
     let cli = Cli::parse();
 
@@ -47,22 +61,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Load configuration
-    println!("📄 Loading configuration from: {}", config_path.display());
+    info!("📄 Loading configuration from: {}", config_path.display());
     let config = ProjectConfig::from_file(&config_path)?;
 
     // Validate configuration
     config.validate()?;
 
-    println!("✅ Configuration loaded successfully");
+    info!("✅ Configuration loaded successfully");
     if config.project_root_paths.is_empty() {
-        println!("⚠️  No project root paths configured");
+        warn!("⚠️  No project root paths configured");
     } else {
-        println!(
+        info!(
             "📁 Monitoring {} project root path(s):",
             config.project_root_paths.len()
         );
         for path in &config.project_root_paths {
-            println!("   - {}", path.display());
+            info!("   - {}", path.display());
         }
     }
 
@@ -94,7 +108,7 @@ Set AUTH_USERNAME/AUTH_PASSWORD or explicitly set ALLOW_INSECURE_REMOTE=true."
     }
 
     if !auth_enabled && !auth_disabled {
-        println!(
+        info!(
             "⚠️  Authentication is not enabled. Set AUTH_USERNAME and AUTH_PASSWORD to secure access."
         );
     }
@@ -119,13 +133,13 @@ Set AUTH_USERNAME/AUTH_PASSWORD or explicitly set ALLOW_INSECURE_REMOTE=true."
                     .into());
                 }
 
-                println!("⚠️  Weak AUTH_SESSION_SECRET: {}", error);
+                warn!("⚠️  Weak AUTH_SESSION_SECRET: {}", error);
             }
 
             secret
         }
         None => {
-            println!(
+            warn!(
                 "⚠️  AUTH_SESSION_SECRET not set. Using ephemeral session secret (sessions invalidate on restart)."
             );
             uuid::Uuid::new_v4().to_string()
@@ -134,7 +148,7 @@ Set AUTH_USERNAME/AUTH_PASSWORD or explicitly set ALLOW_INSECURE_REMOTE=true."
 
     let session_cookie_secure = config.session_cookie_secure();
     if auth_enabled && !session_cookie_secure {
-        println!("⚠️  session_cookie_secure=false. Use this only for local HTTP development.");
+        warn!("⚠️  session_cookie_secure=false. Use this only for local HTTP development.");
 
         if !is_localhost_bind {
             return Err(
@@ -206,16 +220,16 @@ Set AUTH_USERNAME/AUTH_PASSWORD or explicitly set ALLOW_INSECURE_REMOTE=true."
         .layer(middleware::from_fn(security_headers_middleware))
         .layer(cors);
 
-    println!("🚀 Pika server listening on http://{}", addr);
-    println!("📡 WebSocket endpoint available at ws://{}", addr);
-    println!("🌐 CORS allowlist configured");
+    info!("🚀 Pika server listening on http://{}", addr);
+    info!("📡 WebSocket endpoint available at ws://{}", addr);
+    info!("🌐 CORS allowlist configured");
 
     if auth_enabled {
-        println!("🔐 Authentication enabled (session cookie required for protected routes)");
+        info!("🔐 Authentication enabled (session cookie required for protected routes)");
     } else if auth_disabled {
-        println!("⚠️  Authentication disabled via debug override");
+        warn!("⚠️  Authentication disabled via debug override");
     } else {
-        println!("⚠️  Authentication disabled (credentials missing)");
+        warn!("⚠️  Authentication disabled (credentials missing)");
     }
 
     let listener = TcpListener::bind(addr).await?;
@@ -226,13 +240,10 @@ Set AUTH_USERNAME/AUTH_PASSWORD or explicitly set ALLOW_INSECURE_REMOTE=true."
         event_bridge_task(app_state_for_bridge).await;
     });
 
-    // Build encoded project map for lossless path resolution
-    let encoded_project_map = build_encoded_project_map(&config);
-
     // Start file watcher task for real-time session updates
     let app_state_for_watcher = app_state.clone();
     tokio::spawn(async move {
-        file_watcher_task(app_state_for_watcher, encoded_project_map).await;
+        file_watcher_task(app_state_for_watcher).await;
     });
 
     axum::serve(
@@ -279,7 +290,7 @@ fn resolve_allowed_origins(config: &ProjectConfig, port: u16) -> Result<Vec<Head
     }
 
     if !invalid.is_empty() {
-        println!("⚠️  Ignoring invalid CORS origins: {}", invalid.join(", "));
+        warn!("⚠️  Ignoring invalid CORS origins: {}", invalid.join(", "));
     }
 
     if parsed.is_empty() {
@@ -311,31 +322,29 @@ async fn security_headers_middleware(req: Request<Body>, next: Next) -> Response
 }
 
 /// Background task that watches session files for changes and broadcasts WebSocket events
-async fn file_watcher_task(
-    app_state: AppState,
-    encoded_project_map: std::collections::HashMap<String, std::path::PathBuf>,
-) {
+async fn file_watcher_task(app_state: AppState) {
     use tokio::sync::broadcast::error::RecvError;
 
-    // Create file watcher with the encoded project map
+    // Create file watcher with the shared encoded project map.
+    let encoded_project_map = std::sync::Arc::clone(&app_state.encoded_project_map);
     let mut watcher = match SessionFileWatcher::new(encoded_project_map) {
         Ok(w) => w,
         Err(e) => {
-            println!("⚠️ Failed to create file watcher: {}", e);
+            warn!("⚠️ Failed to create file watcher: {}", e);
             return;
         }
     };
 
     // Start watching
     if let Err(e) = watcher.start_watching() {
-        println!("⚠️ Failed to start file watcher: {}", e);
+        warn!("⚠️ Failed to start file watcher: {}", e);
         return;
     }
 
     // Subscribe to file events
     let mut rx = watcher.subscribe();
 
-    println!("📂 File watcher task started");
+    info!("📂 File watcher task started");
 
     loop {
         match rx.recv().await {
@@ -346,7 +355,7 @@ async fn file_watcher_task(
                         session_id,
                         file_path,
                     } => {
-                        println!(
+                        info!(
                             "📁 New session file created: {} in {:?}",
                             session_id, project_path
                         );
@@ -359,7 +368,7 @@ async fn file_watcher_task(
                         app_state.ws_state.broadcast(ws_event);
 
                         // Also log the file path for debugging
-                        println!("   File: {:?}", file_path);
+                        info!("   File: {:?}", file_path);
 
                         if let Ok(session_info) =
                             load_session_info_from_file(&project_path, &file_path).await
@@ -376,12 +385,12 @@ async fn file_watcher_task(
                         // Session file was modified - this means new messages were added
                         // The frontend can poll for new messages or we could parse the diff
                         // For now, we just invalidate the messages cache
-                        println!(
+                        info!(
                             "📝 Session file modified: {} (in {})",
                             session_id,
                             project_path.display()
                         );
-                        println!("   File: {:?}", file_path);
+                        info!("   File: {:?}", file_path);
 
                         if let Ok(session_info) =
                             load_session_info_from_file(&project_path, &file_path).await
@@ -399,12 +408,12 @@ async fn file_watcher_task(
                         session_id,
                         file_path,
                     } => {
-                        println!(
+                        info!(
                             "🗑️ Session file removed: {} (in {})",
                             session_id,
                             project_path.display()
                         );
-                        println!("   File: {:?}", file_path);
+                        info!("   File: {:?}", file_path);
 
                         let mut index = app_state.session_index.write().await;
                         index.remove(&session_id);
@@ -412,7 +421,7 @@ async fn file_watcher_task(
                 }
             }
             Err(RecvError::Lagged(count)) => {
-                eprintln!("⚠️ File watcher lagged, missed {} events", count);
+                warn!("⚠️ File watcher lagged, missed {} events", count);
                 let config = app_state.api_state.config.read().await;
                 let rebuilt = build_session_index(&config).await;
                 let mut index = app_state.session_index.write().await;
@@ -425,7 +434,7 @@ async fn file_watcher_task(
         }
     }
 
-    println!("📂 File watcher task ended");
+    info!("📂 File watcher task ended");
 }
 
 /// Background task that bridges ProcessManager events to WebSocket events
@@ -437,25 +446,19 @@ async fn event_bridge_task(app_state: AppState) {
         pm.subscribe()
     };
 
-    println!("📡 Event bridge task started");
+    info!("📡 Event bridge task started");
 
     loop {
         match rx.recv().await {
             Ok(event) => match event {
                 ProcessManagerEvent::ProcessSpawned { id, project_path } => {
-                    println!("🚀 Process spawned: {} in {}", id, project_path.display());
+                    info!("🚀 Process spawned: {} in {}", id, project_path.display());
 
                     // Don't mark session as active yet - wait for agent_start event
                     // The process being spawned doesn't mean the agent is actively working
                 }
-                ProcessManagerEvent::ProcessKilled { id } => {
-                    println!("🛑 Process killed: {}", id);
-
-                    // Look up the session ID for this process
-                    let session_id = {
-                        let pm = app_state.process_manager.lock().await;
-                        pm.get_session_id_for_process(&id)
-                    };
+                ProcessManagerEvent::ProcessKilled { id, session_id } => {
+                    info!("🛑 Process killed: {}", id);
 
                     // Use session_id if found, otherwise fall back to process_id
                     let ws_id = session_id.unwrap_or_else(|| id.clone());
@@ -467,7 +470,7 @@ async fn event_bridge_task(app_state: AppState) {
                     session_id,
                     process_id,
                 } => {
-                    println!(
+                    info!(
                         "🎯 Session started: {} (process: {})",
                         session_id, process_id
                     );
@@ -527,20 +530,15 @@ async fn event_bridge_task(app_state: AppState) {
                                         .and_then(|v| v.as_str())
                                         .unwrap_or("assistant");
 
-                                    // Get timestamp
                                     let timestamp = message
                                         .get("timestamp")
                                         .and_then(|v| v.as_i64())
                                         .map(|ts| {
-                                            // Convert milliseconds to seconds if needed
-                                            // Millisecond timestamps are > 10_000_000_000_000 (year 2286)
                                             let ts_seconds = if ts > 10_000_000_000_000 {
                                                 ts / 1000
                                             } else {
                                                 ts
                                             };
-
-                                            // Use from_timestamp for conversion (returns Option, handles both secs and ms)
                                             chrono::DateTime::from_timestamp(ts_seconds, 0)
                                                 .map(|dt| {
                                                     dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()
@@ -557,124 +555,7 @@ async fn event_bridge_task(app_state: AppState) {
                                                 .to_string()
                                         });
 
-                                    // Extract content from message (matching sessions.rs format)
-                                    let content = if let Some(content_array) =
-                                        message.get("content").and_then(|c| c.as_array())
-                                    {
-                                        // Extract thinking blocks first
-                                        let thinking_parts: Vec<String> = content_array
-                                            .iter()
-                                            .filter_map(|part| {
-                                                if part.get("type").and_then(|t| t.as_str())
-                                                    == Some("thinking")
-                                                {
-                                                    part.get("thinking")
-                                                        .and_then(|t| t.as_str())
-                                                        .filter(|s| !s.is_empty())
-                                                        .map(|s| {
-                                                            format!("<thinking>{}</thinking>", s)
-                                                        })
-                                                } else {
-                                                    None
-                                                }
-                                            })
-                                            .collect();
-
-                                        // Extract text parts
-                                        let text_parts: Vec<String> = content_array
-                                            .iter()
-                                            .filter_map(|part| {
-                                                part.get("text")
-                                                    .and_then(|t| t.as_str())
-                                                    .map(|s| s.to_string())
-                                            })
-                                            .collect();
-
-                                        // Combine thinking and text
-                                        let mut all_parts = thinking_parts;
-                                        all_parts.extend(text_parts);
-
-                                        if !all_parts.is_empty() {
-                                            all_parts.join("\n")
-                                        } else {
-                                            // Try tool_use / tool_result patterns
-                                            let tool_parts: Vec<String> = content_array
-                                                .iter()
-                                                .filter_map(|part| {
-                                                    if let Some(tool_use) = part
-                                                        .get("tool_use")
-                                                        .and_then(|t| t.as_object())
-                                                    {
-                                                        let name = tool_use
-                                                            .get("name")
-                                                            .and_then(|n| n.as_str())
-                                                            .unwrap_or("unknown_tool");
-                                                        let input = tool_use
-                                                            .get("input")
-                                                            .map(|i| {
-                                                                if i.is_string() {
-                                                                    i.as_str()
-                                                                        .unwrap_or("")
-                                                                        .to_string()
-                                                                } else {
-                                                                    serde_json::to_string(i)
-                                                                        .unwrap_or_default()
-                                                                }
-                                                            })
-                                                            .unwrap_or_default();
-                                                        Some(format!(
-                                                            "Tool Call: {}({})",
-                                                            name, input
-                                                        ))
-                                                    } else if let Some(tool_result) = part
-                                                        .get("tool_result")
-                                                        .and_then(|t| t.as_object())
-                                                    {
-                                                        let is_error = tool_result
-                                                            .get("is_error")
-                                                            .and_then(|e| e.as_bool())
-                                                            .unwrap_or(false);
-                                                        let content = tool_result
-                                                            .get("content")
-                                                            .map(|c| {
-                                                                if c.is_string() {
-                                                                    c.as_str()
-                                                                        .unwrap_or("")
-                                                                        .to_string()
-                                                                } else {
-                                                                    serde_json::to_string(c)
-                                                                        .unwrap_or_default()
-                                                                }
-                                                            })
-                                                            .unwrap_or_default();
-                                                        Some(format!(
-                                                            "Tool Result{}: {}",
-                                                            if is_error { " (Error)" } else { "" },
-                                                            content
-                                                        ))
-                                                    } else {
-                                                        None
-                                                    }
-                                                })
-                                                .collect();
-
-                                            if !tool_parts.is_empty() {
-                                                tool_parts.join("\n")
-                                            } else {
-                                                format!(
-                                                    "Tool call: {}",
-                                                    serde_json::to_string(content_array)
-                                                        .unwrap_or_default()
-                                                )
-                                            }
-                                        }
-                                    } else {
-                                        message
-                                            .get("content")
-                                            .and_then(|c| c.as_str())
-                                            .unwrap_or("")
-                                            .to_string()
-                                    };
+                                    let content = extract_message_content(message);
 
                                     let ws_event = WSEvent::MessageAdded {
                                         session_id: ws_id.clone(),
@@ -687,7 +568,7 @@ async fn event_bridge_task(app_state: AppState) {
                             }
                             "agent_start" => {
                                 // Agent started processing - mark session as active
-                                println!("🤖 Agent started for session {}", ws_id);
+                                info!("🤖 Agent started for session {}", ws_id);
                                 let ws_event = WSEvent::SessionStarted {
                                     session_id: ws_id.clone(),
                                     project_path: "".to_string(), // Not used for this purpose
@@ -696,7 +577,7 @@ async fn event_bridge_task(app_state: AppState) {
                             }
                             "agent_end" => {
                                 // Agent completed - mark session as inactive
-                                println!("✅ Agent completed for session {}", ws_id);
+                                info!("✅ Agent completed for session {}", ws_id);
                                 let ws_event = WSEvent::SessionStopped {
                                     session_id: ws_id.clone(),
                                 };
@@ -704,7 +585,7 @@ async fn event_bridge_task(app_state: AppState) {
                             }
                             "notify" => {
                                 // Notification from pi (content intentionally not logged).
-                                println!("📢 Notification received");
+                                info!("📢 Notification received");
                             }
                             "response" => {
                                 // Response to a command
@@ -714,18 +595,18 @@ async fn event_bridge_task(app_state: AppState) {
                                     .and_then(|v| v.as_bool())
                                     .unwrap_or(true);
                                 if !success {
-                                    println!("❌ Command failed");
+                                    warn!("❌ Command failed");
                                 }
                             }
                             _ => {
-                                println!("Unhandled event type: {}", event_type);
+                                warn!("Unhandled event type: {}", event_type);
                             }
                         }
                     }
                 }
             },
             Err(RecvError::Lagged(count)) => {
-                eprintln!("⚠️ Event bridge lagged, missed {} events", count);
+                warn!("⚠️ Event bridge lagged, missed {} events", count);
                 continue;
             }
             Err(RecvError::Closed) => {
@@ -734,13 +615,5 @@ async fn event_bridge_task(app_state: AppState) {
         }
     }
 
-    println!("📡 Event bridge task ended");
-}
-
-async fn health_check() -> Json<Value> {
-    Json(serde_json::json!({
-        "status": "ok",
-        "service": "pika",
-        "version": "0.1.0"
-    }))
+    info!("📡 Event bridge task ended");
 }

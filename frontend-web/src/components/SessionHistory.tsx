@@ -26,6 +26,7 @@ function formatTimestamp(timestamp: string | null): string {
 
 const COLLAPSE_THRESHOLD = 12; // Lines before we collapse
 const PREVIEW_LINES = 3; // Lines to show at start and end when collapsed
+const MAX_RENDERED_MESSAGES = 200;
 
 function truncateContent(content: string): { truncated: string; isTruncated: boolean } {
   const lines = content.split("\n");
@@ -385,6 +386,7 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
   const prevSessionIdRef = useRef<string | null>(null);
   const initialScrollDoneRef = useRef<boolean>(false);
   const loadingOlderRef = useRef<boolean>(false);
+  const [showAllLoadedMessages, setShowAllLoadedMessages] = useState(false);
 
   // Track previous message count to detect new messages
   const prevMessageCountRef = useRef<number>(0);
@@ -415,6 +417,7 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
       prevSessionIdRef.current = sessionId;
       initialScrollDoneRef.current = false;
       prevMessageCountRef.current = 0;
+      setShowAllLoadedMessages(false);
     }
 
     if (!messages) return;
@@ -469,6 +472,18 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
       }
     };
   }, [messages, thinkingState.isThinking, sessionId]); // Note: using thinkingState.isThinking, not full object
+
+  const renderedMessages = useMemo(() => {
+    if (!messages) return [];
+    if (showAllLoadedMessages || messages.length <= MAX_RENDERED_MESSAGES) {
+      return messages;
+    }
+    return messages.slice(-MAX_RENDERED_MESSAGES);
+  }, [messages, showAllLoadedMessages]);
+
+  const hiddenLoadedCount = messages
+    ? Math.max(messages.length - renderedMessages.length, 0)
+    : 0;
 
   const handleLoadOlder = useCallback(async () => {
     if (!fetchOlder || isFetchingOlder) return;
@@ -571,7 +586,19 @@ export function SessionHistory({ sessionId, className }: SessionHistoryProps) {
               </Button>
             </div>
           )}
-          {messages.map((message, index) => (
+          {hiddenLoadedCount > 0 && (
+            <div className="flex justify-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllLoadedMessages(true)}
+                className="gap-2 rounded-lg text-muted-foreground"
+              >
+                Show {hiddenLoadedCount} earlier loaded messages
+              </Button>
+            </div>
+          )}
+          {renderedMessages.map((message, index) => (
             <MessageBubble key={`${message.timestamp || ''}-${message.role}-${index}`} message={message} />
           ))}
           {thinkingState.isThinking && (
