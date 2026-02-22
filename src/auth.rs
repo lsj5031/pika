@@ -192,12 +192,14 @@ impl AuthContext {
 
 /// Constant-time string comparison to prevent timing attacks
 fn constant_time_compare(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
+    let a_bytes = a.as_bytes();
+    let b_bytes = b.as_bytes();
+    let max_len = a_bytes.len().max(b_bytes.len());
 
-    let mut result = 0u8;
-    for (byte_a, byte_b) in a.bytes().zip(b.bytes()) {
+    let mut result = (a_bytes.len() ^ b_bytes.len()) as u8;
+    for i in 0..max_len {
+        let byte_a = a_bytes.get(i).copied().unwrap_or(0);
+        let byte_b = b_bytes.get(i).copied().unwrap_or(0);
         result |= byte_a ^ byte_b;
     }
     result == 0

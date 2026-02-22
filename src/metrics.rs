@@ -1,5 +1,6 @@
 // Performance monitoring utilities for the Rust backend
 
+use std::collections::VecDeque;
 use std::time::Instant;
 
 const MAX_METRICS: usize = 10000;
@@ -12,7 +13,7 @@ pub struct MetricData {
 }
 
 pub struct PerformanceMetrics {
-    metrics: Vec<MetricData>,
+    metrics: VecDeque<MetricData>,
     max_size: usize,
 }
 
@@ -23,23 +24,23 @@ impl PerformanceMetrics {
 
     pub fn with_capacity(max_size: usize) -> Self {
         Self {
-            metrics: Vec::with_capacity(max_size.min(1000)),
+            metrics: VecDeque::with_capacity(max_size.min(1000)),
             max_size,
         }
     }
 
     pub fn record_timing(&mut self, name: String, duration_ms: f64) {
         if self.metrics.len() >= self.max_size {
-            self.metrics.remove(0);
+            self.metrics.pop_front();
         }
-        self.metrics.push(MetricData {
+        self.metrics.push_back(MetricData {
             name,
             value: duration_ms,
             timestamp: std::time::SystemTime::now(),
         });
     }
 
-    pub fn get_metrics(&self) -> &[MetricData] {
+    pub fn get_metrics(&self) -> &VecDeque<MetricData> {
         &self.metrics
     }
 

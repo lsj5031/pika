@@ -69,19 +69,23 @@ export function SettingsDialog({ trigger, open: controlledOpen, onOpenChange: se
   const updateSettingsMutation = useUpdatePiSettings();
 
   const [localModel, setLocalModel] = useState<string>("");
-  const [localThinkingLevel, setLocalThinkingLevel] = useState<string>("off");
+  const [localThinkingLevel, setLocalThinkingLevel] = useState<string>("");
 
   const { swipeProps: sheetSwipeProps } = useSwipeToClose(
     () => setOpen(false),
     { direction: "down", threshold: 80 }
   );
 
+  const effectiveModel = localModel || settings?.defaultModel || "";
+  const effectiveThinkingLevel =
+    localThinkingLevel || settings?.defaultThinkingLevel || "off";
+
   const handleSave = () => {
     if (!settings) return; // Guard against saving before settings load
     updateSettingsMutation.mutate(
       {
-        defaultModel: localModel,
-        defaultThinkingLevel: localThinkingLevel,
+        defaultModel: effectiveModel,
+        defaultThinkingLevel: effectiveThinkingLevel,
       },
       {
         onSuccess: () => {
@@ -96,6 +100,9 @@ export function SettingsDialog({ trigger, open: controlledOpen, onOpenChange: se
     if (newOpen && settings) {
       setLocalModel(settings.defaultModel || "");
       setLocalThinkingLevel(settings.defaultThinkingLevel || "off");
+    } else if (!newOpen) {
+      setLocalModel("");
+      setLocalThinkingLevel("");
     }
   };
 
@@ -123,7 +130,7 @@ export function SettingsDialog({ trigger, open: controlledOpen, onOpenChange: se
           <div className="space-y-6 py-4">
             <div className="space-y-2">
               <Label htmlFor="model" className="font-heading font-bold text-base">Default Model</Label>
-              <Select value={localModel} onValueChange={setLocalModel}>
+              <Select value={effectiveModel} onValueChange={setLocalModel}>
                 <SelectTrigger id="model" className="min-h-[44px]">
                   <SelectValue placeholder="Select a model" />
                 </SelectTrigger>
@@ -135,9 +142,9 @@ export function SettingsDialog({ trigger, open: controlledOpen, onOpenChange: se
                   ))}
                 </SelectContent>
               </Select>
-              {localModel && (
+              {effectiveModel && (
                 <p className="text-xs text-muted-foreground">
-                  {settings?.availableModels?.find(m => m.id === localModel)?.provider} • {settings?.availableModels?.find(m => m.id === localModel)?.contextWindow?.toLocaleString()} tokens
+                  {settings?.availableModels?.find(m => m.id === effectiveModel)?.provider} • {settings?.availableModels?.find(m => m.id === effectiveModel)?.contextWindow?.toLocaleString()} tokens
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
@@ -148,7 +155,7 @@ export function SettingsDialog({ trigger, open: controlledOpen, onOpenChange: se
             <div className="space-y-2">
               <Label htmlFor="thinking-level" className="font-heading font-bold text-base">Thinking Level</Label>
               <Select
-                value={localThinkingLevel}
+                value={effectiveThinkingLevel}
                 onValueChange={setLocalThinkingLevel}
               >
                 <SelectTrigger id="thinking-level" className="min-h-[44px]">

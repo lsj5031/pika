@@ -36,6 +36,8 @@ hmac = "0.12"
 sha2 = "0.10"
 ipnet = "2.10"
 notify = { version = "7.0", default-features = false, features = ["macos_fsevent"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 [dev-dependencies]
 http-body-util = "0.1"

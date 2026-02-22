@@ -4,14 +4,14 @@ test.describe('Application', () => {
   test('loads homepage', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page.locator('h1')).toContainText('Pika');
+    await expect(page.getByRole('heading', { name: 'Pika' })).toBeVisible();
+    await expect(page.getByText('No session selected')).toBeVisible();
   });
 
-  test('has navigation menu', async ({ page }) => {
+  test('has desktop command palette trigger', async ({ page }) => {
     await page.goto('/');
 
-    const menuButton = page.getByTestId('session-list-button');
-    await expect(menuButton).toBeVisible();
+    await expect(page.getByTestId('command-palette-button')).toBeVisible();
   });
 
   test('opens settings dialog', async ({ page }) => {
@@ -22,6 +22,7 @@ test.describe('Application', () => {
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
+    await expect(page.getByText('AI Settings')).toBeVisible();
   });
 });
 
@@ -30,8 +31,10 @@ test.describe('Responsive Design', () => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/');
 
-    const menuButton = page.getByTestId('session-list-button');
+    const menuButton = page.getByRole('button', { name: /menu/i });
     await expect(menuButton).toBeVisible();
+    await menuButton.click();
+    await expect(page.getByRole('menuitem', { name: 'Switch Session' })).toBeVisible();
 
     const header = page.locator('header');
     await expect(header).toBeVisible();
