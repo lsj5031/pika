@@ -612,9 +612,9 @@ fn parse_session_message_line(line: &str) -> Option<SessionMessage> {
                 .get("timestamp")
                 .and_then(|t| t.as_i64())
                 .map(|ts| {
-                    let datetime: chrono::DateTime<chrono::Utc> =
-                        chrono::DateTime::from_timestamp(ts, 0).unwrap();
-                    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+                    chrono::DateTime::from_timestamp(ts, 0)
+                        .map(|datetime| datetime.format("%Y-%m-%d %H:%M:%S").to_string())
+                        .unwrap_or_else(|| "Unknown".to_string())
                 })
                 .unwrap_or_else(|| "Unknown".to_string())
         });
@@ -1126,5 +1126,13 @@ mod tests {
         let json = serde_json::to_string(&info).unwrap();
         assert!(json.contains("test-session-123"));
         assert!(json.contains("Test Session"));
+    }
+
+    #[test]
+    fn test_parse_session_message_line_invalid_numeric_timestamp_falls_back_to_unknown() {
+        let line = r#"{"type":"message","message":{"role":"user","content":"hello","timestamp":9223372036854775807}}"#;
+
+        let message = parse_session_message_line(line).expect("message should parse");
+        assert_eq!(message.timestamp.as_deref(), Some("Unknown"));
     }
 }
