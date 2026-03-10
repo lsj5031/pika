@@ -1,5 +1,9 @@
-# Rust build artifacts
 /target
+/static
+
+# Cloudflare tunnel service files (user-generated; keep out of source control)
+cloudflared-pi.service
+cloudflared-pi.user.service
 
 # Cargo lock file (optional - uncomment if you want to ignore it)
 # Cargo.lock
@@ -23,7 +27,6 @@ frontend-web/.env.local
 
 # Configuration and Secrets
 config.toml
-deploy/cloudflared-tunnel.yml
 
 # Pika local data
 .pi/

@@ -1,6 +1,4 @@
-# Deployment Guide - your-domain.example
-
-**Status**: ✅ **Deployed and Operational** at https://your-domain.example
+# Deployment Guide
 
 ## Quick Start
 
@@ -12,13 +10,11 @@ make deploy
 ./deploy/setup-deployment.sh
 ```
 
-Both workflows now:
+Both workflows:
 1. Build frontend + backend
 2. Create/prepare runtime layout (`/opt/pika`, `/etc/pika`, `/var/lib/pika`)
 3. Stage binary and frontend assets under `/opt/pika`
-4. Install/enable/start `cloudflared-pi` and `pika` systemd services
-
-After setup, your app will be available at: **https://your-domain.example**
+4. Install/enable/start a Cloudflare tunnel service and `pika` systemd service
 
 ---
 
@@ -34,27 +30,22 @@ After setup, your app will be available at: **https://your-domain.example**
 - **Responsive Design**: Mobile-friendly interface
 - **Error Handling**: Comprehensive error messages and toast notifications
 
-### ✅ Mobile Layout Status
-- **Mobile Overflow (<390px)**: fixed
-- See `docs/MOBILE_TEST_REPORT.md` for details
-
 ### 🔧 Runtime Layout
-- **Backend Port**: 7847 (configurable)
+- **Backend Port**: 7847 (configurable via `config.toml` or `PORT` env var)
 - **Runtime Root**: `/opt/pika`
 - **Backend Binary**: `/opt/pika/target/release/pika`
 - **Frontend Assets**: `/opt/pika/frontend-web/dist/`
 - **Service Config**: `/etc/pika/config.toml`
 - **Service Env File**: `/etc/pika/pika.env`
-- **Services**: `pika` and `cloudflared-pi`
+- **Services**: `pika` and `cloudflared-pi` (or your chosen tunnel service)
 
 ## Overview
 
-- **Domain**: your-domain.example
 - **Local Port**: 7847
 - **Architecture**: Single Rust backend serves API + static frontend files
-- **Tunnel ID**: TUNNEL_ID_REDACTED
+- **Tunnel**: Cloudflare Tunnel (or any reverse proxy of your choice)
 
-All traffic goes through Cloudflare Tunnel.
+All traffic goes through Cloudflare Tunnel (or your reverse proxy).
 
 ## Edge Security Headers (HSTS at Cloudflare)
 
@@ -62,7 +53,7 @@ HSTS is enforced at the Cloudflare edge, not by the tunnel ingress config.
 
 ### Configure HSTS in Cloudflare
 
-1. Open Cloudflare Dashboard → your zone (`liu.nz`)
+1. Open Cloudflare Dashboard → your zone
 2. Go to **SSL/TLS → Edge Certificates**
 3. Enable **Always Use HTTPS**
 4. Enable **HTTP Strict Transport Security (HSTS)** with:
@@ -119,17 +110,22 @@ fi
 ### 4) Install Services
 
 ```bash
-sudo cp deploy/cloudflared-pi.service /etc/systemd/system/
 sudo cp deploy/pika.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable cloudflared-pi.service
 sudo systemctl enable pika.service
+```
+
+Optionally install a Cloudflare tunnel service:
+
+```bash
+sudo cp deploy/cloudflared-pi.service /etc/systemd/system/
+sudo systemctl enable cloudflared-pi.service
 ```
 
 ### 5) Start Services
 
 ```bash
-sudo systemctl start cloudflared-pi.service
+sudo systemctl start cloudflared-pi.service   # if using Cloudflare Tunnel
 sudo systemctl restart pika.service
 ```
 
@@ -145,7 +141,7 @@ BIND_ADDRESS=127.0.0.1
 CORS_ALLOWED_ORIGINS=https://your-domain.example
 TRUSTED_PROXY_CIDRS=127.0.0.1/32
 # Optional: force npx path when Node is installed via nvm
-# PIKA_NPX_PATH=/home/youruser/.nvm/versions/node/vX.X.X/bin/npx
+# PIKA_NPX_PATH=/home/youruser/.nvm/versions/node/v22.x.x/bin/npx
 ```
 
 `TRUSTED_PROXY_CIDRS=127.0.0.1/32` is recommended for Cloudflare Tunnel on localhost. Without it, login/WS rate limiting can treat all users as the proxy peer IP.
@@ -161,9 +157,9 @@ sudo systemctl restart pika
 ```
 User Browser
     ↓
-your-domain.example (Cloudflare)
+your-domain.example (Cloudflare or reverse proxy)
     ↓
-Cloudflare Tunnel (TUNNEL_ID_REDACTED)
+Cloudflare Tunnel (or other reverse proxy)
     ↓
 localhost:7847 (Rust backend)
     ├─→ /api/* → API endpoints
@@ -173,8 +169,7 @@ localhost:7847 (Rust backend)
 
 ## Configuration Files
 
-- **Tunnel Config**: `~/.cloudflared/config-pi.yml`
-- **Tunnel Service**: `/etc/systemd/system/cloudflared-pi.service`
+- **Tunnel Config**: `~/.cloudflared/config.yml` (if using Cloudflare Tunnel)
 - **Pika Service**: `/etc/systemd/system/pika.service`
 - **Pika Config**: `/etc/pika/config.toml`
 - **Pika Env**: `/etc/pika/pika.env`
@@ -224,7 +219,6 @@ sudo systemctl restart pika
 
 ```bash
 sudo systemctl status cloudflared-pi
-nslookup your-domain.example
 curl http://localhost:7847/health
 ```
 

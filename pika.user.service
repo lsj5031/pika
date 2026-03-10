@@ -4,12 +4,12 @@ After=network.target cloudflared-pi.service
 
 [Service]
 Type=simple
-WorkingDirectory=/home/youruser/code/pika
-ExecStart=/home/youruser/code/pika/target/release/pika
+WorkingDirectory=/home/%i/code/pika
+ExecStart=/home/%i/code/pika/target/release/pika
 Restart=always
 RestartSec=5
 Environment=PORT=7847
-Environment=PATH=/home/youruser/.nvm/versions/node/vX.X.X/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
 # User-mode service is for local/dev usage only.
 # For production use the dedicated system service (`pika.service`).
