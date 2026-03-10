@@ -20,8 +20,8 @@ import { Label } from "./ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Settings, Loader2 } from "lucide-react";
-import { usePiSettings } from "../hooks/usePiSettings";
-import { useUpdatePiSettings } from "../hooks/useUpdatePiSettings";
+import { usePikaSettings } from "../hooks/usePikaSettings";
+import { useUpdatePikaSettings } from "../hooks/useUpdatePikaSettings";
 import { useSwipeToClose } from "../hooks/useSwipe";
 import { ProjectManager } from "./ProjectManager";
 import { useAppStore } from "../store/appStore";
@@ -65,8 +65,8 @@ export function SettingsDialog({ trigger, open: controlledOpen, onOpenChange: se
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = isControlled ? setControlledOpen! : setInternalOpen;
 
-  const { data: settings, isLoading } = usePiSettings(!needsAuth);
-  const updateSettingsMutation = useUpdatePiSettings();
+  const { data: settings, isLoading } = usePikaSettings(!needsAuth);
+  const updateSettingsMutation = useUpdatePikaSettings();
 
   const [localModel, setLocalModel] = useState<string>("");
   const [localThinkingLevel, setLocalThinkingLevel] = useState<string>("");

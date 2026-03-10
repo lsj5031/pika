@@ -10,11 +10,11 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use uuid::Uuid;
 
-/// Returns the base directory for pi agent sessions: ~/.pi/agent/sessions/
-pub fn pi_sessions_base_dir() -> PathBuf {
+/// Returns the base directory for Pika agent sessions: ~/.pika/agent/sessions/
+pub fn pika_sessions_base_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pi")
+        .join(".pika")
         .join("agent")
         .join("sessions")
 }
@@ -289,15 +289,15 @@ pub async fn build_session_index(config: &ProjectConfig) -> SessionIndex {
     SessionIndex::from_sessions(sessions)
 }
 
-/// Scan for pi sessions in configured project directories
+/// Scan for pika sessions in configured project directories
 pub async fn scan_sessions(config: &ProjectConfig) -> Vec<SessionInfo> {
     let mut sessions = Vec::new();
 
-    // Get the pi sessions directory
-    let pi_sessions_dir = pi_sessions_base_dir();
+    // Get the pika sessions directory
+    let pika_sessions_dir = pika_sessions_base_dir();
 
-    // If pi sessions directory doesn't exist, return empty list
-    if !pi_sessions_dir.exists() {
+    // If pika sessions directory doesn't exist, return empty list
+    if !pika_sessions_dir.exists() {
         return sessions;
     }
 
@@ -305,7 +305,7 @@ pub async fn scan_sessions(config: &ProjectConfig) -> Vec<SessionInfo> {
         // Encode the project path to match Pika's naming convention
         // e.g., /home/youruser/appifex/appifex -> --home-leo-appifex-appifex--
         let encoded_path = encode_project_path(project_path);
-        let project_sessions_dir = pi_sessions_dir.join(&encoded_path);
+        let project_sessions_dir = pika_sessions_dir.join(&encoded_path);
 
         // Scan each project's sessions directory
         if let Ok(project_sessions) =
@@ -337,16 +337,16 @@ pub fn build_encoded_project_map(config: &ProjectConfig) -> HashMap<String, Path
     map
 }
 
-/// Get the pi sessions directory for a project path
-/// Uses the standard ~/.pi/agent/sessions/{encoded-path}/ structure
-pub fn get_pi_sessions_dir(project_path: &Path) -> PathBuf {
+/// Get the pika sessions directory for a project path
+/// Uses the standard ~/.pika/agent/sessions/{encoded-path}/ structure
+pub fn get_pika_sessions_dir(project_path: &Path) -> PathBuf {
     let encoded_path = encode_project_path(project_path);
-    pi_sessions_base_dir().join(encoded_path)
+    pika_sessions_base_dir().join(encoded_path)
 }
 
 /// Get the full path to a session file
 pub fn get_session_file_path(session_id: &str, project_path: &Path) -> Option<PathBuf> {
-    let sessions_dir = get_pi_sessions_dir(project_path);
+    let sessions_dir = get_pika_sessions_dir(project_path);
 
     if !sessions_dir.exists() {
         return None;
@@ -636,12 +636,12 @@ pub fn get_session_messages_limited(
     if let Some(0) = limit {
         return Ok(Vec::new());
     }
-    // Get the pi sessions directory
-    let pi_sessions_dir = pi_sessions_base_dir();
+    // Get the pika sessions directory
+    let pika_sessions_dir = pika_sessions_base_dir();
 
     // Encode the project path to match Pika's naming convention
     let encoded_path = encode_project_path(project_path);
-    let project_sessions_dir = pi_sessions_dir.join(&encoded_path);
+    let project_sessions_dir = pika_sessions_dir.join(&encoded_path);
 
     // If sessions directory doesn't exist, return empty list
     if !project_sessions_dir.exists() {
@@ -804,10 +804,10 @@ pub fn get_session_messages_before(
         return Ok(Vec::new());
     }
 
-    let pi_sessions_dir = pi_sessions_base_dir();
+    let pika_sessions_dir = pika_sessions_base_dir();
 
     let encoded_path = encode_project_path(project_path);
-    let project_sessions_dir = pi_sessions_dir.join(&encoded_path);
+    let project_sessions_dir = pika_sessions_dir.join(&encoded_path);
 
     if !project_sessions_dir.exists() {
         return Ok(Vec::new());
@@ -902,7 +902,7 @@ pub struct StoredUserPromptWithImages {
 /// Get the path to the user prompts file for a session
 fn get_user_prompts_path(session_id: &str, project_path: &Path) -> Option<PathBuf> {
     let encoded_path = encode_project_path(project_path);
-    let project_sessions_dir = pi_sessions_base_dir().join(&encoded_path);
+    let project_sessions_dir = pika_sessions_base_dir().join(&encoded_path);
 
     Some(project_sessions_dir.join(format!(".user-prompts-{}.jsonl", session_id)))
 }
@@ -1041,7 +1041,7 @@ pub struct CreateSessionResponse {
 }
 
 /// Create a new session in the specified project
-/// Sessions are stored in ~/.pi/agent/sessions/{encoded-project-path}/ to match Pika
+/// Sessions are stored in ~/.pika/agent/sessions/{encoded-project-path}/ to match Pika
 pub fn create_session(
     project_path: &Path,
     request: CreateSessionRequest,
@@ -1073,8 +1073,8 @@ pub fn create_session(
     let timestamp_str = format!("{}-{:03}Z", timestamp_for_filename, millis);
     let created_at = now.format("%Y-%m-%d %H:%M:%S").to_string();
 
-    // Use the standard ~/.pi/agent/sessions/{encoded-path}/ directory
-    let sessions_dir = get_pi_sessions_dir(project_path);
+    // Use the standard ~/.pika/agent/sessions/{encoded-path}/ directory
+    let sessions_dir = get_pika_sessions_dir(project_path);
 
     // Create sessions directory if it doesn't exist
     fs::create_dir_all(&sessions_dir).map_err(|e| SessionError::IoError {

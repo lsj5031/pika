@@ -68,15 +68,15 @@ fi
 echo -e "${GREEN}✓ Runtime artifacts staged${NC}"
 
 echo -e "${YELLOW}Step 4: Installing systemd services...${NC}"
-sudo cp "$SCRIPT_DIR/cloudflared-pi.service" /etc/systemd/system/
+sudo cp "$SCRIPT_DIR/pika-tunnel.service" /etc/systemd/system/
 sudo cp "$SCRIPT_DIR/pika.service" /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable cloudflared-pi.service
+sudo systemctl enable pika-tunnel.service
 sudo systemctl enable pika.service
 echo -e "${GREEN}✓ Services installed${NC}"
 
 echo -e "${YELLOW}Step 5: Starting services...${NC}"
-sudo systemctl start cloudflared-pi.service
+sudo systemctl start pika-tunnel.service
 sudo systemctl restart pika.service
 echo -e "${GREEN}✓ Services started${NC}"
 
@@ -84,7 +84,7 @@ echo ""
 echo -e "${GREEN}🎉 Deployment complete!${NC}"
 echo ""
 echo "Services status:"
-sudo systemctl status cloudflared-pi.service --no-pager -l
+sudo systemctl status pika-tunnel.service --no-pager -l
 echo ""
 sudo systemctl status pika.service --no-pager -l
 echo ""

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../lib/api";
 
-export interface PiModel {
+export interface PikaModel {
   id: string;
   name: string;
   reasoning: boolean;
@@ -11,20 +11,20 @@ export interface PiModel {
   provider: string;
 }
 
-export interface PiSettings {
+export interface PikaSettings {
   defaultProvider?: string;
   defaultModel?: string;
   defaultThinkingLevel?: string;
   theme?: string;
   hideThinkingBlock?: boolean;
-  availableModels?: PiModel[];
+  availableModels?: PikaModel[];
 }
 
-export function usePiSettings(enabled = true) {
-  return useQuery<PiSettings>({
-    queryKey: ["pi-settings"],
+export function usePikaSettings(enabled = true) {
+  return useQuery<PikaSettings>({
+    queryKey: ["pika-settings"],
     queryFn: async () => {
-      return apiClient.get<PiSettings>("/api/settings");
+      return apiClient.get<PikaSettings>("/api/settings");
     },
     enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes

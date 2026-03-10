@@ -3,8 +3,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ChatInput } from "../components/ChatInput";
 
-vi.mock("../hooks/usePiSettings", () => ({
-  usePiSettings: () => ({
+vi.mock("../hooks/usePikaSettings", () => ({
+  usePikaSettings: () => ({
     data: {
       defaultModel: "gpt-test",
       availableModels: [

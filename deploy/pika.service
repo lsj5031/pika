@@ -4,7 +4,7 @@ After=network.target cloudflared-pi.service
 
 [Service]
 Type=simple
-# Run under the primary operator account so project roots and ~/.pi are accessible.
+# Run under the primary operator account so project roots and ~/.pika are accessible.
 User=%i
 # Keep group access to /etc/pika/*.toml and /etc/pika/pika.env (root:pika, 0640).
 Group=pika

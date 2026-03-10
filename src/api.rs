@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 use crate::auth::is_request_authenticated;
 use crate::config::ProjectConfig;
-use crate::pi::ImageUpload;
+use crate::agent::ImageUpload;
 use crate::sessions::{
     CreateSessionRequest, SessionMessage, build_encoded_project_map, build_session_index,
     create_session, get_session_messages_before, get_session_messages_limited, load_user_prompts,
@@ -800,7 +800,7 @@ pub async fn send_prompt_to_session(
         decoded_image_sizes.push(decoded_len);
     }
 
-    // Convert images to the format expected by pi-coding-agent
+    // Convert images to the format expected by pika-agent
     let images_to_send: Vec<ImageUpload> = request_images
         .iter()
         .map(|img| ImageUpload {
@@ -1152,7 +1152,7 @@ pub async fn create_session_in_project(
 
     let session_id = session_response.session_id.clone();
 
-    // Spawn the pi process immediately in RPC mode
+    // Spawn the Pika process immediately in RPC mode
     let mut process_manager = state.process_manager.lock().await;
 
     let process_id = process_manager

@@ -1,0 +1,14 @@
+[Unit]
+Description=Cloudflare Tunnel (Pika)
+After=network.target
+
+[Service]
+Type=simple
+User=pika
+Group=pika
+ExecStart=/usr/local/bin/cloudflared tunnel run --token YOUR_TOKEN_HERE
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

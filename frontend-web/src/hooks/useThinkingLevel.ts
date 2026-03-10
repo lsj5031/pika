@@ -1,14 +1,14 @@
 import { useCallback } from "react";
 import { apiClient } from "../lib/api";
 import { useAppStore } from "../store/appStore";
-import { usePiSettings } from "./usePiSettings";
+import { usePikaSettings } from "./usePikaSettings";
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 export function useThinkingLevel(sessionId: string | null) {
   const needsAuth = useAppStore((state) => state.needsAuth);
-  const { data: settings } = usePiSettings(!needsAuth);
+  const { data: settings } = usePikaSettings(!needsAuth);
   const storedLevel = useAppStore((state) =>
     sessionId ? state.sessionThinkingLevels[sessionId] : null
   );

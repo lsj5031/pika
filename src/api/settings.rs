@@ -2,17 +2,17 @@ use axum::{Json, extract::State};
 
 use crate::AppState;
 
-use super::types::{ErrorResponse, ModelInfo, PiSettingsResponse, UpdatePiSettingsRequest};
+use super::types::{ErrorResponse, ModelInfo, PikaSettingsResponse, UpdatePikaSettingsRequest};
 
 /// GET /api/settings - get PI settings
 pub async fn get_pi_settings(
     State(_state): State<AppState>,
-) -> Result<Json<PiSettingsResponse>, ErrorResponse> {
+) -> Result<Json<PikaSettingsResponse>, ErrorResponse> {
     use std::path::PathBuf;
 
     let pi_agent_dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pi")
+        .join(".pika")
         .join("agent");
 
     let settings_path = pi_agent_dir.join("settings.json");
@@ -77,7 +77,7 @@ pub async fn get_pi_settings(
         vec![]
     };
 
-    let response = PiSettingsResponse {
+    let response = PikaSettingsResponse {
         default_provider: settings
             .get("defaultProvider")
             .and_then(|v| v.as_str())
@@ -104,13 +104,13 @@ pub async fn get_pi_settings(
 /// POST /api/settings - update PI settings
 pub async fn update_pi_settings(
     State(_state): State<AppState>,
-    Json(request): Json<UpdatePiSettingsRequest>,
+    Json(request): Json<UpdatePikaSettingsRequest>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
     use std::path::PathBuf;
 
     let pi_agent_dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pi")
+        .join(".pika")
         .join("agent");
 
     let settings_path = pi_agent_dir.join("settings.json");

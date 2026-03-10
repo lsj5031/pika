@@ -171,7 +171,7 @@ pika/
 │   ├── websocket.rs       # WebSocket handler
 │   ├── auth.rs            # Authentication
 │   ├── config.rs          # Configuration loading
-│   ├── pi.rs              # ProcessManager (spawns Pika CLI)
+│   ├── agent.rs           # ProcessManager (spawns Pika CLI)
 │   ├── sessions.rs        # Session index + persistence
 │   └── ...
 ├── frontend-web/          # React frontend

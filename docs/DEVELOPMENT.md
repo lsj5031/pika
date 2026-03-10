@@ -1,4 +1,4 @@
-# AGENTS.md - Pika
+# Development Guide - Pika
 
 ## Build & Test Commands
 - **Build all**: `make build` (frontend + backend)
@@ -18,7 +18,7 @@
 - **Backend**: Rust/Axum web server with WebSocket support, JSON-RPC, basic auth
 - **Frontend**: React 19 + TypeScript + Vite + TailwindCSS 4 + Radix UI + Zustand
 - **Key modules**: `src/api.rs` (routes), `src/websocket.rs` (WS), `src/auth.rs`, `src/config.rs`
-- **Other modules**: `src/pi.rs` (ProcessManager), `src/sessions.rs`, `src/rate_limit.rs`, `src/metrics.rs`, `src/file_watcher.rs`, `src/static_files.rs`
+- **Other modules**: `src/agent.rs` (ProcessManager), `src/sessions.rs`, `src/rate_limit.rs`, `src/metrics.rs`, `src/file_watcher.rs`, `src/static_files.rs`
 - **State**: `AppState` combines `WSState`, `ApiState`, `ProcessManager`, `SessionIndex`, `AuthContext`, `RateLimitState`
 - **Tests**: Integration tests in `tests/`, use `pika::create_test_app()` with `test-utils` feature
 
