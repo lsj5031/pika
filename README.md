@@ -9,7 +9,7 @@
   <img src="docs/images/screenshot-mobile.png" alt="Pika Mobile View" width="25%" />
 </div>
 
-Pika is your cute AI Coding Companion — a self-hosted web application for managing multiple [Pika](https://github.com/mariozechner/pika) (formerly Pi) coding agent sessions across projects.
+Pika is your cute AI Coding Companion — a self-hosted web application for managing multiple [Pika](https://github.com/lsj5031/pika) coding agent sessions across projects. Pika is built on top of the [Pi](https://github.com/badlogic/pi-mono) coding agent.
 
 Built with a **Rust (Axum)** backend and **React + TypeScript + Vite** frontend.
 

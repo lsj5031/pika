@@ -303,7 +303,7 @@ pub async fn scan_sessions(config: &ProjectConfig) -> Vec<SessionInfo> {
 
     for project_path in &config.project_root_paths {
         // Encode the project path to match Pika's naming convention
-        // e.g., /home/youruser/appifex/appifex -> --home-leo-appifex-appifex--
+        // e.g., /home/youruser/code/my-project -> --home-youruser-code-my-project--
         let encoded_path = encode_project_path(project_path);
         let project_sessions_dir = pika_sessions_dir.join(&encoded_path);
 
