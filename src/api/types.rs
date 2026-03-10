@@ -273,7 +273,7 @@ pub struct CreateStandaloneSessionResponse {
 
 /// PI settings response
 #[derive(Debug, Serialize)]
-pub struct PiSettingsResponse {
+pub struct PikaSettingsResponse {
     /// Default provider
     #[serde(rename = "defaultProvider")]
     pub default_provider: Option<String>,
@@ -313,7 +313,7 @@ pub struct ModelInfo {
 
 /// Request to update PI settings
 #[derive(Debug, Deserialize)]
-pub struct UpdatePiSettingsRequest {
+pub struct UpdatePikaSettingsRequest {
     /// Default model
     #[serde(rename = "defaultModel", skip_serializing_if = "Option::is_none")]
     pub default_model: Option<String>,

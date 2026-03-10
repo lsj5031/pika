@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Send, Cpu, X, ImageIcon, Brain } from "lucide-react";
 import { cn } from "../lib/utils";
-import { usePiSettings, type PiModel } from "../hooks/usePiSettings";
+import { usePikaSettings, type PikaModel } from "../hooks/usePikaSettings";
 import { useThinkingLevel } from "../hooks/useThinkingLevel";
 import { useAppStore } from "../store/appStore";
 import type { ImageUploadRequest } from "../types/api";
@@ -35,7 +35,7 @@ export function ChatInput({
   const [selectedImages, setSelectedImages] = useState<ImageWithPreview[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { data: settings, isLoading: settingsLoading } = usePiSettings(!needsAuth);
+  const { data: settings, isLoading: settingsLoading } = usePikaSettings(!needsAuth);
   const { currentLevel: thinkingLevel, cycleLevel: cycleThinkingLevel } = useThinkingLevel(sessionId);
 
   useEffect(() => {
@@ -179,7 +179,7 @@ export function ChatInput({
   };
 
   const currentModel = settings?.availableModels?.find(
-    (model: PiModel) => model.id === settings?.defaultModel
+    (model: PikaModel) => model.id === settings?.defaultModel
   );
   const modelDisplay = currentModel?.name || settings?.defaultModel || "Not configured";
   const providerDisplay = currentModel?.provider;

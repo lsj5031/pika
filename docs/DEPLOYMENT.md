@@ -37,7 +37,7 @@ Both workflows:
 - **Frontend Assets**: `/opt/pika/frontend-web/dist/`
 - **Service Config**: `/etc/pika/config.toml`
 - **Service Env File**: `/etc/pika/pika.env`
-- **Services**: `pika` and `cloudflared-pi` (or your chosen tunnel service)
+- **Services**: `pika` and `pika-tunnel` (or your chosen tunnel service)
 
 ## Overview
 
@@ -118,14 +118,14 @@ sudo systemctl enable pika.service
 Optionally install a Cloudflare tunnel service:
 
 ```bash
-sudo cp deploy/cloudflared-pi.service /etc/systemd/system/
-sudo systemctl enable cloudflared-pi.service
+sudo cp deploy/pika-tunnel.service /etc/systemd/system/
+sudo systemctl enable pika-tunnel.service
 ```
 
 ### 5) Start Services
 
 ```bash
-sudo systemctl start cloudflared-pi.service   # if using Cloudflare Tunnel
+sudo systemctl start pika-tunnel.service   # if using Cloudflare Tunnel
 sudo systemctl restart pika.service
 ```
 
@@ -201,15 +201,15 @@ sudo systemctl restart pika
 
 ```bash
 # status
-sudo systemctl status cloudflared-pi --no-pager -l
+sudo systemctl status pika-tunnel --no-pager -l
 sudo systemctl status pika --no-pager -l
 
 # logs
-sudo journalctl -u cloudflared-pi -f
+sudo journalctl -u pika-tunnel -f
 sudo journalctl -u pika -f
 
 # restart
-sudo systemctl restart cloudflared-pi
+sudo systemctl restart pika-tunnel
 sudo systemctl restart pika
 ```
 
@@ -218,7 +218,7 @@ sudo systemctl restart pika
 ### Tunnel not working
 
 ```bash
-sudo systemctl status cloudflared-pi
+sudo systemctl status pika-tunnel
 curl http://localhost:7847/health
 ```
 

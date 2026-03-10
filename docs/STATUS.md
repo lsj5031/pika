@@ -63,7 +63,7 @@ make restart-service   # Restart services
 ### Monitoring
 ```bash
 sudo journalctl -u pika -f           # Backend logs
-sudo journalctl -u cloudflared-pi -f  # Tunnel logs
+sudo journalctl -u pika-tunnel -f  # Tunnel logs
 ```
 
 ---

@@ -3,7 +3,7 @@ mod auth;
 mod config;
 mod file_watcher;
 pub mod metrics;
-mod pi;
+mod agent;
 mod rate_limit;
 mod sessions;
 mod static_files;
@@ -16,11 +16,11 @@ pub use auth::{
 pub use config::ProjectConfig;
 pub use file_watcher::{SessionFileEvent, SessionFileWatcher};
 use ipnet::IpNet;
-pub use pi::{ProcessManager, ProcessManagerEvent};
+pub use agent::{ProcessManager, ProcessManagerEvent};
 pub use rate_limit::{RateLimitState, extract_client_ip};
 pub use sessions::{
     SessionIndex, build_encoded_project_map, build_session_index, extract_message_content,
-    load_session_info_from_file, pi_sessions_base_dir,
+    load_session_info_from_file, pika_sessions_base_dir,
 };
 pub use static_files::serve_static_files;
 use std::collections::HashMap;

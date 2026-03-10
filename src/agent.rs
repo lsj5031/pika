@@ -11,7 +11,7 @@ use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tracing::info;
 
-/// Maximum number of concurrent pi processes allowed
+/// Maximum number of concurrent Pika processes allowed
 const MAX_CONCURRENT_PROCESSES: usize = 50;
 
 #[cfg(windows)]
@@ -78,7 +78,7 @@ fn resolve_npx_executable() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("npx"))
 }
 
-/// JSON-RPC event emitted by pi process
+/// JSON-RPC event emitted by Pika process
 /// Pika uses events with "type" field, not standard JSON-RPC
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcEvent {
@@ -90,7 +90,7 @@ pub struct JsonRpcEvent {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-/// Image attachment for sending to pi-coding-agent
+/// Image attachment for sending to pika-agent
 #[derive(Debug, Clone)]
 pub struct ImageUpload {
     pub filename: String,
@@ -98,8 +98,8 @@ pub struct ImageUpload {
     pub data: String,
 }
 
-/// Manages a pi subprocess
-pub struct PiProcess {
+/// Manages a agent subprocess
+pub struct PikaProcess {
     /// The subprocess handle
     process: tokio::process::Child,
     /// Unique process identifier
@@ -115,16 +115,16 @@ pub struct PiProcess {
     _stderr_task: JoinHandle<()>,
 }
 
-impl PiProcess {
-    /// Spawn a new pi process in RPC mode
+impl PikaProcess {
+    /// Spawn a new Pika process in RPC mode
     /// If session_file is provided, the process will resume that session
     pub fn spawn(
         project_path: PathBuf,
         session_file: Option<PathBuf>,
-    ) -> Result<Self, PiProcessError> {
+    ) -> Result<Self, PikaProcessError> {
         // Validate project path exists
         if !project_path.exists() {
-            return Err(PiProcessError::ProjectNotFound { path: project_path });
+            return Err(PikaProcessError::ProjectNotFound { path: project_path });
         }
 
         // Generate unique process ID
@@ -135,7 +135,7 @@ impl PiProcess {
 
         // Build command arguments
         let mut args = vec![
-            "@mariozechner/pi-coding-agent".to_string(),
+            "@mariozechner/pika-agent".to_string(),
             "--mode".to_string(),
             "rpc".to_string(),
         ];
@@ -148,12 +148,12 @@ impl PiProcess {
 
         let npx_executable = resolve_npx_executable();
 
-        // Spawn pi process with environment variables inherited
+        // Spawn Pika process with environment variables inherited
         let mut process =
             Command::new(&npx_executable)
                 .args(&args)
                 .current_dir(project_path.canonicalize().map_err(|_e| {
-                    PiProcessError::InvalidPath {
+                    PikaProcessError::InvalidPath {
                         path: project_path.clone(),
                     }
                 })?)
@@ -162,21 +162,21 @@ impl PiProcess {
                 .stderr(Stdio::piped())
                 .spawn()
                 .map_err(|e| match e.kind() {
-                    std::io::ErrorKind::NotFound => PiProcessError::NpxNotFound {
+                    std::io::ErrorKind::NotFound => PikaProcessError::NpxNotFound {
                         path: project_path.clone(),
                         executable: npx_executable.to_string_lossy().to_string(),
                         source: e,
                     },
-                    _ => PiProcessError::SpawnFailed {
+                    _ => PikaProcessError::SpawnFailed {
                         path: project_path.clone(),
                         source: e,
                     },
                 })?;
 
         // Get stdin, stdout and stderr handles
-        let stdin = process.stdin.take().ok_or(PiProcessError::PipeFailed)?;
-        let stdout = process.stdout.take().ok_or(PiProcessError::PipeFailed)?;
-        let stderr = process.stderr.take().ok_or(PiProcessError::PipeFailed)?;
+        let stdin = process.stdin.take().ok_or(PikaProcessError::PipeFailed)?;
+        let stdout = process.stdout.take().ok_or(PikaProcessError::PipeFailed)?;
+        let stderr = process.stderr.take().ok_or(PikaProcessError::PipeFailed)?;
 
         // Spawn task to read JSON-RPC events from stdout
         let tx_clone = tx.clone();
@@ -190,7 +190,7 @@ impl PiProcess {
             Self::read_stderr(stderr).await;
         });
 
-        Ok(PiProcess {
+        Ok(PikaProcess {
             process,
             id,
             tx,
@@ -205,12 +205,12 @@ impl PiProcess {
         self.tx.subscribe()
     }
 
-    /// Send a prompt with optional images to the pi process via stdin
+    /// Send a prompt with optional images to the Pika process via stdin
     pub async fn send_prompt_with_images(
         &mut self,
         prompt: &str,
         images: &[ImageUpload],
-    ) -> Result<(), PiProcessError> {
+    ) -> Result<(), PikaProcessError> {
         let image_contents: Vec<serde_json::Value> = images
             .iter()
             .map(|img| {
@@ -238,7 +238,7 @@ impl PiProcess {
         stdin
             .write_all(request_str.as_bytes())
             .await
-            .map_err(|e| PiProcessError::WriteFailed {
+            .map_err(|e| PikaProcessError::WriteFailed {
                 id: self.id.clone(),
                 source: e,
             })?;
@@ -246,7 +246,7 @@ impl PiProcess {
         stdin
             .flush()
             .await
-            .map_err(|e| PiProcessError::WriteFailed {
+            .map_err(|e| PikaProcessError::WriteFailed {
                 id: self.id.clone(),
                 source: e,
             })?;
@@ -254,15 +254,15 @@ impl PiProcess {
         Ok(())
     }
 
-    /// Send a raw JSON command to the pi process via stdin
-    pub async fn send_command(&mut self, command: serde_json::Value) -> Result<(), PiProcessError> {
+    /// Send a raw JSON command to the Pika process via stdin
+    pub async fn send_command(&mut self, command: serde_json::Value) -> Result<(), PikaProcessError> {
         let request_str = format!("{}\n", command);
         let stdin = &mut self.stdin;
 
         stdin
             .write_all(request_str.as_bytes())
             .await
-            .map_err(|e| PiProcessError::WriteFailed {
+            .map_err(|e| PikaProcessError::WriteFailed {
                 id: self.id.clone(),
                 source: e,
             })?;
@@ -270,7 +270,7 @@ impl PiProcess {
         stdin
             .flush()
             .await
-            .map_err(|e| PiProcessError::WriteFailed {
+            .map_err(|e| PikaProcessError::WriteFailed {
                 id: self.id.clone(),
                 source: e,
             })?;
@@ -278,12 +278,12 @@ impl PiProcess {
         Ok(())
     }
 
-    /// Kill the pi process
-    pub async fn kill(mut self) -> Result<(), PiProcessError> {
+    /// Kill the Pika process
+    pub async fn kill(mut self) -> Result<(), PikaProcessError> {
         self.process
             .kill()
             .await
-            .map_err(|e| PiProcessError::KillFailed {
+            .map_err(|e| PikaProcessError::KillFailed {
                 id: self.id.clone(),
                 source: e,
             })?;
@@ -329,7 +329,7 @@ impl PiProcess {
                 }
                 Err(_) => {
                     // Not valid JSON-RPC, ignore
-                    // Could be other output from pi
+                    // Could be other output from agent
                 }
             }
         }
@@ -348,10 +348,10 @@ impl PiProcess {
     }
 }
 
-/// Manages multiple pi processes
+/// Manages multiple Pika processes
 pub struct ProcessManager {
-    /// Map of process ID to PiProcess
-    processes: HashMap<String, PiProcess>,
+    /// Map of process ID to PikaProcess
+    processes: HashMap<String, PikaProcess>,
     /// Combined event sender that forwards events from all processes
     event_tx: Sender<ProcessManagerEvent>,
     /// Map of session ID to process ID (for tracking which sessions are active)
@@ -431,24 +431,24 @@ impl ProcessManager {
         self.event_tx.subscribe()
     }
 
-    /// Spawn a new pi process
+    /// Spawn a new Pika process
     /// If session_file is provided, the process will resume that session
     pub fn spawn(
         &mut self,
         project_path: PathBuf,
         session_file: Option<PathBuf>,
-    ) -> Result<String, PiProcessError> {
+    ) -> Result<String, PikaProcessError> {
         self.cleanup_exited_processes();
 
         // Check concurrent limit
         if self.processes.len() >= MAX_CONCURRENT_PROCESSES {
-            return Err(PiProcessError::TooManyProcesses {
+            return Err(PikaProcessError::TooManyProcesses {
                 max: MAX_CONCURRENT_PROCESSES,
             });
         }
 
         // Create process
-        let process = PiProcess::spawn(project_path.clone(), session_file)?;
+        let process = PikaProcess::spawn(project_path.clone(), session_file)?;
         let id = process.id.clone();
 
         // Subscribe to this process's events
@@ -479,11 +479,11 @@ impl ProcessManager {
     }
 
     /// Kill a process by ID
-    pub async fn kill(&mut self, id: &str) -> Result<(), PiProcessError> {
+    pub async fn kill(&mut self, id: &str) -> Result<(), PikaProcessError> {
         let process = self
             .processes
             .remove(id)
-            .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
+            .ok_or(PikaProcessError::ProcessNotFound { id: id.to_string() })?;
 
         let session_id = self.remove_process_mappings(id);
 
@@ -499,11 +499,11 @@ impl ProcessManager {
     }
 
     /// Subscribe to events from a specific process
-    pub fn subscribe_to_process(&self, id: &str) -> Result<Receiver<JsonRpcEvent>, PiProcessError> {
+    pub fn subscribe_to_process(&self, id: &str) -> Result<Receiver<JsonRpcEvent>, PikaProcessError> {
         let process = self
             .processes
             .get(id)
-            .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
+            .ok_or(PikaProcessError::ProcessNotFound { id: id.to_string() })?;
 
         Ok(process.subscribe())
     }
@@ -538,7 +538,7 @@ impl ProcessManager {
     }
 
     /// Send a prompt to a specific process by ID
-    pub async fn send_prompt(&mut self, id: &str, prompt: &str) -> Result<(), PiProcessError> {
+    pub async fn send_prompt(&mut self, id: &str, prompt: &str) -> Result<(), PikaProcessError> {
         self.send_prompt_with_images(id, prompt, &[]).await
     }
 
@@ -548,11 +548,11 @@ impl ProcessManager {
         id: &str,
         prompt: &str,
         images: &[ImageUpload],
-    ) -> Result<(), PiProcessError> {
+    ) -> Result<(), PikaProcessError> {
         let process = self
             .processes
             .get_mut(id)
-            .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
+            .ok_or(PikaProcessError::ProcessNotFound { id: id.to_string() })?;
 
         process.send_prompt_with_images(prompt, images).await
     }
@@ -562,23 +562,23 @@ impl ProcessManager {
         &mut self,
         id: &str,
         command: serde_json::Value,
-    ) -> Result<(), PiProcessError> {
+    ) -> Result<(), PikaProcessError> {
         let process = self
             .processes
             .get_mut(id)
-            .ok_or(PiProcessError::ProcessNotFound { id: id.to_string() })?;
+            .ok_or(PikaProcessError::ProcessNotFound { id: id.to_string() })?;
 
         process.send_command(command).await
     }
 
-    /// Spawn a new pi process for a specific session
+    /// Spawn a new Pika process for a specific session
     /// Returns the process ID if spawned, or existing process ID if already running
     /// The process will resume the existing session file if it exists
     pub fn spawn_for_session(
         &mut self,
         session_id: &str,
         project_path: PathBuf,
-    ) -> Result<String, PiProcessError> {
+    ) -> Result<String, PikaProcessError> {
         self.cleanup_exited_processes();
 
         // Check if this session already has a running process
@@ -591,7 +591,7 @@ impl ProcessManager {
 
         // Check concurrent limit
         if self.processes.len() >= MAX_CONCURRENT_PROCESSES {
-            return Err(PiProcessError::TooManyProcesses {
+            return Err(PikaProcessError::TooManyProcesses {
                 max: MAX_CONCURRENT_PROCESSES,
             });
         }
@@ -607,7 +607,7 @@ impl ProcessManager {
         }
 
         // Create process with session file if available
-        let process = PiProcess::spawn(project_path.clone(), session_file)?;
+        let process = PikaProcess::spawn(project_path.clone(), session_file)?;
         let process_id = process.id.clone();
 
         // Subscribe to this process's events
@@ -671,16 +671,16 @@ impl ProcessManager {
     }
 }
 
-/// Errors related to pi process management
+/// Errors related to Pika process management
 #[derive(Debug, Error)]
-pub enum PiProcessError {
+pub enum PikaProcessError {
     #[error("Project path not found: {path}")]
     ProjectNotFound { path: PathBuf },
 
     #[error("Invalid project path (not valid UTF-8): {path}")]
     InvalidPath { path: PathBuf },
 
-    #[error("Failed to spawn pi process for {path}: {source}")]
+    #[error("Failed to spawn Pika process for {path}: {source}")]
     SpawnFailed {
         path: PathBuf,
         #[source]
@@ -688,7 +688,7 @@ pub enum PiProcessError {
     },
 
     #[error(
-        "Failed to spawn pi process for {path}: unable to execute '{executable}'. Install Node.js and ensure npx is on PATH, or set PIKA_NPX_PATH to the full npx path"
+        "Failed to spawn Pika process for {path}: unable to execute '{executable}'. Install Node.js and ensure npx is on PATH, or set PIKA_NPX_PATH to the full npx path"
     )]
     NpxNotFound {
         path: PathBuf,
@@ -697,7 +697,7 @@ pub enum PiProcessError {
         source: std::io::Error,
     },
 
-    #[error("Failed to get pipe from pi process")]
+    #[error("Failed to get pipe from Pika process")]
     PipeFailed,
 
     #[error("Failed to write to process {id}: {source}")]

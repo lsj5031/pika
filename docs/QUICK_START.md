@@ -10,7 +10,7 @@ This will:
 1. ✅ Build frontend (`npm run build`)
 2. ✅ Build backend (`cargo build --release`)
 3. ✅ Stage runtime files under `/opt/pika` and `/etc/pika`
-4. ✅ Install/enable systemd services (`cloudflared-pi`, `pika`)
+4. ✅ Install/enable systemd services (`pika-tunnel`, `pika`)
 5. ✅ Start/restart services
 
 ---
@@ -48,7 +48,7 @@ make status             # check system service status
 View logs:
 
 ```bash
-sudo journalctl -u cloudflared-pi -f
+sudo journalctl -u pika-tunnel -f
 sudo journalctl -u pika -f
 ```
 

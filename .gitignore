@@ -29,5 +29,5 @@ frontend-web/.env.local
 config.toml
 
 # Pika local data
-.pi/
+.pika/
 .sisyphus/

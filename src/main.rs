@@ -399,7 +399,7 @@ async fn file_watcher_task(app_state: AppState) {
                             index.upsert(session_info);
                         }
 
-                        // Note: We don't send MessageAdded here because the pi process
+                        // Note: We don't send MessageAdded here because the Pika process
                         // already sends that event via JSON-RPC when it writes to the file.
                         // This watcher is mainly for catching external changes.
                     }

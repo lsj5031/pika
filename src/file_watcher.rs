@@ -1,6 +1,6 @@
 //! File watching module for real-time session updates
 //!
-//! Watches the ~/.pi/agent/sessions/ directory for changes and broadcasts
+//! Watches the ~/.pika/agent/sessions/ directory for changes and broadcasts
 //! WebSocket events when session files are created or modified.
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -33,7 +33,7 @@ pub enum SessionFileEvent {
     },
 }
 
-/// Watches the pi sessions directory for changes
+/// Watches the pika sessions directory for changes
 pub struct SessionFileWatcher {
     _watcher: RecommendedWatcher,
     event_tx: broadcast::Sender<SessionFileEvent>,
@@ -43,7 +43,7 @@ pub struct SessionFileWatcher {
 
 impl SessionFileWatcher {
     /// Create a new session file watcher
-    /// Watches ~/.pi/agent/sessions/ for changes
+    /// Watches ~/.pika/agent/sessions/ for changes
     /// Takes a shared map of encoded project names to original paths for lossless path resolution.
     pub fn new(
         encoded_project_map: Arc<RwLock<HashMap<String, PathBuf>>>,
@@ -63,7 +63,7 @@ impl SessionFileWatcher {
         )?;
 
         // Get the sessions directory
-        let sessions_dir = crate::sessions::pi_sessions_base_dir();
+        let sessions_dir = crate::sessions::pika_sessions_base_dir();
 
         // Start a thread to process file events and forward to async channel
         let sessions_dir_clone = sessions_dir.clone();
@@ -86,7 +86,7 @@ impl SessionFileWatcher {
 
     /// Start watching the sessions directory
     pub fn start_watching(&mut self) -> Result<(), notify::Error> {
-        let sessions_dir = crate::sessions::pi_sessions_base_dir();
+        let sessions_dir = crate::sessions::pika_sessions_base_dir();
 
         // Create directory if it doesn't exist
         if !sessions_dir.exists()
@@ -128,7 +128,7 @@ impl SessionFileWatcher {
                         }
 
                         // Extract project path and session ID from the file path
-                        // Path format: ~/.pi/agent/sessions/--{encoded-project-path}--/{timestamp}_{session_id}.jsonl
+                        // Path format: ~/.pika/agent/sessions/--{encoded-project-path}--/{timestamp}_{session_id}.jsonl
                         let map = match encoded_project_map.read() {
                             Ok(map) => map,
                             Err(_) => {
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_parse_session_path_with_lookup_map() {
-        let sessions_dir = PathBuf::from("/home/youruser/.pi/agent/sessions");
+        let sessions_dir = PathBuf::from("/home/youruser/.pika/agent/sessions");
         let mut encoded_map = HashMap::new();
         encoded_map.insert(
             "--home-leo-code-my-project--".to_string(),
@@ -222,7 +222,7 @@ mod tests {
         );
 
         let file_path = PathBuf::from(
-            "/home/youruser/.pi/agent/sessions/--home-leo-code-my-project--/2025-01-13T00-00-00-000Z_abc123.jsonl",
+            "/home/youruser/.pika/agent/sessions/--home-leo-code-my-project--/2025-01-13T00-00-00-000Z_abc123.jsonl",
         );
 
         let result =

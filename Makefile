@@ -107,17 +107,17 @@ stage-runtime:
 # Install systemd services (requires artifacts from stage-runtime)
 install-service: stage-runtime
 	@echo "Installing systemd services (requires sudo)..."
-	sudo cp cloudflared-pi.service /etc/systemd/system/
+	sudo cp pika-tunnel.service /etc/systemd/system/
 	sudo cp pika.service /etc/systemd/system/
 	sudo systemctl daemon-reload
-	sudo systemctl enable cloudflared-pi.service
+	sudo systemctl enable pika-tunnel.service
 	sudo systemctl enable pika.service
 	@echo "✅ Systemd services installed"
 
 # Restart system services
 restart-service:
 	@echo "Restarting systemd services..."
-	sudo systemctl restart cloudflared-pi.service
+	sudo systemctl restart pika-tunnel.service
 	sudo systemctl restart pika.service
 	@echo "✅ Services restarted"
 
@@ -127,7 +127,7 @@ deploy: build install-service
 	@echo "Stopping any existing unmanaged pika process..."
 	-pkill -f "target/release/pika|/opt/pika/target/release/pika" || true
 	@sleep 1
-	sudo systemctl start cloudflared-pi.service
+	sudo systemctl start pika-tunnel.service
 	sudo systemctl restart pika.service
 	@echo "✅ Deployment complete"
 
@@ -136,7 +136,7 @@ deploy-user: build
 	@echo "🚀 Deploying with user systemd services (no sudo)..."
 	@echo "Installing user systemd services..."
 	@mkdir -p $(HOME)/.config/systemd/user
-	cp cloudflared-pi.user.service $(HOME)/.config/systemd/user/cloudflared-pi.service
+	cp pika-tunnel.user.service $(HOME)/.config/systemd/user/pika-tunnel.service
 	cp pika.user.service $(HOME)/.config/systemd/user/pika.service
 	systemctl --user daemon-reload
 	@echo "Stopping any existing pika process on port 7847..."
@@ -144,8 +144,8 @@ deploy-user: build
 	@echo "Waiting for port to be released..."
 	@sleep 1
 	@echo "Enabling and starting user services..."
-	systemctl --user enable cloudflared-pi.service
-	systemctl --user start cloudflared-pi.service
+	systemctl --user enable pika-tunnel.service
+	systemctl --user start pika-tunnel.service
 	systemctl --user enable pika.service
 	systemctl --user start pika.service
 	systemctl --user restart pika.service
@@ -155,7 +155,7 @@ deploy-user: build
 install-service-user:
 	@echo "Installing user systemd services (no sudo)..."
 	@mkdir -p $(HOME)/.config/systemd/user
-	cp cloudflared-pi.user.service $(HOME)/.config/systemd/user/cloudflared-pi.service
+	cp pika-tunnel.user.service $(HOME)/.config/systemd/user/pika-tunnel.service
 	cp pika.user.service $(HOME)/.config/systemd/user/pika.service
 	systemctl --user daemon-reload
 	@echo "✅ User services installed"
@@ -163,14 +163,14 @@ install-service-user:
 # Restart user services
 restart-service-user:
 	@echo "Restarting user systemd services (no sudo)..."
-	systemctl --user restart cloudflared-pi.service
+	systemctl --user restart pika-tunnel.service
 	systemctl --user restart pika.service
 	@echo "✅ User services restarted"
 
 # Check service status
 status:
 	@echo "=== Cloudflare Tunnel ==="
-	sudo systemctl status cloudflared-pi.service --no-pager -l
+	sudo systemctl status pika-tunnel.service --no-pager -l
 	@echo ""
 	@echo "=== Pika ==="
 	sudo systemctl status pika.service --no-pager -l
@@ -178,7 +178,7 @@ status:
 # Check user service status
 status-user:
 	@echo "=== Cloudflare Tunnel (user) ==="
-	systemctl --user status cloudflared-pi.service --no-pager -l
+	systemctl --user status pika-tunnel.service --no-pager -l
 	@echo ""
 	@echo "=== Pika (user) ==="
 	systemctl --user status pika.service --no-pager -l
