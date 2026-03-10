@@ -1,61 +1,34 @@
-# Pika Configuration
+# Pika backend configuration example.
+# Copy to config.toml (gitignored) and customise.
+#
+# config.toml is NOT the right place for credentials — use environment variables
+# (or /etc/pika/pika.env in production). See README.md for details.
 
-# List of project root paths to scan for agent sessions
+# Comma-separated list of absolute paths that Pika is allowed to use as project roots.
+# Sessions can only be created under these directories.
 project_root_paths = [
-    "/path/to/your/project",
+    "/home/youruser/projects/my-project",
+    # "/srv/work/another-project",
 ]
 
-# Optional allowlist for adding projects/creating sessions from API.
-# If empty, any path is allowed.
-allowed_project_roots = [
-    "/path/to",
-]
-
-# Bind address (default is localhost-only)
+# Address to bind the HTTP server to.
+# Use 127.0.0.1 for local/tunnel deployments (recommended).
+# Use 0.0.0.0 only if you need direct external access AND have other auth in front.
 bind_address = "127.0.0.1"
 
-# Explicit CORS allowlist (recommended for browser access)
-# If empty, localhost origins are used by default.
-cors_allowed_origins = [
-    "http://localhost:7847",
-    "http://127.0.0.1:7847",
-]
+# Port number.
+# port = 7847
 
-# Trusted reverse proxies allowed to set X-Forwarded-For / X-Real-IP.
-# Leave empty unless running behind a known proxy.
-trusted_proxy_cidrs = [
-    # "127.0.0.1/32",
-]
-
-# Debug only: disable auth requirement (can also be set via AUTH_DISABLE=true)
+# Set to true ONLY for local development without authentication.
+# NEVER set this in production.
 debug_disable_auth = false
 
-# Debug only: allow insecure remote bind without auth (can also be set via ALLOW_INSECURE_REMOTE=true)
-allow_insecure_remote = false
+# Override CORS allowed origins (default: same-origin only).
+# cors_allowed_origins = "https://your-domain.example"
 
-# Global body/request limits
-max_request_body_bytes = 26214400
-max_prompt_chars = 32000
-max_images_per_prompt = 5
-max_image_bytes = 5242880
-max_total_image_bytes = 20971520
+# Whether to set Secure flag on session cookies.
+# Set to false only for local HTTP development.
+# session_cookie_secure = true
 
-# Image MIME allowlist
-allowed_image_mime_types = ["image/png", "image/jpeg", "image/webp", "image/gif"]
-
-# Auth/session settings
-session_ttl_seconds = 28800
-# session_cookie_secure = true  # defaults to true; set false only for local HTTP development
-
-# Basic abuse protection
-login_rate_limit_per_minute = 20
-ws_connect_rate_limit_per_minute = 60
-
-# --- Environment variables (production) ---
-# AUTH_USERNAME=your-username
-# AUTH_PASSWORD=your-password
-# AUTH_SESSION_SECRET=32+bytes-random-secret
-# CORS_ALLOWED_ORIGINS=https://your-domain.example
-# BIND_ADDRESS=127.0.0.1
-# ALLOWED_PROJECT_ROOTS=/srv/projects:/opt/work
-# TRUSTED_PROXY_CIDRS=127.0.0.1/32,10.0.0.0/8
+# Override the npx binary path (useful when Node is installed via nvm/fnm).
+# pika_npx_path = "/home/youruser/.nvm/versions/node/v22.x.x/bin/npx"

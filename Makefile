@@ -123,7 +123,7 @@ restart-service:
 
 # Deploy: Build everything, stage runtime artifacts, install and start services
 deploy: build install-service
-	@echo "🚀 Deploying your-domain.example..."
+	@echo "🚀 Deploying Pika..."
 	@echo "Stopping any existing unmanaged pika process..."
 	-pkill -f "target/release/pika|/opt/pika/target/release/pika" || true
 	@sleep 1

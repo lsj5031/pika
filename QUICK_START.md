@@ -1,6 +1,4 @@
-# Quick Start - Deploy to your-domain.example
-
-**Current Status**: ✅ Production deployed at https://your-domain.example
+# Quick Start
 
 ## One-Command Deployment
 
@@ -8,14 +6,12 @@
 make deploy
 ```
 
-This now:
-1. ✅ Builds frontend (`npm run build`)
-2. ✅ Builds backend (`cargo build --release`)
-3. ✅ Stages runtime files under `/opt/pika` and `/etc/pika`
-4. ✅ Installs/enables systemd services (`cloudflared-pi`, `pika`)
-5. ✅ Starts/restarts services
-
-**Then access at: https://your-domain.example** 🎉
+This will:
+1. ✅ Build frontend (`npm run build`)
+2. ✅ Build backend (`cargo build --release`)
+3. ✅ Stage runtime files under `/opt/pika` and `/etc/pika`
+4. ✅ Install/enable systemd services (`cloudflared-pi`, `pika`)
+5. ✅ Start/restart services
 
 ---
 
@@ -35,7 +31,7 @@ TRUSTED_PROXY_CIDRS=127.0.0.1/32
 Notes:
 - Protected routes are session-cookie only after login (no Basic Auth fallback).
 - `TRUSTED_PROXY_CIDRS=127.0.0.1/32` is recommended for Cloudflare Tunnel on localhost.
-- Enable HSTS at Cloudflare edge and verify with `curl -I https://your-domain.example`.
+- Enable HSTS at the Cloudflare edge and verify with `curl -I https://your-domain.example`.
 
 ---
 
@@ -58,12 +54,12 @@ sudo journalctl -u pika -f
 
 ---
 
-## Deployed Architecture
+## Architecture
 
 ```
-your-domain.example (Cloudflare)
+your-domain.example (Cloudflare or reverse proxy)
     ↓
-Cloudflare Tunnel
+Cloudflare Tunnel (or other reverse proxy)
     ↓
 localhost:7847 (Rust backend)
     ├─ /api/*      → API endpoints

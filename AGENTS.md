@@ -1,4 +1,4 @@
-# AGENTS.md - Pika (Pika)
+# AGENTS.md - Pika
 
 ## Build & Test Commands
 - **Build all**: `make build` (frontend + backend)

@@ -5,7 +5,7 @@ After=network.target cloudflared-pi.service
 [Service]
 Type=simple
 # Run under the primary operator account so project roots and ~/.pi are accessible.
-User=youruser
+User=%i
 # Keep group access to /etc/pika/*.toml and /etc/pika/pika.env (root:pika, 0640).
 Group=pika
 WorkingDirectory=/opt/pika
@@ -16,7 +16,7 @@ Environment=PORT=7847
 EnvironmentFile=-/etc/pika/pika.env
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
-# Security hardening (loosened to support development under /home/youruser)
+# Security hardening:
 NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true

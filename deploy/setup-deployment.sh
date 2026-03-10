@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 Setting up your-domain.example deployment"
+echo "🚀 Setting up Pika deployment"
 
 # Colors
 RED='\033[0;31m'
@@ -88,7 +88,7 @@ sudo systemctl status cloudflared-pi.service --no-pager -l
 echo ""
 sudo systemctl status pika.service --no-pager -l
 echo ""
-echo "Your app should now be available at: https://your-domain.example"
+echo "Your app should now be available at your configured domain."
 echo ""
 echo "Post-deploy checklist:"
 echo "  1) Edit $PIKA_ETC_DIR/pika.env with AUTH_USERNAME, AUTH_PASSWORD, AUTH_SESSION_SECRET"
