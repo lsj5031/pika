@@ -4,6 +4,11 @@
   <img src="frontend-web/public/logo.png" alt="Pika Logo" width="200" />
 </div>
 
+<div align="center">
+  <img src="docs/images/screenshot-session.png" alt="Pika Desktop Session" width="60%" />
+  <img src="docs/images/screenshot-mobile.png" alt="Pika Mobile View" width="25%" />
+</div>
+
 Pika is your cute AI Coding Companion — a self-hosted web application for managing multiple [Pika](https://github.com/mariozechner/pika) (formerly Pi) coding agent sessions across projects.
 
 Built with a **Rust (Axum)** backend and **React + TypeScript + Vite** frontend.
