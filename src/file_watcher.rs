@@ -187,7 +187,7 @@ impl SessionFileWatcher {
         // Get the relative path from sessions_dir
         let relative = path.strip_prefix(sessions_dir).ok()?;
 
-        // First component should be the encoded project path (e.g., --home-leo-code-project--)
+        // First component should be the encoded project path (e.g., --home-youruser-code-my-project--)
         let encoded_project = relative.components().next()?.as_os_str().to_str()?;
 
         // Look up the project path from the map (lossless)
@@ -217,12 +217,12 @@ mod tests {
         let sessions_dir = PathBuf::from("/home/youruser/.pika/agent/sessions");
         let mut encoded_map = HashMap::new();
         encoded_map.insert(
-            "--home-leo-code-my-project--".to_string(),
+            "--home-youruser-code-my-project--".to_string(),
             PathBuf::from("/home/youruser/code/my-project"),
         );
 
         let file_path = PathBuf::from(
-            "/home/youruser/.pika/agent/sessions/--home-leo-code-my-project--/2025-01-13T00-00-00-000Z_abc123.jsonl",
+            "/home/youruser/.pika/agent/sessions/--home-youruser-code-my-project--/2025-01-13T00-00-00-000Z_abc123.jsonl",
         );
 
         let result =
