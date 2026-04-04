@@ -9,7 +9,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
-use tracing::info;
+use tracing::{debug, info};
 
 /// Maximum number of concurrent Pika processes allowed
 const MAX_CONCURRENT_PROCESSES: usize = 50;
@@ -147,6 +147,14 @@ impl PikaProcess {
         }
 
         let npx_executable = resolve_npx_executable();
+
+        info!(
+            process_id = %id,
+            npx = %npx_executable.display(),
+            project = %project_path.display(),
+            session_file = session_file.as_ref().map(|p| p.display().to_string()).unwrap_or_default(),
+            "Spawning pika-agent process"
+        );
 
         // Spawn Pika process with environment variables inherited
         let mut process =
@@ -308,7 +316,7 @@ impl PikaProcess {
     async fn read_stdout(
         stdout: tokio::process::ChildStdout,
         tx: Sender<JsonRpcEvent>,
-        _id: String,
+        id: String,
     ) {
         use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -327,23 +335,37 @@ impl PikaProcess {
                     // Broadcast to all subscribers (ignore errors if no listeners)
                     let _ = tx.send(event);
                 }
-                Err(_) => {
-                    // Not valid JSON-RPC, ignore
-                    // Could be other output from agent
+                Err(e) => {
+                    // Not valid JSON-RPC — log at debug level with truncated content
+                    let preview: String = trimmed.chars().take(80).collect();
+                    debug!(
+                        process_id = %id,
+                        error = %e,
+                        preview = %preview,
+                        "Non-JSON stdout line from pika-agent"
+                    );
                 }
             }
         }
+
+        debug!(process_id = %id, "pika-agent stdout reader ended");
     }
 
-    /// Read stderr without logging raw payload content.
+    /// Read stderr, logging metadata without raw payload content.
     async fn read_stderr(stderr: tokio::process::ChildStderr) {
         use tokio::io::{AsyncBufReadExt, BufReader};
 
         let reader = BufReader::new(stderr);
         let mut lines = reader.lines();
+        let mut line_count: u64 = 0;
 
         while let Ok(Some(_line)) = lines.next_line().await {
+            line_count += 1;
             // Intentionally suppress raw stderr content to avoid leaking prompts/secrets.
+        }
+
+        if line_count > 0 {
+            debug!(stderr_lines = line_count, "pika-agent stderr output");
         }
     }
 }
