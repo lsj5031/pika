@@ -94,6 +94,7 @@ pub mod test_utils {
 
     pub fn create_test_router() -> Router {
         let config = ProjectConfig::default();
+        // Auth disabled for most tests - login tests will verify empty credential handling
         let auth_context = AuthContext::new(
             AuthCredentials::new(String::new(), String::new()),
             false,

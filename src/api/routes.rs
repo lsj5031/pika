@@ -27,14 +27,13 @@ pub fn create_api_router() -> Router<AppState> {
     Router::new()
         .route("/api/projects", get(get_projects).post(add_project))
         .route("/api/projects/{id}", delete(remove_project))
-        .route("/api/projects/{id}/sessions", get(get_project_sessions))
+        .route(
+            "/api/projects/{id}/sessions",
+            get(get_project_sessions).post(create_session_in_project),
+        )
         .route(
             "/api/projects/{id}/sessions/paged",
             get(get_project_sessions_paged),
-        )
-        .route(
-            "/api/projects/{id}/sessions",
-            post(create_session_in_project),
         )
         .route("/api/sessions", get(get_sessions))
         .route("/api/sessions/paged", get(get_sessions_paged))
