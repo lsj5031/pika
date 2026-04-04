@@ -161,6 +161,7 @@ impl IntoResponse for ErrorResponse {
             "BAD_REQUEST" | "INVALID_PATH" | "PROJECT_EXISTS" | "NOT_RUNNING"
             | "VALIDATION_ERROR" => StatusCode::BAD_REQUEST,
             "UNAUTHORIZED" => StatusCode::UNAUTHORIZED,
+            "SESSION_STOPPED" => StatusCode::GONE,
             "TOO_MANY_REQUESTS" => StatusCode::TOO_MANY_REQUESTS,
             "PAYLOAD_TOO_LARGE" => StatusCode::PAYLOAD_TOO_LARGE,
             _ => StatusCode::INTERNAL_SERVER_ERROR,

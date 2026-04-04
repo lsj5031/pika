@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { ThemeProvider } from './components/ThemeProvider'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import '@fontsource/patrick-hand/400.css'
 import '@fontsource/kalam/300.css'
 import '@fontsource/kalam/400.css'
@@ -21,16 +22,18 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="light"
-      enableSystem
-      disableTransitionOnChange
-    >
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-      <Toaster theme="system" />
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="light"
+        enableSystem
+        disableTransitionOnChange
+      >
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+        <Toaster theme="system" />
+      </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )

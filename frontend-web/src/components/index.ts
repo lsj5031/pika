@@ -7,4 +7,5 @@ export { NewSessionDialog } from "./NewSessionDialog";
 export { AuthPrompt } from "./AuthPrompt";
 export { ProjectManager } from "./ProjectManager";
 export { SettingsDialog } from "./SettingsDialog";
+export { ErrorBoundary } from "./ErrorBoundary";
 

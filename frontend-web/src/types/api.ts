@@ -59,6 +59,8 @@ export interface Message {
   content: string;
   timestamp: string | null;
   images?: ImageAttachment[];
+  /** If true, this message was added optimistically and should be removed on error */
+  _optimistic?: boolean;
 }
 
 // Image attachment types

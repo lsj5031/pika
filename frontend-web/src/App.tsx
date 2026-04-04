@@ -318,17 +318,12 @@ function App() {
     (content: string, images?: import("./types/api").ImageUploadRequest[]) => {
       if (!currentSessionId) return;
 
-      sendPromptMutation.mutate({
-        sessionId: currentSessionId,
-        prompt: content,
-        images,
-      });
-
       // Optimistic: immediately show user message in chat
       const optimisticMessage: Message = {
         role: "user",
         content,
         timestamp: new Date().toISOString(),
+        _optimistic: true,
       };
       queryClient.setQueryData<InfiniteData<Message[]>>(
         ["sessions", currentSessionId, "messages", "paged"],
@@ -339,6 +334,32 @@ function App() {
           const pages = [...old.pages];
           pages[0] = [...pages[0], optimisticMessage];
           return { ...old, pages };
+        }
+      );
+
+      // Send prompt, rolling back optimistic message on error
+      sendPromptMutation.mutate(
+        { sessionId: currentSessionId, prompt: content, images },
+        {
+          onError: () => {
+            queryClient.setQueryData<InfiniteData<Message[]>>(
+              ["sessions", currentSessionId, "messages", "paged"],
+              (old) => {
+                if (!old) return old;
+                const pages = old.pages.map((page) =>
+                  page.filter(
+                    (msg) =>
+                      !(
+                        msg._optimistic &&
+                        msg.content === content &&
+                        msg.timestamp === optimisticMessage.timestamp
+                      )
+                  )
+                );
+                return { ...old, pages };
+              }
+            );
+          },
         }
       );
     },
