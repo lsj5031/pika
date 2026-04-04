@@ -1,13 +1,28 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useSessions } from '../useSessions'
 
 const mockGet = vi.fn()
 
-vi.mock('../lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   apiClient: {
-    get: mockGet,
+    get: (...args: unknown[]) => mockGet(...args),
+  },
+}))
+
+// Mock useResolvedSessions to just pass through sessions
+vi.mock('../useResolvedSessions', () => ({
+  useResolvedSessions: (sessions: unknown) => sessions,
+}))
+
+// Mock appStore
+const mockSetActiveSessionIds = vi.fn()
+vi.mock('../../store/appStore', () => ({
+  useAppStore: {
+    getState: () => ({
+      setActiveSessionIds: mockSetActiveSessionIds,
+    }),
   },
 }))
 
@@ -31,24 +46,40 @@ const createWrapper = () => {
   }
 }
 
-describe.skip('useSessions - React 19 Compatibility Issue', () => {
+describe('useSessions', () => {
   beforeAll(() => {
     onlineManager.setOnline(true)
   })
 
-  it('fetches sessions successfully', async () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('syncs activeSessionIds from API response', async () => {
     const mockSessions = [
       {
-        session_id: 'session-1',
-        project_name: 'project1',
-        created_at: '2026-01-18 10:00:00',
-        status: 'running',
+        id: 'session-1',
+        name: 'Active Session',
+        project_id: 'proj-1',
+        project_path: '/path/1',
+        created_at: '2026-01-18T10:00:00Z',
+        is_active: true,
       },
       {
-        session_id: 'session-2',
-        project_name: 'project2',
-        created_at: '2026-01-18 09:00:00',
-        status: 'stopped',
+        id: 'session-2',
+        name: 'Inactive Session',
+        project_id: 'proj-2',
+        project_path: '/path/2',
+        created_at: '2026-01-18T09:00:00Z',
+        is_active: false,
+      },
+      {
+        id: 'session-3',
+        name: 'Another Active',
+        project_id: 'proj-3',
+        project_path: '/path/3',
+        created_at: '2026-01-18T08:00:00Z',
+        is_active: true,
       },
     ]
     mockGet.mockResolvedValue(mockSessions)
@@ -61,18 +92,12 @@ describe.skip('useSessions - React 19 Compatibility Issue', () => {
       expect(result.current.isSuccess).toBe(true)
     })
 
-    expect(result.current.data).toEqual(mockSessions)
-    expect(mockGet).toHaveBeenCalledWith('/api/sessions')
-  })
-
-  it('handles API errors', async () => {
-    mockGet.mockRejectedValue(new Error('Failed to fetch'))
-
-    const { result } = renderHook(() => useSessions(), {
-      wrapper: createWrapper(),
-    })
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(result.current.error).toBeTruthy()
+    // Verify activeSessionIds are populated from the response
+    expect(mockSetActiveSessionIds).toHaveBeenCalled()
+    const calledSet = mockSetActiveSessionIds.mock.calls[0][0] as Set<string>
+    expect(calledSet).toBeInstanceOf(Set)
+    expect(calledSet.has('session-1')).toBe(true)
+    expect(calledSet.has('session-3')).toBe(true)
+    expect(calledSet.has('session-2')).toBe(false)
   })
 })

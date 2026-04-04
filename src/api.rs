@@ -831,9 +831,15 @@ pub async fn send_prompt_to_session(
     process_manager
         .send_prompt_with_images(&process_id, &req.prompt, &images_to_send)
         .await
-        .map_err(|e| ErrorResponse {
-            error: "INTERNAL_ERROR".to_string(),
-            message: format!("Failed to send prompt: {}", e),
+        .map_err(|e| match &e {
+            crate::agent::PikaProcessError::ProcessNotRunning { .. } => ErrorResponse {
+                error: "SESSION_STOPPED".to_string(),
+                message: "Session process has stopped. Please restart the session.".to_string(),
+            },
+            _ => ErrorResponse {
+                error: "INTERNAL_ERROR".to_string(),
+                message: format!("Failed to send prompt: {}", e),
+            },
         })?;
 
     // Store the user prompt with image metadata for later retrieval

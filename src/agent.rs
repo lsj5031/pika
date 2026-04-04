@@ -135,7 +135,7 @@ impl PikaProcess {
 
         // Build command arguments
         let mut args = vec![
-            "@mariozechner/pika-agent".to_string(),
+            "@mariozechner/pi-coding-agent".to_string(),
             "--mode".to_string(),
             "rpc".to_string(),
         ];
@@ -211,6 +211,12 @@ impl PikaProcess {
         prompt: &str,
         images: &[ImageUpload],
     ) -> Result<(), PikaProcessError> {
+        if !self.is_running() {
+            return Err(PikaProcessError::ProcessNotRunning {
+                id: self.id.clone(),
+            });
+        }
+
         let image_contents: Vec<serde_json::Value> = images
             .iter()
             .map(|img| {
@@ -256,6 +262,12 @@ impl PikaProcess {
 
     /// Send a raw JSON command to the Pika process via stdin
     pub async fn send_command(&mut self, command: serde_json::Value) -> Result<(), PikaProcessError> {
+        if !self.is_running() {
+            return Err(PikaProcessError::ProcessNotRunning {
+                id: self.id.clone(),
+            });
+        }
+
         let request_str = format!("{}\n", command);
         let stdin = &mut self.stdin;
 
@@ -717,6 +729,9 @@ pub enum PikaProcessError {
     #[error("Process not found: {id}")]
     ProcessNotFound { id: String },
 
+    #[error("Process {id} is no longer running")]
+    ProcessNotRunning { id: String },
+
     #[error("Too many concurrent processes (max {max})")]
     TooManyProcesses { max: usize },
 }
@@ -759,6 +774,44 @@ mod tests {
         let manager = ProcessManager::new();
         assert_eq!(manager.count(), 0);
         assert!(manager.list().is_empty());
+    }
+
+    #[test]
+    fn test_process_not_running_error_display() {
+        let err = PikaProcessError::ProcessNotRunning {
+            id: "test-proc-123".to_string(),
+        };
+        let msg = format!("{}", err);
+        assert!(
+            msg.contains("test-proc-123"),
+            "Error message should contain the process ID"
+        );
+        assert!(
+            msg.to_lowercase().contains("no longer running")
+                || msg.to_lowercase().contains("not running")
+                || msg.to_lowercase().contains("stopped"),
+            "Error message should indicate process is not running: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_process_not_running_error_is_distinct_from_write_failed() {
+        // ProcessNotRunning should be a separate variant from WriteFailed
+        let not_running = PikaProcessError::ProcessNotRunning {
+            id: "proc-1".to_string(),
+        };
+        let write_failed = PikaProcessError::WriteFailed {
+            id: "proc-1".to_string(),
+            source: std::io::Error::new(std::io::ErrorKind::BrokenPipe, "Broken pipe"),
+        };
+
+        // They should have different display messages
+        assert_ne!(
+            format!("{}", not_running),
+            format!("{}", write_failed),
+            "ProcessNotRunning and WriteFailed should produce different error messages"
+        );
     }
 
     #[test]

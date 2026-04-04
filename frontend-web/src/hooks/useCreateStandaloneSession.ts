@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api";
+import { showError } from "../lib/toast";
 
 export interface CreateStandaloneSessionRequest {
   path: string;
@@ -29,6 +30,9 @@ export function useCreateStandaloneSession() {
       // Invalidate sessions query to refetch
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+    onError: (error) => {
+      showError("Failed to create standalone session", error);
     },
   });
 }
