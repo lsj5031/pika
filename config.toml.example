@@ -3,6 +3,11 @@
 #
 # config.toml is NOT the right place for credentials — use environment variables
 # (or /etc/pika/pika.env in production). See README.md for details.
+#
+# Config file location can be overridden via:
+# - PIKA_CONFIG_PATH environment variable (takes priority)
+# - --config CLI argument
+# - Default: ./config.toml
 
 # Comma-separated list of absolute paths that Pika is allowed to use as project roots.
 # Sessions can only be created under these directories.
