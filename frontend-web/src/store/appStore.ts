@@ -19,6 +19,7 @@ interface AppState {
   setCurrentSession: (sessionId: string | null) => void;
   setNeedsAuth: (needsAuth: boolean) => void;
   setActiveSession: (sessionId: string, isActive: boolean) => void;
+  setActiveSessionIds: (ids: Set<string>) => void;
   setThinkingSession: (sessionId: string, isThinking: boolean) => void;
   markSessionAsRead: (sessionId: string, messageCount: number) => void;
   incrementUnreadCount: (sessionId: string) => void;
@@ -68,6 +69,8 @@ export const useAppStore = create<AppState>()(
           }
           return { activeSessionIds: newSet };
         }),
+
+      setActiveSessionIds: (ids) => set({ activeSessionIds: ids }),
 
       setThinkingSession: (sessionId, isThinking) =>
         set((state) => {

@@ -142,7 +142,7 @@ export function SessionItem({
 
   return (
     <div
-      className="relative"
+      className="relative group"
       onMouseEnter={() => firstMessagePreview && setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
     >

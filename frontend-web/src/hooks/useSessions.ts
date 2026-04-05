@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../lib/api";
 import type { Session } from "../types";
 import { useResolvedSessions } from "./useResolvedSessions";
+import { useAppStore } from "../store/appStore";
+import { useEffect } from "react";
 
 export function useSessions(
   enabled = true,
@@ -20,6 +22,16 @@ export function useSessions(
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+
+  // Sync activeSessionIds from API response
+  useEffect(() => {
+    if (sessionsQuery.data) {
+      const activeIds = new Set(
+        sessionsQuery.data.filter((s) => s.is_active).map((s) => s.id)
+      );
+      useAppStore.getState().setActiveSessionIds(activeIds);
+    }
+  }, [sessionsQuery.data]);
 
   const enhancedSessions = useResolvedSessions(sessionsQuery.data, enabled, {
     resolveNames,
