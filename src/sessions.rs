@@ -527,6 +527,10 @@ async fn scan_project_sessions(
         if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
             continue;
         }
+        // Skip hidden files (e.g. .user-prompts-*.jsonl)
+        if path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.')) {
+            continue;
+        }
         jsonl_paths.push(path);
     }
 
