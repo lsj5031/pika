@@ -52,8 +52,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI arguments
     let cli = Cli::parse();
 
-    // Determine config file path (default: ./config.toml)
-    let config_path = cli.config.unwrap_or_else(|| PathBuf::from("config.toml"));
+    // Determine config file path:
+    // 1. PIKA_CONFIG_PATH environment variable (for production flexibility)
+    // 2. CLI --config argument
+    // 3. Default: ./config.toml
+    let config_path = std::env::var("PIKA_CONFIG_PATH")
+        .ok()
+        .map(PathBuf::from)
+        .or_else(|| cli.config.clone())
+        .unwrap_or_else(|| PathBuf::from("config.toml"));
     let config_path = if config_path.is_absolute() {
         config_path
     } else {
