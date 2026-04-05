@@ -53,7 +53,7 @@ describe("SessionItem", () => {
   });
 
   it("has the 'group' CSS class on the parent container for the non-compact layout so favorite button hover works", () => {
-    const { container } = render(
+    render(
       <SessionItem
         session={mockSession}
         isSelected={false}
