@@ -1120,6 +1120,64 @@ mod tests {
     }
 
     #[test]
+    fn test_stored_prompt_with_images_roundtrip() {
+        let images = vec![ImageAttachmentStored {
+            id: "img-001".to_string(),
+            filename: "screenshot.png".to_string(),
+            content_type: "image/png".to_string(),
+            size: 42,
+            url: "data:image/png;base64,AAAA".to_string(),
+        }];
+
+        let stored = StoredUserPromptWithImages {
+            prompt: "Describe this image".to_string(),
+            timestamp: "2026-04-05T00:00:00Z".to_string(),
+            images: Some(images),
+        };
+
+        let json = serde_json::to_string(&stored).unwrap();
+        let parsed: StoredUserPromptWithImages = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.prompt, "Describe this image");
+        assert_eq!(parsed.timestamp, "2026-04-05T00:00:00Z");
+        let imgs = parsed.images.unwrap();
+        assert_eq!(imgs.len(), 1);
+        assert_eq!(imgs[0].id, "img-001");
+        assert_eq!(imgs[0].filename, "screenshot.png");
+        assert_eq!(imgs[0].content_type, "image/png");
+        assert_eq!(imgs[0].size, 42);
+        assert_eq!(imgs[0].url, "data:image/png;base64,AAAA");
+    }
+
+    #[test]
+    fn test_stored_prompt_without_images_omits_field() {
+        let stored = StoredUserPromptWithImages {
+            prompt: "Just text".to_string(),
+            timestamp: "2026-04-05T00:00:00Z".to_string(),
+            images: None,
+        };
+
+        let json = serde_json::to_string(&stored).unwrap();
+        // images field should be omitted when None (skip_serializing_if)
+        assert!(!json.contains("images"));
+    }
+
+    #[test]
+    fn test_old_format_prompt_parses_as_new_format() {
+        // Old StoredUserPrompt format (no images field) should parse
+        // as StoredUserPromptWithImages with images = None
+        let old = StoredUserPrompt {
+            prompt: "Hello without images".to_string(),
+            timestamp: "2026-04-05T00:00:00Z".to_string(),
+        };
+        let json = serde_json::to_string(&old).unwrap();
+
+        let parsed: StoredUserPromptWithImages = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.prompt, "Hello without images");
+        assert!(parsed.images.is_none());
+    }
+
+    #[test]
     fn test_session_info_serialization() {
         let info = SessionInfo {
             id: "test-session-123".to_string(),
