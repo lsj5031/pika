@@ -136,34 +136,28 @@ deploy-user: build
 	@echo "🚀 Deploying with user systemd services (no sudo)..."
 	@echo "Installing user systemd services..."
 	@mkdir -p $(HOME)/.config/systemd/user
-	cp pika-tunnel.user.service $(HOME)/.config/systemd/user/pika-tunnel.service
-	cp pika.user.service $(HOME)/.config/systemd/user/pika.service
+	cp deploy/pika.user.service $(HOME)/.config/systemd/user/pika.service
 	systemctl --user daemon-reload
 	@echo "Stopping any existing pika process on port 7847..."
 	-pkill -f pika || true
 	@echo "Waiting for port to be released..."
 	@sleep 1
 	@echo "Enabling and starting user services..."
-	systemctl --user enable pika-tunnel.service
-	systemctl --user start pika-tunnel.service
 	systemctl --user enable pika.service
 	systemctl --user start pika.service
-	systemctl --user restart pika.service
-	@echo "✅ User services restarted"
+	@echo "✅ User service started"
 
 # Install user systemd services without starting
 install-service-user:
 	@echo "Installing user systemd services (no sudo)..."
 	@mkdir -p $(HOME)/.config/systemd/user
-	cp pika-tunnel.user.service $(HOME)/.config/systemd/user/pika-tunnel.service
-	cp pika.user.service $(HOME)/.config/systemd/user/pika.service
+	cp deploy/pika.user.service $(HOME)/.config/systemd/user/pika.service
 	systemctl --user daemon-reload
 	@echo "✅ User services installed"
 
 # Restart user services
 restart-service-user:
 	@echo "Restarting user systemd services (no sudo)..."
-	systemctl --user restart pika-tunnel.service
 	systemctl --user restart pika.service
 	@echo "✅ User services restarted"
 
@@ -177,9 +171,6 @@ status:
 
 # Check user service status
 status-user:
-	@echo "=== Cloudflare Tunnel (user) ==="
-	systemctl --user status pika-tunnel.service --no-pager -l
-	@echo ""
 	@echo "=== Pika (user) ==="
 	systemctl --user status pika.service --no-pager -l
 

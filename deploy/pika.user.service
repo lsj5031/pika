@@ -4,8 +4,8 @@ After=network.target cloudflared-pi.service
 
 [Service]
 Type=simple
-WorkingDirectory=/home/%i/code/pika
-ExecStart=/home/%i/code/pika/target/release/pika
+WorkingDirectory=/home/leo/code/pi-agent-manager
+ExecStart=/home/leo/code/pi-agent-manager/target/release/pika
 Restart=always
 RestartSec=5
 Environment=PORT=7847
