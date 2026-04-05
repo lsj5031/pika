@@ -41,12 +41,14 @@ function fuzzySearch(query: string, text: string): boolean {
 // Format date for display
 const formatDate = (dateString: string) => {
   try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
     return new Intl.DateTimeFormat("en-US", {
       month: "short",
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
-    }).format(new Date(dateString));
+    }).format(date);
   } catch {
     return dateString;
   }

@@ -261,6 +261,7 @@ function App() {
             role: event.data.role as "user" | "assistant",
             content: event.data.content,
             timestamp: event.data.timestamp,
+            images: event.data.images,
           };
           queryClient.setQueryData<InfiniteData<Message[]>>(
             ["sessions", event.data.session_id, "messages", "paged"],
@@ -273,6 +274,12 @@ function App() {
               return { ...old, pages };
             }
           );
+          break;
+        }
+        case "Error": {
+          toast.error("Agent Error", {
+            description: event.data.message,
+          });
           break;
         }
       }
@@ -318,11 +325,19 @@ function App() {
     (content: string, images?: import("./types/api").ImageUploadRequest[]) => {
       if (!currentSessionId) return;
 
-      // Optimistic: immediately show user message in chat
+      // Optimistic: immediately show user message in chat (including images)
+      const optimisticImages = images?.map((img, i) => ({
+        id: `optimistic-${i}`,
+        filename: img.filename,
+        content_type: img.content_type,
+        size: Math.round((img.data.length * 3) / 4),
+        url: `data:${img.content_type};base64,${img.data}`,
+      }));
       const optimisticMessage: Message = {
         role: "user",
         content,
         timestamp: new Date().toISOString(),
+        images: optimisticImages,
         _optimistic: true,
       };
       queryClient.setQueryData<InfiniteData<Message[]>>(

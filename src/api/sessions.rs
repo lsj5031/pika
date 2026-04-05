@@ -315,10 +315,20 @@ pub async fn send_prompt_to_session(
         }
 
         for img in images {
-            if !allowed_mimes.contains(&img.content_type) {
+            if img.content_type.is_empty()
+                || img.content_type == "undefined"
+                || !allowed_mimes.contains(&img.content_type)
+            {
                 return Err(ErrorResponse {
                     error: "BAD_REQUEST".to_string(),
-                    message: format!("Unsupported image type: {}", img.content_type),
+                    message: format!("Invalid or unsupported image type: {}", img.content_type),
+                });
+            }
+
+            if img.data.is_empty() || img.data == "undefined" {
+                return Err(ErrorResponse {
+                    error: "BAD_REQUEST".to_string(),
+                    message: format!("Invalid image data for file: {}", img.filename),
                 });
             }
 
@@ -412,13 +422,40 @@ pub async fn send_prompt_to_session(
         if images_to_store.is_empty() {
             None
         } else {
-            Some(images_to_store)
+            Some(images_to_store.clone())
         },
     )
     .await
     {
         warn!(error = %e, session_id = %session_id, "Failed to store user prompt");
     }
+
+    // Broadcast user prompt via WebSocket so it appears immediately in the chat
+    let ws_images = if images_to_store.is_empty() {
+        None
+    } else {
+        Some(
+            images_to_store
+                .into_iter()
+                .map(|img| crate::api::types::ImageAttachmentResponse {
+                    id: img.id,
+                    filename: img.filename,
+                    content_type: img.content_type,
+                    size: img.size,
+                    url: img.url,
+                })
+                .collect(),
+        )
+    };
+
+    let ws_event = crate::websocket::WSEvent::MessageAdded {
+        session_id: session_id.clone(),
+        role: "user".to_string(),
+        content: req.prompt.clone(),
+        timestamp: chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        images: ws_images,
+    };
+    state.ws_state.broadcast(ws_event);
 
     Ok(Json(serde_json::json!({
         "status": "ok",

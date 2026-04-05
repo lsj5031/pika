@@ -107,7 +107,8 @@ export type WSEvent =
   | { type: "SessionStarted"; data: { session_id: string; project_path: string } }
   | { type: "SessionStopped"; data: { session_id: string } }
   | { type: "ThinkingDelta"; data: { session_id: string; content: string } }
-  | { type: "MessageAdded"; data: { session_id: string; role: string; content: string; timestamp: string } };
+  | { type: "MessageAdded"; data: { session_id: string; role: string; content: string; timestamp: string; images?: ImageAttachment[] } }
+  | { type: "Error"; data: { session_id?: string; message: string; code?: string } };
 
 // Helper type for WebSocket event data extraction
 export type WSEventData = WSEvent extends { data: infer D } ? D : never;

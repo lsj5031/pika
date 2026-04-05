@@ -279,10 +279,9 @@ impl PikaProcess {
             .iter()
             .map(|img| {
                 serde_json::json!({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": format!("data:{};base64,{}", img.content_type, img.data)
-                    }
+                    "type": "image",
+                    "mimeType": img.content_type,
+                    "data": img.data
                 })
             })
             .collect();
