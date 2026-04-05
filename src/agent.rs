@@ -78,6 +78,51 @@ fn resolve_npx_executable() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("npx"))
 }
 
+/// Build a new PATH string for the child process by prepending the directory
+/// containing the npx executable to the parent's PATH. This ensures that npm
+/// and node can be found in the child environment.
+fn build_child_path(npx_path: &Path, parent_path: &str) -> String {
+    let npx_dir = npx_path.parent().unwrap_or_else(|| Path::new("."));
+    format!("{}:{}", npx_dir.to_string_lossy(), parent_path)
+}
+
+/// Debug helper: check npm root -g and log the result.
+/// This helps diagnose environment issues when pika-agent fails to start.
+fn debug_npm_root_check(process_id: &str) {
+    // Log key environment variables that affect npm
+    let env_keys = ["PATH", "HOME", "USER", "SHELL", "NPM_CONFIG_PREFIX", "NPM_CONFIG_GLOBALCONFIG", "NVM_DIR"];
+    let mut env_entries = Vec::new();
+    for key in &env_keys {
+        if let Ok(val) = env::var(key) {
+            env_entries.push(format!("{}={}", key, val));
+        }
+    }
+    debug!(process_id = process_id, env = ?env_entries, "Debug: environment");
+
+    // Run npm root -g using the same environment that will be inherited by the child process.
+    // Use std::process::Command for synchronous execution (blocking, but fast and only for debugging).
+    match std::process::Command::new("npm").arg("root").arg("-g").output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            debug!(
+                process_id = process_id,
+                npm_root_status = output.status.code(),
+                npm_root_stdout = %stdout,
+                npm_root_stderr = %stderr,
+                "npm root -g pre-check"
+            );
+        }
+        Err(e) => {
+            debug!(
+                process_id = process_id,
+                npm_root_error = %e,
+                "npm root -g pre-check failed to execute"
+            );
+        }
+    }
+}
+
 /// JSON-RPC event emitted by Pika process
 /// Pika uses events with "type" field, not standard JSON-RPC
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,30 +201,35 @@ impl PikaProcess {
             "Spawning pika-agent process"
         );
 
+        debug_npm_root_check(&id);
         // Spawn Pika process with environment variables inherited
-        let mut process =
-            Command::new(&npx_executable)
-                .args(&args)
-                .current_dir(project_path.canonicalize().map_err(|_e| {
-                    PikaProcessError::InvalidPath {
-                        path: project_path.clone(),
-                    }
-                })?)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .map_err(|e| match e.kind() {
-                    std::io::ErrorKind::NotFound => PikaProcessError::NpxNotFound {
-                        path: project_path.clone(),
-                        executable: npx_executable.to_string_lossy().to_string(),
-                        source: e,
-                    },
-                    _ => PikaProcessError::SpawnFailed {
-                        path: project_path.clone(),
-                        source: e,
-                    },
-                })?;
+        // Ensure the child process can find npm and node by prepending the npx directory to PATH
+        let mut command = Command::new(&npx_executable);
+        command.args(&args);
+        command.current_dir(project_path.canonicalize().map_err(|_e| {
+            PikaProcessError::InvalidPath {
+                path: project_path.clone(),
+            }
+        })?);
+        command.stdin(Stdio::piped());
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+        // Prepend the directory containing npx to PATH so npm and node can be found
+        if let Ok(current_path) = env::var("PATH") {
+            let new_path = build_child_path(&npx_executable, &current_path);
+            command.env("PATH", new_path);
+        }
+        let mut process = command.spawn().map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => PikaProcessError::NpxNotFound {
+                path: project_path.clone(),
+                executable: npx_executable.to_string_lossy().to_string(),
+                source: e,
+            },
+            _ => PikaProcessError::SpawnFailed {
+                path: project_path.clone(),
+                source: e,
+            },
+        })?;
 
         // Get stdin, stdout and stderr handles
         let stdin = process.stdin.take().ok_or(PikaProcessError::PipeFailed)?;
@@ -850,5 +900,39 @@ mod tests {
         assert!(resolved.starts_with(root.join("v22.2.0")));
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn test_build_child_path_prepends_npx_dir() {
+        let npx_path = Path::new("/home/user/.nvm/versions/node/v22.2.0/bin/npx");
+        let parent_path = "/usr/local/bin:/usr/bin:/bin";
+
+        let result = build_child_path(npx_path, parent_path);
+
+        assert!(result.starts_with("/home/user/.nvm/versions/node/v22.2.0/bin:"));
+        assert!(result.contains("/usr/local/bin"));
+        assert!(result.contains("/usr/bin"));
+    }
+
+    #[test]
+    fn test_build_child_path_handles_empty_parent() {
+        let npx_path = Path::new("/home/user/.nvm/versions/node/v22.2.0/bin/npx");
+        let parent_path = "";
+
+        let result = build_child_path(npx_path, parent_path);
+
+        assert!(result.starts_with("/home/user/.nvm/versions/node/v22.2.0/bin:"));
+    }
+
+    #[test]
+    fn test_build_child_path_handles_relative_npx_path() {
+        let npx_path = Path::new("npx");
+        let parent_path = "/usr/bin:/bin";
+
+        let result = build_child_path(npx_path, parent_path);
+
+        // When npx_path has no parent directory, it falls back to "."
+        // The result should contain the parent path
+        assert!(result.contains("/usr/bin"));
     }
 }
