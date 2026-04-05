@@ -8,15 +8,11 @@ use super::types::{ErrorResponse, ModelInfo, PikaSettingsResponse, UpdatePikaSet
 pub async fn get_pi_settings(
     State(_state): State<AppState>,
 ) -> Result<Json<PikaSettingsResponse>, ErrorResponse> {
-    use std::path::PathBuf;
 
-    let pi_agent_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pika")
-        .join("agent");
+    let pi_dir = crate::sessions::pi_agent_dir();
 
-    let settings_path = pi_agent_dir.join("settings.json");
-    let models_path = pi_agent_dir.join("models.json");
+    let settings_path = pi_dir.join("settings.json");
+    let models_path = pi_dir.join("models.json");
 
     // Read settings
     let settings = if tokio::fs::try_exists(&settings_path).await.unwrap_or(false) {
@@ -106,14 +102,10 @@ pub async fn update_pi_settings(
     State(_state): State<AppState>,
     Json(request): Json<UpdatePikaSettingsRequest>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    use std::path::PathBuf;
 
-    let pi_agent_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".pika")
-        .join("agent");
+    let pi_dir = crate::sessions::pi_agent_dir();
 
-    let settings_path = pi_agent_dir.join("settings.json");
+    let settings_path = pi_dir.join("settings.json");
 
     // Read existing settings
     let mut settings = if tokio::fs::try_exists(&settings_path).await.unwrap_or(false) {

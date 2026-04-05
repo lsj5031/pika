@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../lib/api";
+import { showError } from "../lib/toast";
 
 export function useStopSession() {
   const queryClient = useQueryClient();
@@ -12,6 +13,9 @@ export function useStopSession() {
       // Invalidate session queries
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
       queryClient.invalidateQueries({ queryKey: ["sessions", sessionId, "status"] });
+    },
+    onError: (error) => {
+      showError("Failed to stop session", error);
     },
   });
 }

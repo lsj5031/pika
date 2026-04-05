@@ -123,12 +123,19 @@ export function NewSessionDialog({ trigger, open: controlledOpen, onOpenChange: 
   };
 
   const handleQuickStart = () => {
-    setCustomPath("~"); // Use home directory
-    setUseCustomPath(true);
-    // Auto-create with home directory
-    setTimeout(() => {
-      handleCreateFromPath();
-    }, 100);
+    createStandaloneMutation.mutate(
+      {
+        path: "~",
+        name: sessionName.trim() || undefined,
+      },
+      {
+        onSuccess: (result) => {
+          setOpen(false);
+          setCurrentSession(result.session_id);
+          resetForm();
+        },
+      }
+    );
   };
 
   const defaultTrigger = (

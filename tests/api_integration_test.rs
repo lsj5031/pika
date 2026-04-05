@@ -222,6 +222,29 @@ async fn get_unknown_session_returns_404() {
 }
 
 #[tokio::test]
+async fn send_prompt_to_nonexistent_session_returns_404() {
+    let app = pika::create_test_app().await;
+
+    let response = app
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/sessions/does-not-exist/prompt")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"prompt":"hello"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["error"], "NOT_FOUND");
+}
+
+#[tokio::test]
 async fn static_file_traversal_is_blocked() {
     let app = pika::create_test_app().await;
 
