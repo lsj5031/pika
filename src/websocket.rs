@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use tracing::info;
 
+use crate::api::types::ImageAttachmentResponse;
 use crate::auth::is_request_authenticated;
 use crate::{AppState, extract_client_ip};
 
@@ -42,6 +43,14 @@ pub enum WSEvent {
         role: String,
         content: String,
         timestamp: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        images: Option<Vec<ImageAttachmentResponse>>,
+    },
+    /// An error occurred during agent execution or system operation
+    Error {
+        session_id: Option<String>,
+        message: String,
+        code: Option<String>,
     },
 }
 
@@ -237,6 +246,7 @@ mod tests {
             role: "assistant".to_string(),
             content: "Hello!".to_string(),
             timestamp: "2026-01-13T00:00:00Z".to_string(),
+            images: None,
         };
         let json = event.to_json().unwrap();
         assert!(json.contains("MessageAdded"));

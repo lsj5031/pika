@@ -47,6 +47,9 @@ export function ChatInput({
   }, [content]);
 
   const validateFile = (file: File): string | null => {
+    if (!file.type || file.type === "undefined") {
+      return "Could not determine file type.";
+    }
     if (!ALLOWED_TYPES.includes(file.type)) {
       return `Invalid file type: ${file.type}. Only PNG, JPEG, GIF, and WebP are allowed.`;
     }
@@ -130,7 +133,12 @@ export function ChatInput({
       const reader = new FileReader();
       reader.onload = () => {
         const result = reader.result as string;
-        resolve(result.split(",")[1]);
+        const parts = result.split(",");
+        if (parts.length < 2) {
+          reject(new Error("Failed to parse base64 data from file"));
+          return;
+        }
+        resolve(parts[1]);
       };
       reader.onerror = reject;
       reader.readAsDataURL(file);

@@ -4,6 +4,25 @@ use crate::AppState;
 
 use super::types::{ErrorResponse, ModelInfo, PikaSettingsResponse, UpdatePikaSettingsRequest};
 
+/// Kill all running pika-agent processes so they restart with new settings.
+async fn kill_all_running_processes(state: &AppState) {
+    let process_ids = {
+        let pm = state.process_manager.lock().await;
+        pm.list()
+    };
+
+    if process_ids.is_empty() {
+        return;
+    }
+
+    let mut pm = state.process_manager.lock().await;
+    for pid in process_ids {
+        if let Err(e) = pm.kill(&pid).await {
+            tracing::warn!(process_id = %pid, error = %e, "Failed to kill process during settings update");
+        }
+    }
+}
+
 /// GET /api/settings - get PI settings
 pub async fn get_pi_settings(
     State(_state): State<AppState>,
@@ -99,7 +118,7 @@ pub async fn get_pi_settings(
 
 /// POST /api/settings - update PI settings
 pub async fn update_pi_settings(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(request): Json<UpdatePikaSettingsRequest>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
 
@@ -117,6 +136,15 @@ pub async fn update_pi_settings(
     } else {
         serde_json::json!({})
     };
+
+    // Detect model or provider change — requires process restart
+    let model_changed = request.default_model.as_ref()
+        .map(|m| settings.get("defaultModel").and_then(|v| v.as_str()) != Some(m))
+        .unwrap_or(false);
+    let provider_changed = request.default_provider.as_ref()
+        .map(|p| settings.get("defaultProvider").and_then(|v| v.as_str()) != Some(p))
+        .unwrap_or(false);
+    let needs_restart = model_changed || provider_changed;
 
     // Update settings
     if let Some(default_model) = request.default_model {
@@ -152,6 +180,11 @@ pub async fn update_pi_settings(
         error: "INTERNAL_ERROR".to_string(),
         message: format!("Failed to write settings: {}", e),
     })?;
+
+    // Kill running processes so they restart with new model/provider
+    if needs_restart {
+        kill_all_running_processes(&state).await;
+    }
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

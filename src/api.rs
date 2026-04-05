@@ -13,7 +13,7 @@ mod projects;
 mod routes;
 mod sessions;
 mod settings;
-mod types;
+pub mod types;
 
 pub use routes::{create_api_router, create_auth_router};
 

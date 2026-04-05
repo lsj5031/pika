@@ -82,9 +82,11 @@ export function SettingsDialog({ trigger, open: controlledOpen, onOpenChange: se
 
   const handleSave = () => {
     if (!settings) return; // Guard against saving before settings load
+    const selectedModel = settings?.availableModels?.find(m => m.id === effectiveModel);
     updateSettingsMutation.mutate(
       {
         defaultModel: effectiveModel,
+        defaultProvider: selectedModel?.provider,
         defaultThinkingLevel: effectiveThinkingLevel,
       },
       {

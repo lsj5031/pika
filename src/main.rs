@@ -18,7 +18,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use tokio::net::TcpListener;
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
 
 /// Pika - Manages multiple agent sessions and their execution contexts
@@ -537,6 +537,12 @@ async fn event_bridge_task(app_state: AppState) {
                                         .and_then(|v| v.as_str())
                                         .unwrap_or("assistant");
 
+                                    // Skip user messages — already broadcast by
+                                    // send_prompt_to_session when the prompt arrives
+                                    if role == "user" {
+                                        continue;
+                                    }
+
                                     let timestamp = message
                                         .get("timestamp")
                                         .and_then(|v| v.as_i64())
@@ -569,6 +575,7 @@ async fn event_bridge_task(app_state: AppState) {
                                         role: role.to_string(),
                                         content,
                                         timestamp,
+                                        images: None,
                                     };
                                     app_state.ws_state.broadcast(ws_event);
                                 }
@@ -596,14 +603,53 @@ async fn event_bridge_task(app_state: AppState) {
                             }
                             "response" => {
                                 // Response to a command
-                                let success = event
-                                    .extra
-                                    .get("success")
-                                    .and_then(|v| v.as_bool())
-                                    .unwrap_or(true);
-                                if !success {
-                                    warn!("❌ Command failed");
+                                if let Some(success) = event.extra.get("success").and_then(|v| v.as_bool()) {
+                                    if !success {
+                                        let message = event.extra.get("message")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("Unknown agent error")
+                                            .to_string();
+                                        warn!("❌ Command failed: {}", message);
+                                        
+                                        app_state.ws_state.broadcast(WSEvent::Error {
+                                            session_id: Some(ws_id.clone()),
+                                            message,
+                                            code: Some("AGENT_COMMAND_FAILED".to_string()),
+                                        });
+                                    }
                                 }
+                            }
+                            "error" => {
+                                // Explicit error event from agent
+                                let message = event.extra.get("message")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("Unknown agent error")
+                                    .to_string();
+                                warn!("❌ Agent error: {}", message);
+
+                                let error_code = event.extra.get("code")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string());
+
+                                app_state.ws_state.broadcast(WSEvent::Error {
+                                    session_id: Some(ws_id.clone()),
+                                    message: message.clone(),
+                                    code: error_code,
+                                });
+
+                                // Also broadcast as an assistant message so it appears in chat history
+                                let error_ts = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+                                app_state.ws_state.broadcast(WSEvent::MessageAdded {
+                                    session_id: ws_id.clone(),
+                                    role: "assistant".to_string(),
+                                    content: format!("Error: {}", message),
+                                    timestamp: error_ts,
+                                    images: None,
+                                });
+                            }
+                            "turn_start" | "turn_end" | "message_start" | "auto_retry_start" | "auto_retry_end" | "extension_ui_request" => {
+                                // Known events that don't need backend processing
+                                debug!("Ignored agent event: {}", event_type);
                             }
                             _ => {
                                 warn!("Unhandled event type: {}", event_type);

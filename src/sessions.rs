@@ -53,7 +53,7 @@ pub fn safe_timestamp_to_string(ts: i64) -> String {
         return "Unknown".to_string();
     }
     chrono::DateTime::from_timestamp(ts, 0)
-        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
         .unwrap_or_else(|| "Unknown".to_string())
 }
 
@@ -651,6 +651,8 @@ pub fn extract_message_content(message: &serde_json::Value) -> String {
 
             if !tool_parts.is_empty() {
                 tool_parts.join("\n")
+            } else if content_array.is_empty() {
+                String::from("[Empty response]")
             } else {
                 format!(
                     "Tool call: {}",
