@@ -469,7 +469,14 @@ async fn scan_project_sessions(
 
     let results = join_all(futures).await;
     for result in results {
-        sessions.push(result?);
+        match result {
+            Ok(session) => sessions.push(session),
+            Err(e) => {
+                // Log the error but continue scanning other sessions
+                // Empty session files or corrupt files shouldn't break the entire scan
+                tracing::debug!("Failed to load session info: {}", e);
+            }
+        }
     }
 
     Ok(sessions)
