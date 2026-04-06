@@ -9,15 +9,15 @@ use tracing::{info, warn};
 use crate::AppState;
 use crate::agent::ImageUpload;
 use crate::sessions::{
-    CreateSessionRequest, create_session, get_session_messages_before,
+    CreateSessionRequest, create_session,
     get_session_messages_limited, load_user_prompts,
 };
 use super::types::{
     CreateSessionInProjectRequest, CreateSessionInProjectResponse, CreateStandaloneSessionRequest,
     CreateStandaloneSessionResponse, ErrorResponse, MessageResponse,
     PagedResponse, PagedSessionsQuery, PromptRequest, SessionMessagesPagedQuery,
-    SessionMessagesQuery, SessionResponse, SessionStatusResponse, SetThinkingLevelRequest,
-    StartSessionResponse, StopSessionResponse,
+    SessionMessagesQuery, SessionResponse, SessionStatusResponse, SetModelRequest,
+    SetThinkingLevelRequest, StartSessionResponse, StopSessionResponse,
 };
 use super::{
     DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, enforce_project_root_policy, find_session, merge_messages,
@@ -243,32 +243,41 @@ pub async fn get_session_messages_paged(
     let limit = query.limit.unwrap_or(DEFAULT_PAGE_LIMIT).min(MAX_PAGE_LIMIT);
     let before = query.before.as_deref();
 
-    // For paged loading, we only look at the session.jsonl file for now
-    // (User prompts stored separately aren't easily paged without loading all)
-    let messages = tokio::task::spawn_blocking({
-        let id = id.clone();
-        let path = session.project_path.clone();
-        let before = before.map(|s| s.to_string());
-        move || get_session_messages_before(&id, &path, limit, before.as_deref())
-    })
-    .await
-    .unwrap()
-    .map_err(|e| ErrorResponse {
-        error: "INTERNAL_ERROR".to_string(),
-        message: format!("Failed to load messages: {}", e),
-    })?;
-
-    let responses = messages
-        .into_iter()
-        .map(|m| MessageResponse {
-            role: m.role,
-            content: m.content,
-            timestamp: m.timestamp,
-            images: None,
+    // Load both user prompts and pi-agent messages in parallel
+    let (stored_prompts, pi_messages) = tokio::join!(
+        load_user_prompts(&id, &session.project_path),
+        tokio::task::spawn_blocking({
+            let id = id.clone();
+            let path = session.project_path.clone();
+            move || get_session_messages_limited(&id, &path, None, false)
         })
-        .collect();
+    );
 
-    Ok(Json(responses))
+    let pi_messages = pi_messages
+        .unwrap()
+        .map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to load messages: {}", e),
+        })?;
+
+    // Merge user prompts (with images) with pi-agent messages
+    let all_messages = merge_messages(stored_prompts, pi_messages);
+
+    // Apply 'before' cursor filter
+    let filtered: Vec<_> = if let Some(before_ts) = before {
+        all_messages
+            .into_iter()
+            .filter(|m| m.timestamp.as_deref() < Some(before_ts))
+            .collect()
+    } else {
+        all_messages
+    };
+
+    // Take the last `limit` messages for the page
+    let start = filtered.len().saturating_sub(limit);
+    let page: Vec<_> = filtered.into_iter().skip(start).collect();
+
+    Ok(Json(page))
 }
 
 /// POST /api/sessions/:id/prompt - send a prompt to an active session
@@ -415,6 +424,24 @@ pub async fn send_prompt_to_session(
         })
         .collect();
 
+    // Broadcast user prompt via WebSocket so it appears immediately in the chat
+    let ws_images = if images_to_store.is_empty() {
+        None
+    } else {
+        Some(
+            images_to_store
+                .iter()
+                .map(|img| crate::api::types::ImageAttachmentResponse {
+                    id: img.id.clone(),
+                    filename: img.filename.clone(),
+                    content_type: img.content_type.clone(),
+                    size: img.size,
+                    url: img.url.clone(),
+                })
+                .collect(),
+        )
+    };
+
     if let Err(e) = crate::sessions::store_user_prompt_with_images(
         &session_id,
         &session.project_path,
@@ -422,31 +449,13 @@ pub async fn send_prompt_to_session(
         if images_to_store.is_empty() {
             None
         } else {
-            Some(images_to_store.clone())
+            Some(images_to_store)
         },
     )
     .await
     {
         warn!(error = %e, session_id = %session_id, "Failed to store user prompt");
     }
-
-    // Broadcast user prompt via WebSocket so it appears immediately in the chat
-    let ws_images = if images_to_store.is_empty() {
-        None
-    } else {
-        Some(
-            images_to_store
-                .into_iter()
-                .map(|img| crate::api::types::ImageAttachmentResponse {
-                    id: img.id,
-                    filename: img.filename,
-                    content_type: img.content_type,
-                    size: img.size,
-                    url: img.url,
-                })
-                .collect(),
-        )
-    };
 
     let ws_event = crate::websocket::WSEvent::MessageAdded {
         session_id: session_id.clone(),
@@ -555,20 +564,16 @@ pub async fn cycle_thinking_level(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let session = find_session(&state, &id).await.ok_or_else(|| ErrorResponse {
+        error: "NOT_FOUND".to_string(),
+        message: format!("Session {} not found", id),
+    })?;
+
     let mut pm = state.process_manager.lock().await;
 
-    let process_id = pm.get_process_id_for_session(&id);
-    let is_running = process_id.as_ref().map(|pid| pm.is_running(pid)).unwrap_or(false);
+    let process_id = ensure_process_running(&mut pm, &id, &session.project_path)?;
 
-    if !is_running {
-        return Err(ErrorResponse {
-            error: "NOT_RUNNING".to_string(),
-            message: "Session process is not running".to_string(),
-        });
-    }
-
-    let pid = process_id.unwrap();
-    pm.send_command(&pid, serde_json::json!({ "type": "cycle_thinking_level" }))
+    pm.send_command(&process_id, serde_json::json!({ "type": "cycle_thinking_level" }))
         .await
         .map_err(|e| ErrorResponse {
             error: "INTERNAL_ERROR".to_string(),
@@ -584,21 +589,17 @@ pub async fn set_thinking_level(
     State(state): State<AppState>,
     Json(payload): Json<SetThinkingLevelRequest>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let session = find_session(&state, &id).await.ok_or_else(|| ErrorResponse {
+        error: "NOT_FOUND".to_string(),
+        message: format!("Session {} not found", id),
+    })?;
+
     let mut pm = state.process_manager.lock().await;
 
-    let process_id = pm.get_process_id_for_session(&id);
-    let is_running = process_id.as_ref().map(|pid| pm.is_running(pid)).unwrap_or(false);
+    let process_id = ensure_process_running(&mut pm, &id, &session.project_path)?;
 
-    if !is_running {
-        return Err(ErrorResponse {
-            error: "NOT_RUNNING".to_string(),
-            message: "Session process is not running".to_string(),
-        });
-    }
-
-    let pid = process_id.unwrap();
     pm.send_command(
-        &pid,
+        &process_id,
         serde_json::json!({ "type": "set_thinking_level", "level": payload.level }),
     )
     .await
@@ -712,4 +713,110 @@ pub async fn create_session_in_project(
         newly_spawned: true,
         process_id: Some(process_id),
     }))
+}
+
+/// Get an existing process or spawn a new one for the session
+fn ensure_process_running(
+    pm: &mut crate::agent::ProcessManager,
+    session_id: &str,
+    project_path: &std::path::Path,
+) -> Result<String, ErrorResponse> {
+    let process_id = if let Some(pid) = pm.get_process_id_for_session(session_id) {
+        if pm.is_running(&pid) {
+            pid
+        } else {
+            pm.spawn_for_session(session_id, project_path.to_path_buf())
+                .map_err(|e| ErrorResponse {
+                    error: "INTERNAL_ERROR".to_string(),
+                    message: format!("Failed to spawn pika-agent: {}", e),
+                })?
+        }
+    } else {
+        pm.spawn_for_session(session_id, project_path.to_path_buf())
+            .map_err(|e| ErrorResponse {
+                error: "INTERNAL_ERROR".to_string(),
+                message: format!("Failed to spawn pika-agent: {}", e),
+            })?
+    };
+    Ok(process_id)
+}
+
+/// POST /api/sessions/:id/set-model - set model for a session
+pub async fn set_model(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+    Json(payload): Json<SetModelRequest>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let session = find_session(&state, &id).await.ok_or_else(|| ErrorResponse {
+        error: "NOT_FOUND".to_string(),
+        message: format!("Session {} not found", id),
+    })?;
+
+    let mut pm = state.process_manager.lock().await;
+
+    let process_id = ensure_process_running(&mut pm, &id, &session.project_path)?;
+
+    pm.send_command(
+        &process_id,
+        serde_json::json!({
+            "type": "set_model",
+            "provider": payload.provider,
+            "modelId": payload.model_id
+        }),
+    )
+    .await
+    .map_err(|e| ErrorResponse {
+        error: "INTERNAL_ERROR".to_string(),
+        message: format!("Failed to set model: {}", e),
+    })?;
+
+    Ok(Json(serde_json::json!({ "success": true })))
+}
+
+/// GET /api/sessions/:id/state - get session state (model, thinking level, etc.)
+pub async fn get_session_state(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let session = find_session(&state, &id).await.ok_or_else(|| ErrorResponse {
+        error: "NOT_FOUND".to_string(),
+        message: format!("Session {} not found", id),
+    })?;
+
+    let mut pm = state.process_manager.lock().await;
+
+    let process_id = ensure_process_running(&mut pm, &id, &session.project_path)?;
+
+    pm.send_command(&process_id, serde_json::json!({ "type": "get_state" }))
+        .await
+        .map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to get session state: {}", e),
+        })?;
+
+    Ok(Json(serde_json::json!({ "success": true, "message": "get_state command sent, response will arrive via WebSocket" })))
+}
+
+/// GET /api/sessions/:id/models - get available models for a session
+pub async fn get_session_models(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let session = find_session(&state, &id).await.ok_or_else(|| ErrorResponse {
+        error: "NOT_FOUND".to_string(),
+        message: format!("Session {} not found", id),
+    })?;
+
+    let mut pm = state.process_manager.lock().await;
+
+    let process_id = ensure_process_running(&mut pm, &id, &session.project_path)?;
+
+    pm.send_command(&process_id, serde_json::json!({ "type": "get_available_models" }))
+        .await
+        .map_err(|e| ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to get available models: {}", e),
+        })?;
+
+    Ok(Json(serde_json::json!({ "success": true, "message": "get_available_models command sent, response will arrive via WebSocket" })))
 }

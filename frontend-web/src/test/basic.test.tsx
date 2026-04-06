@@ -27,8 +27,8 @@ vi.mock("../hooks/useThinkingLevel", () => ({
 }));
 
 vi.mock("../store/appStore", () => ({
-  useAppStore: (selector: (state: { needsAuth: boolean }) => unknown) =>
-    selector({ needsAuth: false }),
+  useAppStore: (selector: (state: { needsAuth: boolean; sessionModels: Record<string, unknown>; sessionThinkingLevels: Record<string, string> }) => unknown) =>
+    selector({ needsAuth: false, sessionModels: {}, sessionThinkingLevels: {} }),
 }));
 
 describe("ChatInput", () => {

@@ -14,6 +14,7 @@ interface AppState {
   recentSessionIds: string[]; // NEW: Recently accessed sessions (max 5)
   favoriteSessionIds: string[]; // NEW: Favorite/pinned sessions
   sessionThinkingLevels: Record<string, string>; // Per-session thinking level
+  sessionModels: Record<string, { id: string; name: string; provider: string }>; // Per-session model
 
   // Actions
   setCurrentSession: (sessionId: string | null) => void;
@@ -31,6 +32,8 @@ interface AppState {
   isFavoriteSession: (sessionId: string) => boolean; // NEW: Check if favorite
   setSessionThinkingLevel: (sessionId: string, level: string) => void;
   getSessionThinkingLevel: (sessionId: string) => string | null;
+  setSessionModel: (sessionId: string, model: { id: string; name: string; provider: string }) => void;
+  getSessionModel: (sessionId: string) => { id: string; name: string; provider: string } | null;
 }
 
 export const useAppStore = create<AppState>()(
@@ -47,6 +50,7 @@ export const useAppStore = create<AppState>()(
       recentSessionIds: [],
       favoriteSessionIds: [],
       sessionThinkingLevels: {},
+      sessionModels: {},
 
       // Actions
       setCurrentSession: (sessionId) => {
@@ -157,6 +161,15 @@ export const useAppStore = create<AppState>()(
       getSessionThinkingLevel: (sessionId) => {
         return get().sessionThinkingLevels[sessionId] || null;
       },
+
+      setSessionModel: (sessionId, model) =>
+        set((state) => ({
+          sessionModels: { ...state.sessionModels, [sessionId]: model },
+        })),
+
+      getSessionModel: (sessionId) => {
+        return get().sessionModels[sessionId] || null;
+      },
     }),
     {
       name: "pika-storage",
@@ -168,6 +181,7 @@ export const useAppStore = create<AppState>()(
         recentSessionIds: state.recentSessionIds,
         favoriteSessionIds: state.favoriteSessionIds,
         sessionThinkingLevels: state.sessionThinkingLevels,
+        sessionModels: state.sessionModels,
       }),
     }
   )

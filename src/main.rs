@@ -547,7 +547,7 @@ async fn event_bridge_task(app_state: AppState) {
                                         .get("timestamp")
                                         .and_then(|v| v.as_i64())
                                         .map(|ts| {
-                                            let ts_seconds = if ts > 10_000_000_000_000 {
+                                            let ts_seconds = if ts > 10_000_000_000 {
                                                 ts / 1000
                                             } else {
                                                 ts
@@ -602,22 +602,38 @@ async fn event_bridge_task(app_state: AppState) {
                                 info!("📢 Notification received");
                             }
                             "response" => {
-                                // Response to a command
-                                if let Some(success) = event.extra.get("success").and_then(|v| v.as_bool()) {
-                                    if !success {
-                                        let message = event.extra.get("message")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("Unknown agent error")
-                                            .to_string();
-                                        warn!("❌ Command failed: {}", message);
-                                        
-                                        app_state.ws_state.broadcast(WSEvent::Error {
-                                            session_id: Some(ws_id.clone()),
-                                            message,
-                                            code: Some("AGENT_COMMAND_FAILED".to_string()),
-                                        });
-                                    }
+                                // Response to a command — forward to frontend
+                                let success = event.extra.get("success")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or(false);
+                                let command_name = event.extra.get("command")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("unknown")
+                                    .to_string();
+
+                                if !success {
+                                    let message = event.extra.get("error")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("Unknown agent error")
+                                        .to_string();
+                                    warn!("❌ Command failed: {}", message);
+
+                                    app_state.ws_state.broadcast(WSEvent::Error {
+                                        session_id: Some(ws_id.clone()),
+                                        message: message.clone(),
+                                        code: Some("AGENT_COMMAND_FAILED".to_string()),
+                                    });
                                 }
+
+                                app_state.ws_state.broadcast(WSEvent::CommandResponse {
+                                    session_id: ws_id.clone(),
+                                    command: command_name,
+                                    success,
+                                    data: event.extra.get("data").cloned(),
+                                    error: event.extra.get("error")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string()),
+                                });
                             }
                             "error" => {
                                 // Explicit error event from agent
@@ -635,16 +651,6 @@ async fn event_bridge_task(app_state: AppState) {
                                     session_id: Some(ws_id.clone()),
                                     message: message.clone(),
                                     code: error_code,
-                                });
-
-                                // Also broadcast as an assistant message so it appears in chat history
-                                let error_ts = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-                                app_state.ws_state.broadcast(WSEvent::MessageAdded {
-                                    session_id: ws_id.clone(),
-                                    role: "assistant".to_string(),
-                                    content: format!("Error: {}", message),
-                                    timestamp: error_ts,
-                                    images: None,
                                 });
                             }
                             "turn_start" | "turn_end" | "message_start" | "auto_retry_start" | "auto_retry_end" | "extension_ui_request" => {

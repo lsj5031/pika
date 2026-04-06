@@ -52,6 +52,14 @@ pub enum WSEvent {
         message: String,
         code: Option<String>,
     },
+    /// Response to an RPC command (set_model, get_state, get_available_models, etc.)
+    CommandResponse {
+        session_id: String,
+        command: String,
+        success: bool,
+        data: Option<serde_json::Value>,
+        error: Option<String>,
+    },
 }
 
 impl WSEvent {

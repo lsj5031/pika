@@ -9,9 +9,10 @@ use super::settings::{get_pi_settings, update_pi_settings};
 use super::{
     add_project, create_session_in_project, create_standalone_session, cycle_thinking_level,
     get_auth_status, get_project_sessions, get_project_sessions_paged, get_projects, get_session,
-    get_session_messages, get_session_messages_paged, get_session_status, get_sessions,
-    get_sessions_paged, login, logout, lookup_sessions, remove_project, send_prompt_to_session,
-    set_thinking_level, start_session, stop_session,
+    get_session_messages, get_session_messages_paged, get_session_models, get_session_state,
+    get_session_status, get_sessions, get_sessions_paged, login, logout, lookup_sessions,
+    remove_project, send_prompt_to_session, set_model, set_thinking_level, start_session,
+    stop_session,
 };
 
 /// Public auth router (unprotected endpoints)
@@ -57,6 +58,12 @@ pub fn create_api_router() -> Router<AppState> {
             "/api/sessions/{id}/set-thinking-level",
             post(set_thinking_level),
         )
+        .route(
+            "/api/sessions/{id}/set-model",
+            post(set_model),
+        )
+        .route("/api/sessions/{id}/state", get(get_session_state))
+        .route("/api/sessions/{id}/models", get(get_session_models))
         .route(
             "/api/settings",
             get(get_pi_settings).post(update_pi_settings),

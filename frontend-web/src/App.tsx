@@ -13,7 +13,7 @@ import { useCommandPalette, useSessionSwitchingShortcuts } from "./hooks/useComm
 import { usePerformanceMonitor } from "./hooks/usePerformanceMonitor";
 import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AUTH_ERROR_EVENT } from "./lib/api";
+import { AUTH_ERROR_EVENT, apiClient } from "./lib/api";
 import { clearAuthState, markAuthenticated } from "./lib/auth";
 import { config } from "./config/env";
 import type { WSEvent, Message, Session } from "./types";
@@ -182,8 +182,11 @@ function App() {
         // Mark as read without forcing a full history fetch
         markSessionAsRead(currentSessionId, 0);
       }
+      if (activeSessionIds.has(currentSessionId)) {
+        apiClient.get(`/api/sessions/${currentSessionId}/state`).catch(() => {});
+      }
     }
-  }, [currentSessionId, sessions, queryClient, markSessionAsRead]);
+  }, [currentSessionId, sessions, queryClient, markSessionAsRead, activeSessionIds]);
 
   // WebSocket event handler
   const handleWebSocketMessage = useCallback(
@@ -274,6 +277,24 @@ function App() {
               return { ...old, pages };
             }
           );
+          break;
+        }
+        case "CommandResponse": {
+          const { session_id, command, success, data } = event.data;
+          if (!success) break;
+          if (command === "get_state" && data) {
+            const stateData = data as { model?: { id: string; name: string; provider: string }; thinkingLevel?: string };
+            if (stateData.model) {
+              useAppStore.getState().setSessionModel(session_id, stateData.model);
+            }
+            if (stateData.thinkingLevel) {
+              useAppStore.getState().setSessionThinkingLevel(session_id, stateData.thinkingLevel);
+            }
+          }
+          if (command === "set_model" && data) {
+            const modelData = data as { id: string; name: string; provider: string };
+            useAppStore.getState().setSessionModel(session_id, modelData);
+          }
           break;
         }
         case "Error": {

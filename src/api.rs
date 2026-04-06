@@ -44,9 +44,10 @@ pub use auth::{get_auth_status, login, logout};
 pub use projects::{add_project, get_project_sessions, get_projects, remove_project};
 pub use sessions::{
     create_session_in_project, create_standalone_session, cycle_thinking_level, get_session,
-    get_session_messages, get_session_messages_paged, get_session_status, get_sessions,
-    get_sessions_paged, get_project_sessions_paged, lookup_sessions, send_prompt_to_session,
-    set_thinking_level, start_session, stop_session,
+    get_session_messages, get_session_messages_paged, get_session_models, get_session_state,
+    get_session_status, get_sessions, get_sessions_paged, get_project_sessions_paged,
+    lookup_sessions, send_prompt_to_session, set_model, set_thinking_level, start_session,
+    stop_session,
 };
 
 
@@ -128,11 +129,18 @@ pub async fn find_session(
     index.get(session_id).cloned()
 }
 
-/// Merge stored user prompts with pi-agent messages based on timestamps
+/// Merge stored user prompts with pi-agent messages based on timestamps.
+/// Filters user-role messages from pi-agent output to avoid duplicates with stored prompts.
 pub fn merge_messages(
     stored_prompts: Vec<crate::sessions::SessionMessage>,
     pi_messages: Vec<crate::sessions::SessionMessage>,
 ) -> Vec<types::MessageResponse> {
+    // Filter out user-role messages from pi-agent since they come from stored prompts
+    let pi_messages: Vec<_> = pi_messages
+        .into_iter()
+        .filter(|m| m.role != "user")
+        .collect();
+
     let mut all_messages: Vec<types::MessageResponse> = Vec::new();
 
     let mut prompt_iter = stored_prompts.into_iter().peekable();
