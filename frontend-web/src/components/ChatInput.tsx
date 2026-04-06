@@ -8,6 +8,7 @@ import { useThinkingLevel } from "../hooks/useThinkingLevel";
 import { useAppStore } from "../store/appStore";
 import type { ImageUploadRequest } from "../types/api";
 import { toast } from "sonner";
+import { SessionSettingsDialog } from "./SessionSettingsDialog";
 
 interface ChatInputProps {
   sessionId: string | null;
@@ -36,7 +37,9 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: settings, isLoading: settingsLoading } = usePikaSettings(!needsAuth);
-  const { currentLevel: thinkingLevel, cycleLevel: cycleThinkingLevel } = useThinkingLevel(sessionId);
+  const sessionModel = useAppStore((state) => sessionId ? state.sessionModels?.[sessionId] : null);
+  const { currentLevel: thinkingLevel } = useThinkingLevel(sessionId);
+  const [sessionSettingsOpen, setSessionSettingsOpen] = useState(false);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -189,8 +192,8 @@ export function ChatInput({
   const currentModel = settings?.availableModels?.find(
     (model: PikaModel) => model.id === settings?.defaultModel
   );
-  const modelDisplay = currentModel?.name || settings?.defaultModel || "Not configured";
-  const providerDisplay = currentModel?.provider;
+  const modelDisplay = sessionModel?.name || currentModel?.name || settings?.defaultModel || "Not configured";
+  const providerDisplay = sessionModel?.provider || currentModel?.provider;
 
   return (
     <div className={cn("border-t bg-background p-3", className)}>
@@ -270,29 +273,41 @@ export function ChatInput({
 
       {sessionId && (
         <div className="flex items-center gap-1.5 max-w-4xl mx-auto mt-2 px-2">
-          <Cpu className="h-3 w-3 text-muted-foreground shrink-0" />
-          <span className="text-xs text-muted-foreground hidden sm:inline">
-            Model:
-          </span>
-          <span className="text-xs text-muted-foreground font-medium truncate max-w-[200px] sm:max-w-[300px]">
-            {settingsLoading ? "Loading..." : modelDisplay}
-          </span>
-          {providerDisplay && (
-            <span className="text-xs text-muted-foreground/70 hidden md:inline">
-              ({providerDisplay})
+          <button
+            type="button"
+            onClick={() => setSessionSettingsOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            title="Click to change model and thinking level"
+          >
+            <Cpu className="h-3 w-3 shrink-0" />
+            <span className="hidden sm:inline">Model:</span>
+            <span className="font-medium truncate max-w-[200px] sm:max-w-[300px]">
+              {settingsLoading ? "Loading..." : modelDisplay}
             </span>
-          )}
+            {providerDisplay && (
+              <span className="text-muted-foreground/70 hidden md:inline">
+                ({providerDisplay})
+              </span>
+            )}
+          </button>
           <span className="text-xs text-muted-foreground/50">·</span>
           <button
             type="button"
-            onClick={cycleThinkingLevel}
+            onClick={() => setSessionSettingsOpen(true)}
             className="flex items-center gap-1 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
-            title="Click to cycle thinking level"
+            title="Click to change thinking level"
           >
             <Brain className="h-3 w-3" />
             {thinkingLevel}
           </button>
         </div>
+      )}
+      {sessionId && (
+        <SessionSettingsDialog
+          sessionId={sessionId}
+          open={sessionSettingsOpen}
+          onOpenChange={setSessionSettingsOpen}
+        />
       )}
     </div>
   );

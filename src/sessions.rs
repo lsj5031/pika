@@ -2,9 +2,9 @@ use crate::config::ProjectConfig;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fs;
-use std::io::{BufRead, BufReader, Read as _, Seek, SeekFrom};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
@@ -48,11 +48,13 @@ pub fn pi_agent_dir() -> PathBuf {
 
 /// Safely converts a Unix timestamp to a formatted string without panicking.
 /// Returns "Unknown" for invalid timestamps (negative, out of range).
+/// Handles both seconds and millisecond timestamps (>10 trillion → divided by 1000).
 pub fn safe_timestamp_to_string(ts: i64) -> String {
     if ts < 0 {
         return "Unknown".to_string();
     }
-    chrono::DateTime::from_timestamp(ts, 0)
+    let ts_seconds = if ts > 10_000_000_000 { ts / 1000 } else { ts };
+    chrono::DateTime::from_timestamp(ts_seconds, 0)
         .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
         .unwrap_or_else(|| "Unknown".to_string())
 }
@@ -424,10 +426,14 @@ pub fn get_session_file_path(session_id: &str, project_path: &Path) -> Option<Pa
         return None;
     }
 
-    // Find the session file with the given ID
+    // Find the session file with the given ID (skip hidden dotfiles)
     fs::read_dir(&sessions_dir).ok()?.find_map(|entry| {
         let entry = entry.ok()?;
         let path = entry.path();
+        // Skip hidden files (e.g. .user-prompts-*.jsonl)
+        if path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.')) {
+            return None;
+        }
         let file_name = path.file_stem()?.to_str()?;
         if file_name.contains(session_id) {
             Some(path)
@@ -731,7 +737,7 @@ pub fn get_session_messages_limited(
         return Ok(Vec::new());
     }
 
-    // Find the session file with the given ID
+    // Find the session file with the given ID (skip hidden dotfiles like .user-prompts-*)
     let session_file = fs::read_dir(&project_sessions_dir)
         .map_err(|e| SessionError::IoError {
             path: project_sessions_dir.clone(),
@@ -740,6 +746,10 @@ pub fn get_session_messages_limited(
         .find_map(|entry| {
             let entry = entry.ok()?;
             let path = entry.path();
+            // Skip hidden files (e.g. .user-prompts-*.jsonl)
+            if path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with('.')) {
+                return None;
+            }
             let file_name = path.file_stem()?.to_str()?;
             // Check if the file name contains the session ID
             if file_name.contains(session_id) {
@@ -787,171 +797,6 @@ pub fn get_session_messages_limited(
     }
 
     Ok(messages)
-}
-
-/// Read up to `limit` parseable messages from the end of a JSONL file by reading
-/// chunks backwards. Returns messages in reverse chronological order (newest first);
-/// the caller must reverse if chronological order is needed.
-fn read_last_messages_reverse(
-    path: &Path,
-    limit: usize,
-) -> Result<Vec<SessionMessage>, SessionError> {
-    const CHUNK_SIZE: u64 = 8192;
-
-    let mut file = fs::File::open(path).map_err(|e| SessionError::IoError {
-        path: path.to_path_buf(),
-        source: e,
-    })?;
-
-    let file_len = file
-        .metadata()
-        .map_err(|e| SessionError::IoError {
-            path: path.to_path_buf(),
-            source: e,
-        })?
-        .len();
-
-    if file_len == 0 {
-        return Ok(Vec::new());
-    }
-
-    let mut messages: Vec<SessionMessage> = Vec::with_capacity(limit);
-    let mut pos = file_len;
-    let mut trailing = String::new(); // leftover bytes from the previous (later) chunk
-
-    while pos > 0 && messages.len() < limit {
-        let read_start = pos.saturating_sub(CHUNK_SIZE);
-        let to_read = (pos - read_start) as usize;
-
-        file.seek(SeekFrom::Start(read_start))
-            .map_err(|e| SessionError::IoError {
-                path: path.to_path_buf(),
-                source: e,
-            })?;
-
-        let mut buf = vec![0u8; to_read];
-        file.read_exact(&mut buf)
-            .map_err(|e| SessionError::IoError {
-                path: path.to_path_buf(),
-                source: e,
-            })?;
-
-        let chunk_str = String::from_utf8_lossy(&buf);
-
-        let combined = if trailing.is_empty() {
-            chunk_str.into_owned()
-        } else {
-            let mut s = chunk_str.into_owned();
-            s.push_str(&trailing);
-            s
-        };
-
-        let mut lines: Vec<&str> = combined.split('\n').collect();
-
-        if read_start > 0 {
-            trailing = lines.remove(0).to_owned();
-        } else {
-            trailing.clear();
-        }
-
-        for line in lines.iter().rev() {
-            if messages.len() >= limit {
-                break;
-            }
-            if let Some(msg) = parse_session_message_line(line) {
-                messages.push(msg);
-            }
-        }
-
-        pos = read_start;
-    }
-
-    if messages.len() < limit
-        && !trailing.is_empty()
-        && let Some(msg) = parse_session_message_line(&trailing)
-    {
-        messages.push(msg);
-    }
-
-    Ok(messages)
-}
-
-/// Get messages before a timestamp (paged history loading)
-pub fn get_session_messages_before(
-    session_id: &str,
-    project_path: &Path,
-    limit: usize,
-    before: Option<&str>,
-) -> Result<Vec<SessionMessage>, SessionError> {
-    if limit == 0 {
-        return Ok(Vec::new());
-    }
-
-    let pika_sessions_dir = pika_sessions_base_dir();
-
-    let encoded_path = encode_project_path(project_path);
-    let project_sessions_dir = pika_sessions_dir.join(&encoded_path);
-
-    if !project_sessions_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let session_file = fs::read_dir(&project_sessions_dir)
-        .map_err(|e| SessionError::IoError {
-            path: project_sessions_dir.clone(),
-            source: e,
-        })?
-        .find_map(|entry| {
-            let entry = entry.ok()?;
-            let path = entry.path();
-            let file_name = path.file_stem()?.to_str()?;
-            if file_name.contains(session_id) {
-                Some(path)
-            } else {
-                None
-            }
-        });
-
-    let session_file = match session_file {
-        Some(file) => file,
-        None => return Ok(Vec::new()),
-    };
-
-    if before.is_none() {
-        let mut messages = read_last_messages_reverse(&session_file, limit)?;
-        messages.reverse();
-        return Ok(messages);
-    }
-
-    let file = fs::File::open(&session_file).map_err(|e| SessionError::IoError {
-        path: session_file.clone(),
-        source: e,
-    })?;
-
-    let reader = BufReader::new(file);
-    let mut buffer: VecDeque<SessionMessage> = VecDeque::new();
-    let before_ts = before.unwrap();
-
-    for line in reader.lines() {
-        let line = line.map_err(|e| SessionError::IoError {
-            path: session_file.clone(),
-            source: e,
-        })?;
-
-        if let Some(message) = parse_session_message_line(&line) {
-            let message_ts = message.timestamp.as_deref();
-            if message_ts.is_none() || message_ts >= Some(before_ts) {
-                continue;
-            }
-
-            buffer.push_back(message);
-            if buffer.len() > limit {
-                buffer.pop_front();
-            }
-        }
-    }
-
-    Ok(buffer.into_iter().collect())
 }
 
 /// Stored user prompt (for prompts sent via our API that pi-agent doesn't persist)
@@ -1353,6 +1198,18 @@ mod tests {
     }
 
     #[test]
+    fn test_safe_timestamp_to_string_handles_milliseconds() {
+        // Millisecond timestamp (> 10 trillion) should be normalized to seconds
+        let ts_seconds = 1712345678_i64;
+        let ts_millis = ts_seconds * 1000; // 1712345678000
+
+        let result_seconds = safe_timestamp_to_string(ts_seconds);
+        let result_millis = safe_timestamp_to_string(ts_millis);
+        assert_eq!(result_seconds, result_millis);
+        assert_ne!(result_seconds, "Unknown");
+    }
+
+    #[test]
     fn test_parse_session_message_line_handles_missing_timestamp_gracefully() {
         // A message with no timestamp or an invalid one should not panic
         let line = r#"{"type":"message","message":{"role":"user","content":"hello"}}"#;
@@ -1410,6 +1267,36 @@ mod tests {
         let input = "My Cool Session";
         let result = format_session_name(input);
         assert_eq!(result, "My Cool Session");
+    }
+
+    #[test]
+    fn test_session_lookup_skips_hidden_user_prompts_files() {
+        // Regression test: .user-prompts-{session_id}.jsonl files must NOT be
+        // matched when looking up session messages. The file stem contains the
+        // session ID so a naive contains() check would incorrectly match.
+        let session_id = "4ee01d39-7c2b-4b97-b421-460260722771";
+
+        // Hidden file name that contains the session ID — must be skipped
+        let hidden_stem = ".user-prompts-4ee01d39-7c2b-4b97-b421-460260722771";
+        assert!(
+            hidden_stem.contains(session_id),
+            "Hidden file stem should contain session ID (precondition)"
+        );
+        assert!(
+            hidden_stem.starts_with('.'),
+            "Hidden file stem should start with dot"
+        );
+
+        // Real session file name
+        let real_stem = "2026-04-06T00-06-10-046Z_4ee01d39-7c2b-4b97-b421-460260722771";
+        assert!(
+            real_stem.contains(session_id),
+            "Real file stem should contain session ID"
+        );
+        assert!(
+            !real_stem.starts_with('.'),
+            "Real file stem should NOT start with dot"
+        );
     }
 
     #[test]

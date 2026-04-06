@@ -135,3 +135,11 @@ pub struct CreateStandaloneSessionResponse {
 pub struct SetThinkingLevelRequest {
     pub level: String,
 }
+
+/// Request to set model for a session
+#[derive(Debug, Deserialize)]
+pub struct SetModelRequest {
+    pub provider: String,
+    #[serde(rename = "modelId")]
+    pub model_id: String,
+}

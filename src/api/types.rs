@@ -19,7 +19,8 @@ pub use projects::{AddProjectRequest, AddProjectResponse, ProjectResponse};
 pub use sessions::{
     CreateSessionInProjectRequest, CreateSessionInProjectResponse, CreateStandaloneSessionRequest,
     CreateStandaloneSessionResponse, MessageResponse, PromptRequest, SessionResponse,
-    SessionStatusResponse, SetThinkingLevelRequest, StartSessionResponse, StopSessionResponse,
+    SessionStatusResponse, SetModelRequest, SetThinkingLevelRequest, StartSessionResponse,
+    StopSessionResponse,
 };
 pub use settings::{ModelInfo, PikaSettingsResponse, UpdatePikaSettingsRequest};
 pub use shared::{
