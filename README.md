@@ -44,7 +44,7 @@ Built with a **Rust (Axum)** backend and **React + TypeScript + Vite** frontend.
 ### Prerequisites
 
 - Rust (edition 2024)
-- Node.js 18+ and npm
+- Node.js 24.22.1+ and npm
 - `npx` (for running Pika CLI)
 
 ### Development
